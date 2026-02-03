@@ -11,6 +11,12 @@ from datetime import datetime
 import uvicorn
 from io import StringIO
 import csv
+import json
+import os
+
+# Armazenamento das respostas da Claude (em memória e arquivo)
+CLAUDE_RESPONSES = []
+RESPONSES_FILE = "/tmp/claude_responses.json"
 
 app = FastAPI(
     title="AgriMacro API",
@@ -171,10 +177,12 @@ async def root():
     return {
         "projeto": "AgriMacro",
         "status": "ativo",
-        "versao": "2.0.0",
+        "versao": "2.1.0",
         "endpoints": {
             "/webhook": "GET para dados completos das commodities, POST para receber dados",
             "/commodities": "Lista todas as 21 commodities com preços atuais",
+            "/claude-response": "POST para receber respostas da Claude, GET para consultar histórico",
+            "/claude-response/latest": "GET para consultar a última resposta da Claude",
             "/health": "Verificação de saúde da API"
         },
         "timestamp": datetime.now().isoformat()
@@ -259,9 +267,122 @@ async def health_check():
     return {
         "status": "healthy",
         "servico": "AgriMacro API",
-        "versao": "2.0.0",
+        "versao": "2.1.0",
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ============================================================================
+# ENDPOINTS PARA RECEBER RESPOSTAS DA CLAUDE (n8n)
+# ============================================================================
+
+@app.post("/claude-response")
+async def receive_claude_response(request: Request):
+    """Endpoint para receber respostas processadas pela Claude via n8n"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    # Criar registro da resposta
+    response_record = {
+        "id": len(CLAUDE_RESPONSES) + 1,
+        "received_at": datetime.now().isoformat(),
+        "data": body
+    }
+    
+    # Armazenar em memória
+    CLAUDE_RESPONSES.append(response_record)
+    
+    # Manter apenas as últimas 100 respostas em memória
+    if len(CLAUDE_RESPONSES) > 100:
+        CLAUDE_RESPONSES.pop(0)
+    
+    # Salvar em arquivo para persistência
+    try:
+        save_response_to_file(response_record)
+    except Exception as e:
+        print(f"Erro ao salvar resposta: {e}")
+    
+    return JSONResponse(content={
+        "projeto": "AgriMacro",
+        "status": "sucesso",
+        "mensagem": "Resposta da Claude recebida e armazenada",
+        "response_id": response_record["id"],
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+@app.get("/claude-response")
+async def get_claude_responses():
+    """Endpoint para consultar as últimas respostas da Claude"""
+    return JSONResponse(content={
+        "projeto": "AgriMacro",
+        "status": "sucesso",
+        "total_responses": len(CLAUDE_RESPONSES),
+        "responses": CLAUDE_RESPONSES[-10:],  # Últimas 10 respostas
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+@app.get("/claude-response/latest")
+async def get_latest_claude_response():
+    """Endpoint para consultar a última resposta da Claude"""
+    if not CLAUDE_RESPONSES:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Nenhuma resposta da Claude recebida ainda"}
+        )
+    
+    return JSONResponse(content={
+        "projeto": "AgriMacro",
+        "status": "sucesso",
+        "latest_response": CLAUDE_RESPONSES[-1],
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+@app.get("/claude-response/{response_id}")
+async def get_claude_response_by_id(response_id: int):
+    """Endpoint para consultar uma resposta específica da Claude por ID"""
+    response = next((r for r in CLAUDE_RESPONSES if r["id"] == response_id), None)
+    
+    if not response:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Resposta com ID {response_id} não encontrada"}
+        )
+    
+    return JSONResponse(content={
+        "projeto": "AgriMacro",
+        "status": "sucesso",
+        "response": response,
+        "timestamp": datetime.now().isoformat()
+    })
+
+
+def save_response_to_file(response: dict):
+    """Salva resposta em arquivo JSON para persistência"""
+    try:
+        # Carregar respostas existentes
+        if os.path.exists(RESPONSES_FILE):
+            with open(RESPONSES_FILE, 'r') as f:
+                responses = json.load(f)
+        else:
+            responses = []
+        
+        # Adicionar nova resposta
+        responses.append(response)
+        
+        # Manter apenas as últimas 1000 respostas no arquivo
+        if len(responses) > 1000:
+            responses = responses[-1000:]
+        
+        # Salvar
+        with open(RESPONSES_FILE, 'w') as f:
+            json.dump(responses, f, indent=2)
+    except Exception as e:
+        print(f"Erro ao salvar em arquivo: {e}")
 
 
 if __name__ == "__main__":
