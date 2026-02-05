@@ -1,28 +1,9 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
+﻿__pycache__/
+*.pyc
 .venv/
-ENV/
-
-# Logs
-*.log
-server.log
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment variables
+data/raw/
+data/processed/
+outputs/
 .env
-.env.local
+.DS_Store
+.vscode/
