@@ -1,9 +1,50 @@
-﻿__pycache__/
+﻿# Node
+agrimacro-dash/node_modules/
+agrimacro-dash/.next/
+
+# Data files (mudam todo dia, nao versionar)
+agrimacro-dash/public/data/
+
+# Reports PDF (grandes, nao versionar)
+reports/*.pdf
+
+# Temp fix/debug/diag scripts
+**/fix*.py
+**/diag*.py
+**/debug*.py
+**/check*.py
+**/bloco*.py
+**/patch_*.py
+**/w[0-9]*.py
+**/write*.py
+**/gen.py
+**/gen1.py
+**/prep.py
+**/touch.py
+**/dbg*.py
+**/fixgt.py
+**/install.py
+**/install_dashboard.py
+**/copy_data.py
+**/backup.py
+**/remove_stooq.py
+**/rebuild_*.py
+**/upgrade_*.py
+**/update_pipeline.py
+**/add_stock_state.py
+
+# Backups
+**/*.bak
+**/*.bak_*
+**/*.bak2
+**/*.bak3
+**/dashboard_backup*
+**/header_part.txt
+**/test_write.txt
+**/*.py.bak*
+**/collect_new_sources.py
+
+# OS
 *.pyc
-.venv/
-data/raw/
-data/processed/
-outputs/
+__pycache__/
 .env
-.DS_Store
-.vscode/
