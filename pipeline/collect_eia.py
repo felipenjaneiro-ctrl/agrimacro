@@ -3,11 +3,17 @@ collect_eia.py — EIA: Energy Information Administration
 AgriMacro v3.2
 
 Coleta dados de energia relevantes para commodities agrícolas:
-  - Estoques petróleo (Weekly Petroleum Status)
+  - Estoques petróleo TOTAL EUA (Weekly Petroleum Status)
+  - Estoques gasolina
+  - Estoques destilados (diesel/heating oil)
   - Etanol produção semanal (demanda milho)
   - Etanol estoques
   - Diesel preço retail (custo produção ag)
-  - WTI forecast (STEO)
+  - Gasolina preço retail
+  - WTI spot price
+  - Natural Gas Henry Hub spot
+  - Refinery utilization (capacidade)
+  - US crude oil production
 
 API Key: lê EIA_API_KEY do .env
 Base URL: https://api.eia.gov/v2/
@@ -62,21 +68,51 @@ print(f"🔑 EIA Key: {API_KEY[:6]}...{API_KEY[-4:]}")
 BASE_URL = "https://api.eia.gov/v2"
 
 # Séries relevantes para Agro
-# Formato: (nome, route, params)
 SERIES = [
+    # ── Estoques ──────────────────────────────────────────────
     {
         "id": "crude_stocks",
-        "name": "Crude Oil Stocks (Weekly)",
+        "name": "Crude Oil Stocks - US Total (Weekly)",
         "route": "/petroleum/stoc/wstk/data/",
         "params": {
             "frequency": "weekly",
             "data[0]": "value",
             "facets[product][]": "EPC0",
+            "facets[duoarea][]": "NUS",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 12,
+            "length": 52,
         },
     },
+    {
+        "id": "gasoline_stocks",
+        "name": "Gasoline Stocks - US Total (Weekly)",
+        "route": "/petroleum/stoc/wstk/data/",
+        "params": {
+            "frequency": "weekly",
+            "data[0]": "value",
+            "facets[product][]": "EPM0F",
+            "facets[duoarea][]": "NUS",
+            "sort[0][column]": "period",
+            "sort[0][direction]": "desc",
+            "length": 52,
+        },
+    },
+    {
+        "id": "distillate_stocks",
+        "name": "Distillate Stocks - US Total (Weekly)",
+        "route": "/petroleum/stoc/wstk/data/",
+        "params": {
+            "frequency": "weekly",
+            "data[0]": "value",
+            "facets[product][]": "EPD0",
+            "facets[duoarea][]": "NUS",
+            "sort[0][column]": "period",
+            "sort[0][direction]": "desc",
+            "length": 52,
+        },
+    },
+    # ── Etanol ────────────────────────────────────────────────
     {
         "id": "ethanol_production",
         "name": "Ethanol Production (Weekly)",
@@ -87,7 +123,7 @@ SERIES = [
             "facets[series][]": "W_EPOOXE_YOP_NUS_MBBLD",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 12,
+            "length": 52,
         },
     },
     {
@@ -100,9 +136,10 @@ SERIES = [
             "facets[series][]": "W_EPOOXE_SAE_NUS_MBBL",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 12,
+            "length": 52,
         },
     },
+    # ── Preços Retail ─────────────────────────────────────────
     {
         "id": "diesel_retail",
         "name": "Diesel Retail Price (Weekly)",
@@ -113,7 +150,7 @@ SERIES = [
             "facets[series][]": "EMD_EPD2D_PTE_NUS_DPG",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 12,
+            "length": 52,
         },
     },
     {
@@ -126,9 +163,10 @@ SERIES = [
             "facets[series][]": "EMM_EPMR_PTE_NUS_DPG",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 12,
+            "length": 52,
         },
     },
+    # ── Preços Spot ───────────────────────────────────────────
     {
         "id": "wti_spot",
         "name": "WTI Spot Price (Weekly)",
@@ -139,20 +177,47 @@ SERIES = [
             "facets[series][]": "RWTC",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 12,
+            "length": 52,
         },
     },
     {
         "id": "natural_gas_spot",
-        "name": "Natural Gas Henry Hub Spot (Monthly)",
-        "route": "/natural-gas/pri/sum/data/",
+        "name": "Natural Gas Henry Hub Spot (Weekly)",
+        "route": "/natural-gas/pri/fut/data/",
         "params": {
-            "frequency": "monthly",
+            "frequency": "weekly",
             "data[0]": "value",
-            "facets[series][]": "RNGWHHD",
+            "facets[series][]": "RNGC1",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
-            "length": 6,
+            "length": 52,
+        },
+    },
+    # ── Produção / Refino ─────────────────────────────────────
+    {
+        "id": "refinery_utilization",
+        "name": "Refinery Utilization (Weekly %)",
+        "route": "/petroleum/sum/sndw/data/",
+        "params": {
+            "frequency": "weekly",
+            "data[0]": "value",
+            "facets[series][]": "WPULEUS3",
+            "sort[0][column]": "period",
+            "sort[0][direction]": "desc",
+            "length": 52,
+        },
+    },
+    {
+        "id": "crude_production",
+        "name": "US Crude Oil Production (Weekly)",
+        "route": "/petroleum/sum/sndw/data/",
+        "params": {
+            "frequency": "weekly",
+            "data[0]": "value",
+            "facets[series][]": "WCRFPUS2",
+            "sort[0][column]": "period",
+            "sort[0][direction]": "desc",
+            "length": 52,
         },
     },
 ]
@@ -169,11 +234,9 @@ import ssl
 
 def fetch_eia(route, params, retries=3, delay=2.0):
     """Fetch from EIA API v2."""
-    # Add API key
     all_params = dict(params)
     all_params["api_key"] = API_KEY
 
-    # Build URL with query string
     query = urllib.parse.urlencode(all_params, doseq=True)
     url = f"{BASE_URL}{route}?{query}"
 
@@ -227,13 +290,17 @@ def collect_all_series():
             records = data["response"]["data"]
             print(f"  ✅ {len(records)} registros")
 
-            # Extrair valores
+            # Extrair valores — deduplicate by period (keep first = most recent)
+            seen_periods = set()
             values = []
             for r in records:
                 period = r.get("period", "")
                 value = r.get("value")
                 unit = r.get("units") or r.get("unit", "")
-                desc = r.get("series-description") or r.get("seriesDescription", "")
+
+                if period in seen_periods:
+                    continue
+                seen_periods.add(period)
 
                 if value is not None:
                     try:
@@ -247,17 +314,32 @@ def collect_all_series():
                     "unit": unit,
                 })
 
+            # Sort by period desc
+            values.sort(key=lambda x: x["period"], reverse=True)
+
             # Calcular variações
             latest_val = values[0]["value"] if values and values[0]["value"] is not None else None
             prev_val = values[1]["value"] if len(values) > 1 and values[1]["value"] is not None else None
             month_ago_val = values[3]["value"] if len(values) > 3 and values[3]["value"] is not None else None
+            year_ago_val = values[-1]["value"] if len(values) > 40 and values[-1]["value"] is not None else None
 
             wow_change = None
             mom_change = None
+            yoy_change = None
             if latest_val is not None and prev_val is not None and prev_val != 0:
                 wow_change = round(((latest_val - prev_val) / prev_val) * 100, 2)
             if latest_val is not None and month_ago_val is not None and month_ago_val != 0:
                 mom_change = round(((latest_val - month_ago_val) / month_ago_val) * 100, 2)
+            if latest_val is not None and year_ago_val is not None and year_ago_val != 0:
+                yoy_change = round(((latest_val - year_ago_val) / year_ago_val) * 100, 2)
+
+            # Compute 52-week high/low for stocks
+            valid_vals = [v["value"] for v in values if v["value"] is not None]
+            high_52w = max(valid_vals) if valid_vals else None
+            low_52w = min(valid_vals) if valid_vals else None
+            pct_range = None
+            if high_52w is not None and low_52w is not None and high_52w != low_52w and latest_val is not None:
+                pct_range = round(((latest_val - low_52w) / (high_52w - low_52w)) * 100, 1)
 
             results[sid] = {
                 "name": name,
@@ -266,19 +348,29 @@ def collect_all_series():
                 "unit": values[0]["unit"] if values else "",
                 "wow_change_pct": wow_change,
                 "mom_change_pct": mom_change,
+                "yoy_change_pct": yoy_change,
+                "high_52w": high_52w,
+                "low_52w": low_52w,
+                "pct_range_52w": pct_range,
                 "history": values,
             }
             ok_count += 1
         else:
             print(f"  ❌ Sem dados")
-            # Tentar mostrar o erro
             if data and "error" in data:
                 print(f"    Erro: {data['error']}")
             results[sid] = {
                 "name": name,
                 "latest_period": None,
                 "latest_value": None,
-                "error": "No data returned",
+                "unit": "",
+                "wow_change_pct": None,
+                "mom_change_pct": None,
+                "yoy_change_pct": None,
+                "high_52w": None,
+                "low_52w": None,
+                "pct_range_52w": None,
+                "history": [],
             }
 
     return results, ok_count
@@ -293,6 +385,7 @@ def main():
     print("EIA Collector — Energy Data for Ag")
     print(f"Início: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Base URL: {BASE_URL}")
+    print(f"Séries: {len(SERIES)}")
     print("=" * 60)
 
     # Output path
@@ -338,6 +431,14 @@ def main():
             line += f" ({d}{abs(wti['wow_change_pct'])}% WoW)"
         summary.append(line)
 
+    if "natural_gas_spot" in series_data and series_data["natural_gas_spot"].get("latest_value"):
+        ng = series_data["natural_gas_spot"]
+        line = f"Henry Hub: ${ng['latest_value']:.2f}/MMBtu"
+        if ng.get("wow_change_pct") is not None:
+            d = "↑" if ng["wow_change_pct"] > 0 else "↓"
+            line += f" ({d}{abs(ng['wow_change_pct'])}% WoW)"
+        summary.append(line)
+
     if "diesel_retail" in series_data and series_data["diesel_retail"].get("latest_value"):
         diesel = series_data["diesel_retail"]
         line = f"Diesel: ${diesel['latest_value']:.3f}/gal"
@@ -348,7 +449,7 @@ def main():
 
     if "ethanol_production" in series_data and series_data["ethanol_production"].get("latest_value"):
         eth = series_data["ethanol_production"]
-        line = f"Ethanol prod: {eth['latest_value']} {eth.get('unit', 'MBbl/d')}"
+        line = f"Ethanol prod: {eth['latest_value']:.0f} MBbl/d"
         if eth.get("wow_change_pct") is not None:
             d = "↑" if eth["wow_change_pct"] > 0 else "↓"
             line += f" ({d}{abs(eth['wow_change_pct'])}% WoW)"
@@ -356,10 +457,19 @@ def main():
 
     if "crude_stocks" in series_data and series_data["crude_stocks"].get("latest_value"):
         crude = series_data["crude_stocks"]
-        line = f"Crude stocks: {crude['latest_value']:,.0f} {crude.get('unit', 'MBbl')}"
-        if crude.get("wow_change_pct") is not None:
-            d = "↑" if crude["wow_change_pct"] > 0 else "↓"
-            line += f" ({d}{abs(crude['wow_change_pct'])}% WoW)"
+        line = f"Crude stocks: {crude['latest_value']:,.0f} MBbl"
+        if crude.get("pct_range_52w") is not None:
+            line += f" (range 52w: {crude['pct_range_52w']}%)"
+        summary.append(line)
+
+    if "refinery_utilization" in series_data and series_data["refinery_utilization"].get("latest_value"):
+        ref = series_data["refinery_utilization"]
+        line = f"Refinery util: {ref['latest_value']:.1f}%"
+        summary.append(line)
+
+    if "crude_production" in series_data and series_data["crude_production"].get("latest_value"):
+        prod = series_data["crude_production"]
+        line = f"US crude prod: {prod['latest_value']:,.0f} MBbl/d"
         summary.append(line)
 
     # Output

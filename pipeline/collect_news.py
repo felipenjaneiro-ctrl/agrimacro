@@ -1,7 +1,9 @@
-﻿"""
+"""
 AgriMacro v3.2 - News & Macro Data Collector
 - USDA RSS feeds (reports, announcements)
 - Yahoo Finance commodity news RSS
+- Brazilian agro news (Noticias Agricolas, Canal Rural, Agrolink, CONAB)
+- Google News filtered (BR + US commodities)
 - FRED macro indicators (via API)
 """
 import json, os, re
@@ -19,10 +21,19 @@ FRED_KEY_PATH = os.path.join(os.path.expanduser("~"), ".fred_key")
 
 # ── RSS Feeds ─────────────────────────────────────────────────────
 RSS_FEEDS = [
+    # US / International
     {"url": "https://www.usda.gov/rss/home.xml", "source": "USDA", "category": "usda"},
     {"url": "https://search.ams.usda.gov/mndms/RSS", "source": "USDA Market News", "category": "usda"},
     {"url": "https://finance.yahoo.com/rss/headline?s=ZC=F,ZS=F,ZW=F,KC=F,CT=F,SB=F,CL=F,GC=F,LE=F,HE=F", "source": "Yahoo Finance", "category": "market"},
     {"url": "https://finance.yahoo.com/rss/headline?s=DBA,CORN,SOYB,WEAT", "source": "Yahoo ETFs", "category": "market"},
+    # Brazilian Agro
+    {"url": "https://www.noticiasagricolas.com.br/rss/noticias.xml", "source": "Noticias Agricolas", "category": "br_agro"},
+    {"url": "https://www.canalrural.com.br/feed/", "source": "Canal Rural", "category": "br_agro"},
+    {"url": "https://www.agrolink.com.br/rss/noticias.xml", "source": "Agrolink", "category": "br_agro"},
+    {"url": "https://www.conab.gov.br/ultimas-noticias?format=feed&type=rss", "source": "CONAB", "category": "br_gov"},
+    # Google News filtered
+    {"url": "https://news.google.com/rss/search?q=commodities+agr%C3%ADcolas+soja+milho+caf%C3%A9&hl=pt-BR&gl=BR&ceid=BR:pt-419", "source": "Google News BR", "category": "br_agro"},
+    {"url": "https://news.google.com/rss/search?q=WASDE+USDA+corn+soybeans+wheat&hl=en&gl=US&ceid=US:en", "source": "Google News US", "category": "us_agro"},
 ]
 
 # ── FRED Series (macro indicators relevant to commodities) ───────
@@ -122,18 +133,25 @@ def main():
     fred_data = fetch_fred()
     print(f"  [OK] FRED: {len(fred_data)} indicators")
 
+    # Summary by category
+    cats = {}
+    for art in all_news:
+        c = art.get("category", "other")
+        cats[c] = cats.get(c, 0) + 1
+
     output = {
         "generated_at": datetime.now().isoformat(),
         "news": all_news,
         "fred": fred_data,
         "total_news": len(all_news),
-        "total_fred": len(fred_data)
+        "total_fred": len(fred_data),
+        "by_category": cats
     }
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
-    print(f"  [OK] News: {len(all_news)} articles, {len(fred_data)} FRED indicators saved")
+    print(f"  [OK] News: {len(all_news)} articles ({cats}), {len(fred_data)} FRED indicators saved")
 
 if __name__ == "__main__":
     main()

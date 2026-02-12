@@ -1,0 +1,244 @@
+{
+  "timestamp": "2026-02-04T21:28:01.456642",
+  "commodities": {
+    "ZC": {
+      "symbol": "ZC",
+      "price_vs_avg": -22.97,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -23.0% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "ZS": {
+      "symbol": "ZS",
+      "price_vs_avg": -18.33,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -18.3% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "ZW": {
+      "symbol": "ZW",
+      "price_vs_avg": -20.52,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -20.5% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "KE": {
+      "symbol": "KE",
+      "price_vs_avg": -20.85,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -20.9% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "ZM": {
+      "symbol": "ZM",
+      "price_vs_avg": -25.49,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -25.5% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "ZL": {
+      "symbol": "ZL",
+      "price_vs_avg": 6.71,
+      "state": "NEUTRO",
+      "factors": [],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "SB": {
+      "symbol": "SB",
+      "price_vs_avg": -19.86,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -19.9% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "KC": {
+      "symbol": "KC",
+      "price_vs_avg": 18.6,
+      "state": "NEUTRO_VIES_EXCESSO",
+      "factors": [
+        "Estoque 18.6% acima da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "CT": {
+      "symbol": "CT",
+      "price_vs_avg": -32.73,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -32.7% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "CC": {
+      "symbol": "CC",
+      "price_vs_avg": -24.76,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -24.8% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "OJ": {
+      "symbol": "OJ",
+      "price_vs_avg": -22.3,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -22.3% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "LE": {
+      "symbol": "LE",
+      "price_vs_avg": 56.74,
+      "state": "NEUTRO_VIES_EXCESSO",
+      "factors": [
+        "Estoque 56.7% acima da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "GF": {
+      "symbol": "GF",
+      "price_vs_avg": 80.91,
+      "state": "NEUTRO_VIES_EXCESSO",
+      "factors": [
+        "Estoque 80.9% acima da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "HE": {
+      "symbol": "HE",
+      "price_vs_avg": 8.46,
+      "state": "NEUTRO",
+      "factors": [],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "CL": {
+      "symbol": "CL",
+      "price_vs_avg": -13.41,
+      "state": "NEUTRO_VIES_APERTO",
+      "factors": [
+        "Estoque -13.4% abaixo da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "NG": {
+      "symbol": "NG",
+      "price_vs_avg": -4.12,
+      "state": "NEUTRO",
+      "factors": [],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "GC": {
+      "symbol": "GC",
+      "price_vs_avg": 130.08,
+      "state": "NEUTRO_VIES_EXCESSO",
+      "factors": [
+        "Estoque 130.1% acima da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "SI": {
+      "symbol": "SI",
+      "price_vs_avg": 208.47,
+      "state": "NEUTRO_VIES_EXCESSO",
+      "factors": [
+        "Estoque 208.5% acima da media"
+      ],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    },
+    "DX": {
+      "symbol": "DX",
+      "price_vs_avg": -0.62,
+      "state": "NEUTRO",
+      "factors": [],
+      "data_available": {
+        "stock_proxy": true,
+        "curve": false,
+        "cot": false
+      }
+    }
+  }
+}

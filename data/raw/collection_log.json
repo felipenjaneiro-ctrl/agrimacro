@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-02-04T21:22:05.885802",
+  "total": 19,
+  "success": 19,
+  "failed": 0,
+  "details": {
+    "ZC": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 427.5
+    },
+    "ZS": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 1089.25
+    },
+    "ZW": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 524.0
+    },
+    "KE": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 527.5
+    },
+    "ZM": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 295.8
+    },
+    "ZL": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 55.51
+    },
+    "SB": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1259,
+      "last_close": 14.41
+    },
+    "KC": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1259,
+      "last_close": 296.2
+    },
+    "CT": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1259,
+      "last_close": 62.33
+    },
+    "CC": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1258,
+      "last_close": 4041.0
+    },
+    "OJ": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1259,
+      "last_close": 181.0
+    },
+    "LE": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 240.525
+    },
+    "GF": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 346.05
+    },
+    "HE": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1257,
+      "last_close": 87.9
+    },
+    "CL": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1258,
+      "last_close": 63.86
+    },
+    "NG": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1259,
+      "last_close": 3.439
+    },
+    "GC": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1258,
+      "last_close": 4945.8999
+    },
+    "SI": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1258,
+      "last_close": 83.89
+    },
+    "DX": {
+      "status": "ok",
+      "source": "yahoo",
+      "rows": 1258,
+      "last_close": 97.712
+    }
+  }
+}

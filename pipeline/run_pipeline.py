@@ -1,6 +1,11 @@
 """
-AgriMacro v3.2 - Pipeline Runner
-Orchestrates all data collection and processing
+AgriMacro v3.2 - Pipeline Runner (18 Steps)
+Orchestrates all data collection, processing, and content generation.
+
+Steps:
+  CORE (1-8): Prices, COT, Seasonality, Spreads, Stocks, Physical US, Physical Intl, Daily Reading
+  OPTIONAL (9-13): BCB/IBGE, EIA, USDA FAS, News Agro, Weather/Clima
+  GENERATION (14-18): Calendar, Daily Report, PDF Report, Video Script, Video MP4
 """
 import os
 import sys
@@ -9,19 +14,17 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Add parent to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 def log(msg, level="INFO"):
     ts = datetime.now().strftime("%H:%M:%S")
-    icons = {"INFO": "◆", "OK": "✓", "WARN": "!", "ERR": "✗"}
-    print(f"[{ts}] [{icons.get(level, '◆')}] {msg}")
+    icons = {"INFO": "\u25c6", "OK": "\u2714", "WARN": "!", "ERR": "\u2718"}
+    print(f"[{ts}] [{icons.get(level, '\u25c6')}] {msg}")
 
 def main():
     log("AgriMacro Pipeline v3.2 starting...")
     start = time.time()
 
-    # Paths
     base = Path(__file__).parent.parent / "agrimacro-dash" / "public" / "data"
     raw_path = base / "raw"
     proc_path = base / "processed"
@@ -32,13 +35,13 @@ def main():
     reports_path.mkdir(parents=True, exist_ok=True)
 
     results = {}
+    total_steps = 18
 
     # =========================================================
-    # CORE STEPS (1-8) — essential data collection
+    # CORE STEPS (1-8)
     # =========================================================
 
-    # Step 1: Collect prices
-    log("Step 1/14: Collecting prices from Yahoo Finance...")
+    log(f"Step 1/{total_steps}: Collecting prices from Yahoo Finance...")
     try:
         from collect_prices import collect_all_prices
         from collect_ibkr import collect_ibkr_data
@@ -54,8 +57,7 @@ def main():
         results["prices"] = {"status": "ERROR", "error": str(e)}
         log(f"Prices failed: {e}", "ERR")
 
-    # Step 2: Collect COT (CFTC CSV)
-    log("Step 2/14: Collecting COT from CFTC...")
+    log(f"Step 2/{total_steps}: Collecting COT from CFTC...")
     try:
         from collect_cot import collect_cot_data
         cot = collect_cot_data()
@@ -67,8 +69,7 @@ def main():
         results["cot"] = {"status": "ERROR", "error": str(e)}
         log(f"COT failed: {e}", "ERR")
 
-    # Step 3: Process seasonality
-    log("Step 3/14: Processing seasonality...")
+    log(f"Step 3/{total_steps}: Processing seasonality...")
     try:
         from process_seasonality import process_seasonality
         season = process_seasonality(raw_path / "price_history.json")
@@ -80,8 +81,7 @@ def main():
         results["seasonality"] = {"status": "ERROR", "error": str(e)}
         log(f"Seasonality failed: {e}", "ERR")
 
-    # Step 4: Process spreads
-    log("Step 4/14: Processing spreads...")
+    log(f"Step 4/{total_steps}: Processing spreads...")
     try:
         from process_spreads import process_spreads
         spreads = process_spreads(raw_path / "price_history.json")
@@ -93,8 +93,7 @@ def main():
         results["spreads"] = {"status": "ERROR", "error": str(e)}
         log(f"Spreads failed: {e}", "ERR")
 
-    # Step 5: Process stocks watch
-    log("Step 5/14: Processing stocks watch...")
+    log(f"Step 5/{total_steps}: Processing stocks watch...")
     try:
         from process_stocks import process_stocks_watch
         stocks = process_stocks_watch(proc_path / "seasonality.json")
@@ -106,8 +105,7 @@ def main():
         results["stocks"] = {"status": "ERROR", "error": str(e)}
         log(f"Stocks watch failed: {e}", "ERR")
 
-    # Step 6: Collect physical market prices
-    log("Step 6/14: Collecting physical market prices...")
+    log(f"Step 6/{total_steps}: Collecting physical market prices...")
     try:
         from collect_physical import collect_physical
         physical = collect_physical(str(raw_path / "price_history.json"))
@@ -119,8 +117,7 @@ def main():
         results["physical"] = {"status": "ERROR", "error": str(e)}
         log(f"Physical prices failed: {e}", "ERR")
 
-    # Step 7: Collect international physical market prices
-    log("Step 7/14: Collecting international physical prices...")
+    log(f"Step 7/{total_steps}: Collecting international physical prices...")
     try:
         from collect_physical_intl import collect_physical_intl
         phys_intl = collect_physical_intl()
@@ -132,8 +129,7 @@ def main():
         results["physical_intl"] = {"status": "ERROR", "error": str(e)}
         log(f"Intl physical failed: {e}", "ERR")
 
-    # Step 8: Generate daily reading
-    log("Step 8/14: Generating daily reading...")
+    log(f"Step 8/{total_steps}: Generating daily reading...")
     try:
         from generate_reading import save_reading
         reading = save_reading(proc_path)
@@ -144,49 +140,74 @@ def main():
         log(f"Daily reading failed: {e}", "ERR")
 
     # =========================================================
-    # OPTIONAL STEPS (9-11) — external APIs, may be unavailable
-    # These NEVER block the pipeline
+    # OPTIONAL STEPS (9-13) - NEVER block the pipeline
     # =========================================================
 
-    # Step 9: Collect BCB, IBGE, CONAB
-    log("Step 9/14: Collecting BCB, IBGE, CONAB data...")
+    log(f"Step 9/{total_steps}: Collecting BCB, IBGE, CONAB data...")
     try:
         from collect_bcb_ibge import main as collect_bcb_ibge
         collect_bcb_ibge()
         results["bcb_ibge"] = {"status": "OK", "sources": "BCB, IBGE, CONAB"}
         log("BCB + IBGE + CONAB collected", "OK")
-    except Exception as e:
+    except BaseException as e:
         results["bcb_ibge"] = {"status": "WARN", "error": str(e)}
         log(f"BCB/IBGE/CONAB failed (non-blocking): {e}", "WARN")
 
-    # Step 10: Collect EIA energy data
-    log("Step 10/14: Collecting EIA energy data...")
+    log(f"Step 10/{total_steps}: Collecting EIA energy data...")
     try:
         from collect_eia import main as collect_eia
         collect_eia()
         results["eia"] = {"status": "OK"}
         log("EIA energy data collected", "OK")
-    except Exception as e:
+    except BaseException as e:
         results["eia"] = {"status": "WARN", "error": str(e)}
         log(f"EIA failed (non-blocking): {e}", "WARN")
 
-    # Step 11: Collect USDA FAS (Export Sales + PSD)
-    log("Step 11/14: Collecting USDA FAS data...")
+    log(f"Step 11/{total_steps}: Collecting USDA FAS data...")
     try:
         from collect_usda_fas import main as collect_fas
         collect_fas()
         results["usda_fas"] = {"status": "OK"}
         log("USDA FAS collected", "OK")
-    except Exception as e:
+    except BaseException as e:
         results["usda_fas"] = {"status": "WARN", "error": str(e)}
         log(f"USDA FAS failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 12/{total_steps}: Collecting news & FRED macro...")
+    try:
+        from collect_news import main as collect_news
+        collect_news()
+        results["news"] = {"status": "OK"}
+        log("News & FRED collected", "OK")
+    except BaseException as e:
+        results["news"] = {"status": "WARN", "error": str(e)}
+        log(f"News failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 13/{total_steps}: Collecting agricultural weather...")
+    try:
+        from collect_weather import main as collect_weather
+        collect_weather()
+        results["weather"] = {"status": "OK"}
+        log("Weather data collected", "OK")
+    except BaseException as e:
+        results["weather"] = {"status": "WARN", "error": str(e)}
+        log(f"Weather failed (non-blocking): {e}", "WARN")
+
     # =========================================================
-    # GENERATION STEPS (12-14) — reports and content
+    # GENERATION STEPS (14-18)
     # =========================================================
 
-    # Step 12: Generate daily report (Claude API)
-    log("Step 12/14: Generating daily report...")
+    log(f"Step 14/{total_steps}: Generating calendar...")
+    try:
+        from collect_calendar import main as generate_calendar
+        generate_calendar()
+        results["calendar"] = {"status": "OK"}
+        log("Calendar generated", "OK")
+    except Exception as e:
+        results["calendar"] = {"status": "WARN", "error": str(e)}
+        log(f"Calendar failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 15/{total_steps}: Generating daily report...")
     try:
         from generate_report import main as generate_report
         generate_report()
@@ -196,27 +217,35 @@ def main():
         results["report"] = {"status": "ERROR", "error": str(e)}
         log(f"Report generation failed: {e}", "ERR")
 
-    # Step 13: Generate daily PDF
-    log("Step 13/14: Generating daily PDF...")
+    log(f"Step 16/{total_steps}: Generating PDF report...")
     try:
-        from generate_daily_pdf import main as generate_pdf
-        generate_pdf()
+        from generate_report_pdf import build_pdf
+        build_pdf()
         results["pdf"] = {"status": "OK"}
-        log("Daily PDF generated", "OK")
+        log("PDF report generated", "OK")
     except Exception as e:
         results["pdf"] = {"status": "ERROR", "error": str(e)}
         log(f"PDF generation failed: {e}", "ERR")
 
-    # Step 14: Generate visual content (PDF visual + video script)
-    log("Step 14/14: Generating visual content...")
+    log(f"Step 17/{total_steps}: Generating video script...")
     try:
-        from generate_content import main as generate_content
-        generate_content()
-        results["content"] = {"status": "OK"}
-        log("Visual PDF + video script generated", "OK")
+        from generate_video_script import main as generate_video
+        generate_video()
+        results["video_script"] = {"status": "OK"}
+        log("Video script generated", "OK")
     except Exception as e:
-        results["content"] = {"status": "ERROR", "error": str(e)}
-        log(f"Content generation failed: {e}", "ERR")
+        results["video_script"] = {"status": "ERROR", "error": str(e)}
+        log(f"Video script failed: {e}", "ERR")
+
+    log(f"Step 18/{total_steps}: Generating video MP4...")
+    try:
+        from step18_video_generator import main as generate_video_mp4
+        generate_video_mp4()
+        results["video_mp4"] = {"status": "OK"}
+        log("Video MP4 generated", "OK")
+    except BaseException as e:
+        results["video_mp4"] = {"status": "WARN", "error": str(e)}
+        log(f"Video MP4 failed (non-blocking): {e}", "WARN")
 
     # =========================================================
     # SUMMARY
@@ -238,10 +267,11 @@ def main():
         errs = [k for k, v in results.items() if v.get("status") == "ERROR"]
         log(f"Errors: {', '.join(errs)}", "ERR")
 
-    # Save run log
     run_log = {
         "timestamp": datetime.now().isoformat(),
         "elapsed_seconds": elapsed,
+        "pipeline_version": "3.2",
+        "total_steps": total_steps,
         "ok": ok_count,
         "warnings": warn_count,
         "errors": err_count,
@@ -250,7 +280,6 @@ def main():
     with open(base / "last_run.json", "w") as f:
         json.dump(run_log, f, indent=2)
 
-    # ALWAYS exit 0 — pipeline never blocks the .bat
     return 0
 
 if __name__ == "__main__":

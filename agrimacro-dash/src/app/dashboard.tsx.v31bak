@@ -1,0 +1,1745 @@
+﻿import { useState, useEffect, useRef } from "react";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AgriMacro v3.1 — Dashboard Profissional de Commodities Agrícolas
+   ZERO MOCK — Somente dados reais via pipeline JSON
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// ── Types ──────────────────────────────────────────────────────────────────
+interface OHLCV { date:string; open:number; high:number; low:number; close:number; volume:number; }
+type PriceData = Record<string, OHLCV[]>;
+
+interface SeasonPoint { day:number; close:number; date?:string; }
+interface SeasonEntry { symbol:string; status:string; years:string[]; series:Record<string,SeasonPoint[]>; }
+type SeasonData = Record<string, SeasonEntry>;
+
+interface SpreadInfo { 
+  name:string; unit:string; current:number; zscore_1y:number; percentile:number; 
+  regime:string; points:number; description?:string; trend?:string; trend_pct?:number;
+  history?:{date:string;value:number}[];
+}
+interface SpreadsData { timestamp:string; spreads:Record<string,SpreadInfo>; }
+
+interface StockItem { 
+  symbol:string; price:number; avg_5y:number; price_vs_avg:number; state:string; 
+  factors:string[]; data_available:{stock_proxy:boolean;curve:boolean;cot:boolean}; 
+}
+interface StocksData { timestamp:string; commodities:Record<string,StockItem>; }
+
+interface COTHistoryEntry {
+  date:string; open_interest:number|null;
+  comm_long?:number|null; comm_short?:number|null; comm_net?:number|null;
+  noncomm_long?:number|null; noncomm_short?:number|null; noncomm_net?:number|null;
+  producer_long?:number|null; producer_short?:number|null; producer_net?:number|null;
+  swap_long?:number|null; swap_short?:number|null; swap_net?:number|null;
+  managed_money_long?:number|null; managed_money_short?:number|null; managed_money_net?:number|null;
+  mm_long_pct?:number|null; mm_short_pct?:number|null;
+}
+interface COTCommodity {
+  ticker:string; name:string;
+  legacy?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number};
+  disaggregated?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number};
+}
+interface COTData {
+  generated_at:string; source:string; year:number;
+  commodities:Record<string,COTCommodity>;
+}
+
+interface DailyReading {
+  timestamp:string; date:string;
+  blocos:{title:string;body:string}[];
+  perguntas:string[];
+  resumo:Record<string,string>;
+  sources:string[];
+}
+
+type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia";
+
+// ── Color Theme ────────────────────────────────────────────────────────────
+const C = {
+  bg:"#0d1117", panel:"#161b22", panelAlt:"#1c2128", border:"rgba(148,163,184,.12)",
+  text:"#e2e8f0", textDim:"#94a3b8", textMuted:"#64748b",
+  green:"#22c55e", red:"#ef4444", amber:"#f59e0b", blue:"#3b82f6", cyan:"#06b6d4", purple:"#a78bfa",
+  greenBg:"rgba(34,197,94,.12)", redBg:"rgba(239,68,68,.12)", amberBg:"rgba(245,158,11,.12)", blueBg:"rgba(59,130,246,.12)",
+  greenBorder:"rgba(34,197,94,.3)", redBorder:"rgba(239,68,68,.3)", amberBorder:"rgba(245,158,11,.3)",
+  candleUp:"#22c55e", candleDn:"#ef4444", wick:"rgba(148,163,184,.4)",
+  ma9:"#06b6d4", ma21:"#fbbf24", ma50:"#a78bfa", ma200:"#ef4444", bb:"rgba(148,163,184,.18)",
+  rsiLine:"#f59e0b", rsiOverbought:"rgba(239,68,68,.3)", rsiOversold:"rgba(34,197,94,.3)",
+};
+
+// ── Commodities ────────────────────────────────────────────────────────────
+const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
+  {sym:"ZC",name:"Corn",group:"Grãos",unit:"¢/bu"},
+  {sym:"ZS",name:"Soybeans",group:"Grãos",unit:"¢/bu"},
+  {sym:"ZW",name:"Wheat CBOT",group:"Grãos",unit:"¢/bu"},
+  {sym:"KE",name:"Wheat KC",group:"Grãos",unit:"¢/bu"},
+  {sym:"ZM",name:"Soybean Meal",group:"Grãos",unit:"$/st"},
+  {sym:"ZL",name:"Soybean Oil",group:"Grãos",unit:"¢/lb"},
+  {sym:"SB",name:"Sugar #11",group:"Softs",unit:"¢/lb"},
+  {sym:"KC",name:"Coffee C",group:"Softs",unit:"¢/lb"},
+  {sym:"CT",name:"Cotton #2",group:"Softs",unit:"¢/lb"},
+  {sym:"CC",name:"Cocoa",group:"Softs",unit:"$/mt"},
+  {sym:"OJ",name:"Orange Juice",group:"Softs",unit:"¢/lb"},
+  {sym:"LE",name:"Live Cattle",group:"Pecuária",unit:"¢/lb"},
+  {sym:"GF",name:"Feeder Cattle",group:"Pecuária",unit:"¢/lb"},
+  {sym:"HE",name:"Lean Hogs",group:"Pecuária",unit:"¢/lb"},
+  {sym:"CL",name:"Crude Oil",group:"Energia",unit:"$/bbl"},
+  {sym:"NG",name:"Natural Gas",group:"Energia",unit:"$/MMBtu"},
+  {sym:"GC",name:"Gold",group:"Metais",unit:"$/oz"},
+  {sym:"SI",name:"Silver",group:"Metais",unit:"$/oz"},
+  {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
+];
+
+const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia"];
+
+const SEASON_COLORS:Record<string,string> = {
+  "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
+  "current":"#f59e0b","average":"#e2e8f0",
+};
+
+const SPREAD_NAMES:Record<string,string> = {
+  soy_crush:"Soy Crush Margin",ke_zw:"KC−CBOT Wheat",zl_cl:"Soy Oil / Crude",
+  feedlot:"Feedlot Margin",zc_zm:"Corn / Meal",zc_zs:"Corn / Soy Ratio",
+};
+// ── Cost of Production Data ────────────────────────────────────────────────
+const COST_DATA:{sym:string;commodity:string;futuresUnit:string;regions:{region:string;cost:number;unit:string;source:string}[]}[] = [
+  {sym:"ZC",commodity:"Corn",futuresUnit:"¢/bu",regions:[
+    {region:"🇺🇸 EUA (Heartland)",cost:475,unit:"¢/bu",source:"USDA ERS 2025f"},
+    {region:"🇺🇸 EUA (High Prod.)",cost:430,unit:"¢/bu",source:"Purdue 2025"},
+    {region:"🇧🇷 Brasil (MT)",cost:350,unit:"¢/bu",source:"CONAB 24/25"},
+    {region:"🇧🇷 Brasil (PR)",cost:380,unit:"¢/bu",source:"CONAB 24/25"},
+    {region:"🇦🇷 Argentina",cost:310,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
+  ]},
+  {sym:"ZS",commodity:"Soybeans",futuresUnit:"¢/bu",regions:[
+    {region:"🇺🇸 EUA (Heartland)",cost:1103,unit:"¢/bu",source:"USDA ERS 2025f"},
+    {region:"🇺🇸 EUA (High Prod.)",cost:1050,unit:"¢/bu",source:"Purdue 2025"},
+    {region:"🇧🇷 Brasil (MT)",cost:870,unit:"¢/bu",source:"CONAB 24/25"},
+    {region:"🇧🇷 Brasil (MATOPIBA)",cost:830,unit:"¢/bu",source:"CONAB 24/25"},
+    {region:"🇦🇷 Argentina",cost:800,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
+  ]},
+  {sym:"ZW",commodity:"Wheat",futuresUnit:"¢/bu",regions:[
+    {region:"🇺🇸 EUA (Kansas)",cost:560,unit:"¢/bu",source:"USDA ERS 2025f"},
+    {region:"🇺🇸 EUA (N.Dakota)",cost:530,unit:"¢/bu",source:"USDA ERS 2025f"},
+    {region:"🇷🇺 Rússia",cost:350,unit:"¢/bu",source:"IKAR est. 2025"},
+    {region:"🇦🇷 Argentina",cost:400,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
+    {region:"🇦🇺 Austrália",cost:440,unit:"¢/bu",source:"ABARES est. 2025"},
+  ]},
+  {sym:"KC",commodity:"Coffee Arabica",futuresUnit:"¢/lb",regions:[
+    {region:"🇧🇷 Brasil (Cerrado)",cost:155,unit:"¢/lb",source:"CONAB 24/25"},
+    {region:"🇧🇷 Brasil (Sul MG)",cost:175,unit:"¢/lb",source:"CONAB 24/25"},
+    {region:"🇨🇴 Colômbia",cost:220,unit:"¢/lb",source:"FNC est. 2025"},
+    {region:"🇻🇳 Vietnã (Robusta eq.)",cost:105,unit:"¢/lb",source:"VICOFA est. 2025"},
+    {region:"🇪🇹 Etiópia",cost:130,unit:"¢/lb",source:"ECX est. 2025"},
+  ]},
+  {sym:"SB",commodity:"Sugar #11",futuresUnit:"¢/lb",regions:[
+    {region:"🇧🇷 Brasil (SP)",cost:13.5,unit:"¢/lb",source:"UNICA 24/25"},
+    {region:"🇮🇳 Índia",cost:17.5,unit:"¢/lb",source:"ISMA est. 2025"},
+    {region:"🇹🇭 Tailândia",cost:15.0,unit:"¢/lb",source:"OCSB est. 2025"},
+  ]},
+  {sym:"LE",commodity:"Live Cattle",futuresUnit:"¢/lb",regions:[
+    {region:"🇺🇸 EUA (Feedlot)",cost:195,unit:"¢/lb",source:"USDA ERS 2025f"},
+    {region:"🇧🇷 Brasil (Confin.)",cost:145,unit:"¢/lb",source:"CEPEA 2025"},
+    {region:"🇦🇺 Austrália",cost:165,unit:"¢/lb",source:"MLA est. 2025"},
+    {region:"🇦🇷 Argentina",cost:115,unit:"¢/lb",source:"IPCVA est. 2025"},
+  ]},
+  {sym:"CC",commodity:"Cocoa",futuresUnit:"$/mt",regions:[
+    {region:"🇨🇮 Costa do Marfim",cost:3200,unit:"$/mt",source:"CCC est. 2025"},
+    {region:"🇬🇭 Gana",cost:3600,unit:"$/mt",source:"COCOBOD est. 2025"},
+    {region:"🇮🇩 Indonésia",cost:2800,unit:"$/mt",source:"ASKINDO est. 2025"},
+    {region:"🇧🇷 Brasil (Bahia)",cost:3800,unit:"$/mt",source:"CEPLAC est. 2025"},
+  ]},
+  {sym:"CT",commodity:"Cotton #2",futuresUnit:"¢/lb",regions:[
+    {region:"🇺🇸 EUA (Texas)",cost:78,unit:"¢/lb",source:"USDA ERS 2025f"},
+    {region:"🇧🇷 Brasil (MT)",cost:58,unit:"¢/lb",source:"CONAB 24/25"},
+    {region:"🇮🇳 Índia",cost:62,unit:"¢/lb",source:"CAI est. 2025"},
+    {region:"🇦🇺 Austrália",cost:60,unit:"¢/lb",source:"Cotton AU est. 2025"},
+  ]},
+];
+
+// ── Physical Markets Data (International - placeholder) ─────────────────────
+const PHYS_INTL:{cat:string;items:{origin:string;price:string;basis:string;trend:string;source:string}[]}[] = [
+  {cat:"☕ Coffee",items:[
+    {origin:"🇧🇷 Brasil (Santos) — Arabica NY 2/3",price:"—",basis:"—",trend:"Colheita 25/26 iniciando",source:"Cecafé"},
+    {origin:"🇧🇷 Brasil (Cerrado) — Fine Cup",price:"—",basis:"—",trend:"Prêmio qualidade",source:"Cecafé"},
+    {origin:"🇨🇴 Colômbia — Excelso EP",price:"—",basis:"—",trend:"Prêmio qualidade alto",source:"FNC"},
+    {origin:"🇻🇳 Vietnã — Robusta G2",price:"—",basis:"—",trend:"Safra acima esperado",source:"VICOFA"},
+  ]},
+  {cat:"🌾 Soybeans",items:[
+    {origin:"🇧🇷 Brasil (Paranaguá) — GMO",price:"—",basis:"—",trend:"Colheita recorde",source:"CEPEA"},
+    {origin:"🇦🇷 Argentina — GMO",price:"—",basis:"—",trend:"Safra recuperando",source:"B.Cereales"},
+  ]},
+  {cat:"🌽 Corn",items:[
+    {origin:"🇧🇷 Brasil (Paranaguá) — GMO",price:"—",basis:"—",trend:"Safrinha nos portos",source:"CEPEA"},
+    {origin:"🇦🇷 Argentina — GMO",price:"—",basis:"—",trend:"Safra volumosa",source:"B.Cereales"},
+  ]},
+  {cat:"🐄 Live Cattle",items:[
+    {origin:"🇧🇷 Brasil (SP) — Boi Gordo @",price:"—",basis:"—",trend:"Alta sazonal",source:"CEPEA"},
+    {origin:"🇦🇷 Argentina (Liniers)",price:"—",basis:"—",trend:"Câmbio favorece export",source:"IPCVA"},
+  ]},
+  {cat:"🌾 Wheat",items:[
+    {origin:"🇷🇺 Rússia (FOB BS) — 12.5%",price:"—",basis:"—",trend:"Safra grande",source:"IKAR"},
+    {origin:"🇦🇷 Argentina — Trigo Pan",price:"—",basis:"—",trend:"Normalizado",source:"B.Cereales"},
+  ]},
+  {cat:"🍫 Cocoa",items:[
+    {origin:"🇨🇮 Costa do Marfim — Grade I",price:"—",basis:"—",trend:"Menor safra 10 anos",source:"CCC"},
+    {origin:"🇬🇭 Gana — Grade I",price:"—",basis:"—",trend:"Produção -50%",source:"COCOBOD"},
+  ]},
+  {cat:"🇨🇳 China Demand",items:[
+    {origin:"🇨🇳 Soja Import (DCE)",price:"—",basis:"—",trend:"Importação desacelerando",source:"GACC"},
+    {origin:"🇨🇳 Milho Import (DCE)",price:"—",basis:"—",trend:"Estoques altos",source:"GACC"},
+    {origin:"🇨🇳 Suínos (Zhengzhou)",price:"—",basis:"—",trend:"Demanda estável",source:"MARA"},
+  ]},
+];
+// ── Helper Components ──────────────────────────────────────────────────────
+
+function Badge({label,color}:{label:string;color:string}) {
+  const bg = color===C.green?C.greenBg:color===C.red?C.redBg:color===C.amber?C.amberBg:C.blueBg;
+  const border = color===C.green?C.greenBorder:color===C.red?C.redBorder:color===C.amber?C.amberBorder:"rgba(59,130,246,.3)";
+  return <span style={{display:"inline-block",padding:"3px 10px",borderRadius:4,fontSize:10,fontWeight:700,
+    color,background:bg,border:`1px solid ${border}`,letterSpacing:.3}}>{label}</span>;
+}
+
+function DevBar({val}:{val:number}) {
+  const pct = Math.min(Math.abs(val),50)/50*100;
+  const color = val<-15?C.red:val>15?C.green:C.amber;
+  const left = val<0;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <div style={{width:80,height:8,background:"rgba(148,163,184,.1)",borderRadius:4,position:"relative",overflow:"hidden"}}>
+        <div style={{
+          position:"absolute",height:"100%",borderRadius:4,background:color,
+          width:`${pct/2}%`,
+          left:left?"auto":"50%",right:left?"50%":"auto",
+        }}/>
+        <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:1,background:"rgba(148,163,184,.3)"}}/>
+      </div>
+      <span style={{fontSize:11,fontFamily:"monospace",fontWeight:600,color,minWidth:50}}>
+        {val>=0?"+":""}{val.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+function PctBar({val}:{val:number}) {
+  const color = val>70?C.green:val<30?C.red:C.amber;
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <div style={{width:60,height:6,background:"rgba(148,163,184,.1)",borderRadius:3,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${val}%`,background:color,borderRadius:3}}/>
+      </div>
+      <span style={{fontSize:10,fontFamily:"monospace",color:C.textDim}}>{val.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+function MarginBar({price,cost}:{price:number;cost:number}) {
+  const margin = ((price-cost)/cost)*100;
+  const color = margin>20?C.green:margin>0?C.amber:C.red;
+  const label = margin>0?`+${margin.toFixed(0)}%`:`${margin.toFixed(0)}%`;
+  const status = margin>20?"LUCRO":margin>0?"MARGINAL":"PREJUÍZO";
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:6}}>
+      <div style={{width:50,height:6,background:"rgba(148,163,184,.1)",borderRadius:3,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${Math.min(Math.abs(margin),100)}%`,background:color,borderRadius:3}}/>
+      </div>
+      <span style={{fontSize:10,fontFamily:"monospace",fontWeight:600,color}}>{label}</span>
+      <span style={{fontSize:9,color:C.textMuted}}>({status})</span>
+    </div>
+  );
+}
+
+function SectionTitle({children}:{children:React.ReactNode}) {
+  return <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12,paddingBottom:8,
+    borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}>{children}</div>;
+}
+
+function TableHeader({cols}:{cols:string[]}) {
+  return (
+    <tr style={{background:C.panelAlt}}>
+      {cols.map((c,i)=>(
+        <th key={i} style={{padding:"10px 12px",textAlign:i===0?"left":"right",fontSize:10,fontWeight:700,
+          color:C.textMuted,textTransform:"uppercase",letterSpacing:.5,borderBottom:`1px solid ${C.border}`}}>{c}</th>
+      ))}
+    </tr>
+  );
+}
+
+function DataPlaceholder({title,detail}:{title:string;detail:string}) {
+  return (
+    <div style={{padding:40,textAlign:"center",background:C.panelAlt,borderRadius:8,border:`1px dashed ${C.border}`}}>
+      <div style={{fontSize:14,fontWeight:600,color:C.textDim,marginBottom:6}}>{title}</div>
+      <div style={{fontSize:11,color:C.textMuted,maxWidth:400,margin:"0 auto"}}>{detail}</div>
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:60}}>
+      <div style={{width:32,height:32,border:`3px solid ${C.border}`,borderTopColor:C.blue,
+        borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+// ── Technical Indicators ───────────────────────────────────────────────────
+
+function emaCalc(data:number[],period:number):number[] {
+  const k=2/(period+1);
+  const ema:number[]=[];
+  data.forEach((v,i)=>{
+    if(i===0)ema.push(v);
+    else ema.push(v*k+ema[i-1]*(1-k));
+  });
+  return ema;
+}
+
+function smaCalc(data:number[],period:number):number[] {
+  const sma:number[]=[];
+  for(let i=0;i<data.length;i++){
+    if(i<period-1){sma.push(NaN);continue;}
+    const slice=data.slice(i-period+1,i+1);
+    sma.push(slice.reduce((a,b)=>a+b,0)/period);
+  }
+  return sma;
+}
+
+function bbCalc(data:number[],period:number=20,mult:number=2):{upper:number[];middle:number[];lower:number[]} {
+  const middle=smaCalc(data,period);
+  const upper:number[]=[];
+  const lower:number[]=[];
+  for(let i=0;i<data.length;i++){
+    if(i<period-1){upper.push(NaN);lower.push(NaN);continue;}
+    const slice=data.slice(i-period+1,i+1);
+    const avg=middle[i];
+    const std=Math.sqrt(slice.reduce((sum,v)=>sum+(v-avg)**2,0)/period);
+    upper.push(avg+mult*std);
+    lower.push(avg-mult*std);
+  }
+  return {upper,middle,lower};
+}
+
+function rsiCalc(data:number[],period:number=14):number[] {
+  const rsi:number[]=[];
+  let gains=0,losses=0;
+  
+  for(let i=0;i<data.length;i++){
+    if(i===0){rsi.push(50);continue;}
+    const change=data[i]-data[i-1];
+    const gain=change>0?change:0;
+    const loss=change<0?-change:0;
+    
+    if(i<period){
+      gains+=gain;
+      losses+=loss;
+      rsi.push(50);
+    } else if(i===period){
+      gains+=gain;
+      losses+=loss;
+      const avgGain=gains/period;
+      const avgLoss=losses/period;
+      const rs=avgLoss===0?100:avgGain/avgLoss;
+      rsi.push(100-100/(1+rs));
+    } else {
+      const avgGain=(gains*(period-1)+gain)/period;
+      const avgLoss=(losses*(period-1)+loss)/period;
+      gains=avgGain*period;
+      losses=avgLoss*period;
+      const rs=avgLoss===0?100:avgGain/avgLoss;
+      rsi.push(100-100/(1+rs));
+    }
+  }
+  return rsi;
+}
+// ── Price Chart with RSI ───────────────────────────────────────────────────
+
+function PriceChart({candles,symbol}:{candles:OHLCV[];symbol:string}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dims,setDims] = useState({w:900,h:480});
+  const [hover,setHover] = useState<{i:number;x:number;y:number}|null>(null);
+  const VISIBLE = 120;
+  const RSI_HEIGHT = 80;
+
+  useEffect(()=>{
+    const el=containerRef.current;if(!el)return;
+    const obs=new ResizeObserver(entries=>{
+      const{width}=entries[0].contentRect;
+      if(width>0)setDims({w:Math.floor(width),h:480});
+    });
+    obs.observe(el);return()=>obs.disconnect();
+  },[]);
+
+  useEffect(()=>{
+    const cvs=ref.current;if(!cvs||!candles.length)return;
+    const ctx=cvs.getContext("2d");if(!ctx)return;
+    
+    const W=dims.w,H=dims.h;
+    const mainH=H-RSI_HEIGHT-30;
+    cvs.width=W*2;cvs.height=H*2;ctx.scale(2,2);
+    cvs.style.width=W+"px";cvs.style.height=H+"px";
+
+    const data=candles.slice(-VISIBLE);
+    const closes=data.map(c=>c.close);
+    const ema9=emaCalc(closes,9);
+    const ma21=smaCalc(closes,21);
+    const ma50=smaCalc(closes,50);
+    const ma200=smaCalc(closes,200);
+    const bb=bbCalc(closes,20,2);
+    const rsi=rsiCalc(closes,14);
+
+    const pad={t:24,b:30,l:55,r:16};
+    const chartH=mainH-pad.t-pad.b;
+    const allP=data.flatMap(c=>[c.high,c.low]);
+    const mn=Math.min(...allP),mx=Math.max(...allP),range=mx-mn||1;
+    const pMn=mn-range*.05,pMx=mx+range*.05;
+    const bW=Math.max(2,(W-pad.l-pad.r)/data.length-1);
+
+    const yP=(v:number)=>pad.t+(1-(v-pMn)/(pMx-pMn))*chartH;
+    const xC=(i:number)=>pad.l+i*(W-pad.l-pad.r)/data.length+bW/2;
+
+    // Background
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+    // Grid lines
+    ctx.strokeStyle="rgba(148,163,184,.06)";ctx.lineWidth=1;
+    for(let i=0;i<5;i++){
+      const y=pad.t+i*(chartH/4);
+      ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    }
+
+    // Y axis labels
+    ctx.fillStyle=C.textMuted;ctx.font="10px monospace";ctx.textAlign="right";
+    for(let i=0;i<5;i++){
+      const v=pMx-(pMx-pMn)*i/4;
+      ctx.fillText(v.toFixed(2),pad.l-6,pad.t+i*(chartH/4)+4);
+    }
+
+    // Bollinger Bands fill
+    ctx.fillStyle=C.bb;ctx.beginPath();
+    let started=false;
+    for(let i=0;i<data.length;i++){
+      if(isNaN(bb.upper[i]))continue;
+      const x=xC(i);
+      if(!started){ctx.moveTo(x,yP(bb.upper[i]));started=true;}
+      else ctx.lineTo(x,yP(bb.upper[i]));
+    }
+    for(let i=data.length-1;i>=0;i--){
+      if(isNaN(bb.lower[i]))continue;
+      ctx.lineTo(xC(i),yP(bb.lower[i]));
+    }
+    ctx.closePath();ctx.fill();
+
+    // Moving averages
+    const drawLine=(arr:number[],color:string,width:number=1)=>{
+      ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();
+      let s=false;
+      arr.forEach((v,i)=>{
+        if(isNaN(v))return;
+        const x=xC(i),y=yP(v);
+        if(!s){ctx.moveTo(x,y);s=true;}else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+    };
+    drawLine(ema9,C.ma9,1.5);
+    drawLine(ma21,C.ma21,1);
+    drawLine(ma50,C.ma50,1);
+    if(ma200.some(v=>!isNaN(v)))drawLine(ma200,C.ma200,1);
+
+    // Candles
+    for(let i=0;i<data.length;i++){
+      const c=data[i];const x=xC(i);const up=c.close>=c.open;
+      ctx.strokeStyle=C.wick;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,yP(c.high));ctx.lineTo(x,yP(c.low));ctx.stroke();
+      ctx.fillStyle=up?C.candleUp:C.candleDn;
+      const top=yP(Math.max(c.open,c.close));
+      const bot=yP(Math.min(c.open,c.close));
+      const h=Math.max(1,bot-top);
+      ctx.fillRect(x-bW/2,top,bW,h);
+    }
+
+    // Volume bars (small)
+    const volH=30;
+    const maxVol=Math.max(...data.map(c=>c.volume||1));
+    ctx.globalAlpha=0.3;
+    for(let i=0;i<data.length;i++){
+      const c=data[i];const vh=(c.volume/maxVol)*volH;const up=c.close>=c.open;
+      ctx.fillStyle=up?C.candleUp:C.candleDn;
+      ctx.fillRect(xC(i)-bW/2,mainH-pad.b-vh,bW,vh);
+    }
+    ctx.globalAlpha=1;
+
+    // X axis dates
+    ctx.fillStyle=C.textMuted;ctx.font="9px monospace";ctx.textAlign="center";
+    const step=Math.ceil(data.length/8);
+    for(let i=0;i<data.length;i+=step){
+      const d=data[i].date;
+      ctx.fillText(d.slice(5),xC(i),mainH-pad.b+14);
+    }
+
+    // RSI Panel
+    const rsiTop=mainH+10;
+    const rsiH=RSI_HEIGHT-20;
+    
+    // RSI background
+    ctx.fillStyle=C.panelAlt;
+    ctx.fillRect(pad.l,rsiTop,W-pad.l-pad.r,rsiH);
+    
+    // RSI zones
+    ctx.fillStyle=C.rsiOverbought;
+    ctx.fillRect(pad.l,rsiTop,W-pad.l-pad.r,rsiH*0.3);
+    ctx.fillStyle=C.rsiOversold;
+    ctx.fillRect(pad.l,rsiTop+rsiH*0.7,W-pad.l-pad.r,rsiH*0.3);
+    
+    // RSI 50 line
+    ctx.strokeStyle="rgba(148,163,184,.2)";ctx.lineWidth=1;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(pad.l,rsiTop+rsiH*0.5);ctx.lineTo(W-pad.r,rsiTop+rsiH*0.5);ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // RSI line
+    const yRsi=(v:number)=>rsiTop+rsiH*(1-v/100);
+    ctx.strokeStyle=C.rsiLine;ctx.lineWidth=1.5;ctx.beginPath();
+    let rsiStarted=false;
+    for(let i=0;i<rsi.length;i++){
+      const x=xC(i),y=yRsi(rsi[i]);
+      if(!rsiStarted){ctx.moveTo(x,y);rsiStarted=true;}else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    
+    // RSI labels
+    ctx.fillStyle=C.textMuted;ctx.font="9px monospace";ctx.textAlign="right";
+    ctx.fillText("70",pad.l-4,rsiTop+rsiH*0.3+3);
+    ctx.fillText("50",pad.l-4,rsiTop+rsiH*0.5+3);
+    ctx.fillText("30",pad.l-4,rsiTop+rsiH*0.7+3);
+    
+    // RSI value
+    const lastRsi=rsi[rsi.length-1];
+    ctx.fillStyle=lastRsi>70?C.red:lastRsi<30?C.green:C.amber;
+    ctx.font="bold 11px monospace";ctx.textAlign="left";
+    ctx.fillText(`RSI: ${lastRsi.toFixed(1)}`,pad.l+5,rsiTop+12);
+
+    // Legend
+    const legendY=8;
+    ctx.font="9px monospace";ctx.textAlign="left";
+    const legends=[
+      {label:"EMA9",color:C.ma9},{label:"MA21",color:C.ma21},
+      {label:"MA50",color:C.ma50},{label:"MA200",color:C.ma200},{label:"BB",color:"rgba(148,163,184,.5)"}
+    ];
+    let lx=pad.l;
+    legends.forEach(({label,color})=>{
+      ctx.fillStyle=color;ctx.fillRect(lx,legendY,16,2);
+      ctx.fillStyle=C.textMuted;ctx.fillText(label,lx+20,legendY+4);
+      lx+=60;
+    });
+
+    // Hover crosshair
+    if(hover&&hover.i>=0&&hover.i<data.length){
+      const hc=data[hover.i];
+      const x=xC(hover.i);
+      ctx.strokeStyle="rgba(148,163,184,.3)";ctx.lineWidth=1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,mainH-pad.b);ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Tooltip
+      ctx.fillStyle="rgba(22,27,34,.95)";
+      const tx=Math.min(x+10,W-140);
+      ctx.fillRect(tx,pad.t,130,85);
+      ctx.strokeStyle=C.border;ctx.strokeRect(tx,pad.t,130,85);
+      ctx.fillStyle=C.text;ctx.font="bold 10px monospace";
+      ctx.fillText(hc.date,tx+8,pad.t+14);
+      ctx.font="10px monospace";ctx.fillStyle=C.textDim;
+      ctx.fillText(`O: ${hc.open.toFixed(2)}`,tx+8,pad.t+30);
+      ctx.fillText(`H: ${hc.high.toFixed(2)}`,tx+8,pad.t+44);
+      ctx.fillText(`L: ${hc.low.toFixed(2)}`,tx+8,pad.t+58);
+      ctx.fillStyle=hc.close>=hc.open?C.green:C.red;
+      ctx.fillText(`C: ${hc.close.toFixed(2)}`,tx+8,pad.t+72);
+    }
+  },[candles,dims,hover]);
+
+  const handleMouse=(e:React.MouseEvent)=>{
+    const rect=ref.current?.getBoundingClientRect();if(!rect)return;
+    const x=e.clientX-rect.left;
+    const data=candles.slice(-VISIBLE);
+    const pad={l:55,r:16};
+    const bW=(dims.w-pad.l-pad.r)/data.length;
+    const i=Math.floor((x-pad.l)/bW);
+    if(i>=0&&i<data.length)setHover({i,x:e.clientX,y:e.clientY});
+    else setHover(null);
+  };
+
+  return (
+    <div ref={containerRef} style={{width:"100%"}}>
+      <canvas ref={ref} style={{borderRadius:6,display:"block",cursor:"crosshair"}}
+        onMouseMove={handleMouse} onMouseLeave={()=>setHover(null)}/>
+    </div>
+  );
+}
+// ── Season Chart ───────────────────────────────────────────────────────────
+
+function SeasonChart({entry}:{entry:SeasonEntry}) {
+  const ref=useRef<HTMLCanvasElement>(null);
+  const containerRef=useRef<HTMLDivElement>(null);
+  const [w,setW]=useState(900);
+
+  useEffect(()=>{
+    const el=containerRef.current;if(!el)return;
+    const obs=new ResizeObserver(entries=>{const{width}=entries[0].contentRect;if(width>0)setW(Math.floor(width));});
+    obs.observe(el);return()=>obs.disconnect();
+  },[]);
+
+  useEffect(()=>{
+    const cvs=ref.current;if(!cvs)return;
+    const ctx=cvs.getContext("2d");if(!ctx)return;
+    const H=320;
+    cvs.width=w*2;cvs.height=H*2;ctx.scale(2,2);
+    cvs.style.width=w+"px";cvs.style.height=H+"px";
+    
+    const pad={t:30,b:30,l:60,r:16};
+    const cH=H-pad.t-pad.b;
+    
+    let allVals:number[]=[];
+    for(const yr of entry.years){const s=entry.series[yr];if(s)allVals.push(...s.map(p=>p.close));}
+    if(!allVals.length)return;
+    
+    const mn=Math.min(...allVals),mx=Math.max(...allVals),range=mx-mn||1;
+    const pMn=mn-range*.05,pMx=mx+range*.05;
+    const yP=(v:number)=>pad.t+(1-(v-pMn)/(pMx-pMn))*cH;
+    const xP=(day:number)=>pad.l+(day/365)*(w-pad.l-pad.r);
+
+    // Background
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,H);
+    
+    // Grid
+    ctx.strokeStyle="rgba(148,163,184,.06)";ctx.lineWidth=1;
+    for(let i=0;i<5;i++){const y=pad.t+i*(cH/4);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
+    
+    // Y axis
+    ctx.fillStyle=C.textMuted;ctx.font="10px monospace";ctx.textAlign="right";
+    for(let i=0;i<5;i++){const v=pMx-(pMx-pMn)*i/4;ctx.fillText(v.toFixed(0),pad.l-6,pad.t+i*(cH/4)+4);}
+    
+    // X axis months
+    ctx.textAlign="center";ctx.font="9px monospace";
+    const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    for(let m=0;m<12;m++){const day=m*30.4+15;ctx.fillText(months[m],xP(day),H-pad.b+14);}
+
+    // Draw lines (years first, then current, then average on top)
+    const drawOrder = entry.years.filter(y=>y!=="current"&&y!=="average");
+    drawOrder.push("average");
+    if(entry.years.includes("current"))drawOrder.push("current");
+
+    for(const yr of drawOrder){
+      const s=entry.series[yr];if(!s||!s.length)continue;
+      const col=SEASON_COLORS[yr]||C.textMuted;
+      ctx.strokeStyle=col;
+      ctx.lineWidth=yr==="current"?2.5:yr==="average"?2:1;
+      ctx.setLineDash(yr==="average"?[6,4]:[]);
+      ctx.globalAlpha=yr==="current"||yr==="average"?1:.35;
+      ctx.beginPath();
+      let started=false;
+      for(const p of s){
+        const x=xP(p.day),y=yP(p.close);
+        if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha=1;ctx.setLineDash([]);
+    }
+
+    // Legend
+    let lx=pad.l;
+    ctx.font="9px monospace";
+    for(const yr of entry.years){
+      const col=SEASON_COLORS[yr]||C.textMuted;
+      ctx.fillStyle=col;
+      ctx.fillRect(lx,10,yr==="current"||yr==="average"?20:14,yr==="average"?2:3);
+      ctx.fillStyle=C.textMuted;ctx.textAlign="left";
+      ctx.fillText(yr,lx+(yr==="current"||yr==="average"?24:18),14);
+      lx+=60;
+    }
+  },[entry,w]);
+
+  return (
+    <div ref={containerRef} style={{width:"100%"}}>
+      <canvas ref={ref} style={{borderRadius:6,display:"block"}}/>
+    </div>
+  );
+}
+
+// ── Spread Chart (mini) ────────────────────────────────────────────────────
+
+function SpreadChart({history,regime}:{history:{date:string;value:number}[];regime:string}) {
+  const ref=useRef<HTMLCanvasElement>(null);
+  
+  useEffect(()=>{
+    const cvs=ref.current;if(!cvs||!history.length)return;
+    const ctx=cvs.getContext("2d");if(!ctx)return;
+    const W=200,H=50;
+    cvs.width=W*2;cvs.height=H*2;ctx.scale(2,2);
+    cvs.style.width=W+"px";cvs.style.height=H+"px";
+    
+    const vals=history.map(h=>h.value);
+    const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
+    const yP=(v:number)=>5+(1-(v-mn)/range)*(H-10);
+    const xP=(i:number)=>5+i*(W-10)/(vals.length-1);
+    
+    ctx.fillStyle=C.panelAlt;ctx.fillRect(0,0,W,H);
+    
+    const color=regime==="EXTREMO"?C.red:regime==="NORMAL"?C.green:C.amber;
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
+    vals.forEach((v,i)=>{
+      const x=xP(i),y=yP(v);
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    
+    // Current dot
+    const lastY=yP(vals[vals.length-1]);
+    ctx.fillStyle=color;
+    ctx.beginPath();ctx.arc(W-5,lastY,3,0,Math.PI*2);ctx.fill();
+  },[history,regime]);
+
+  return <canvas ref={ref} style={{borderRadius:4,display:"block"}}/>;
+}
+
+// ── Compare Chart ──────────────────────────────────────────────────────────
+
+function CompareChart({symbols,prices}:{symbols:string[];prices:PriceData}) {
+  const ref=useRef<HTMLCanvasElement>(null);
+  const containerRef=useRef<HTMLDivElement>(null);
+  const [w,setW]=useState(900);
+  const VISIBLE=120;
+  const COLORS=["#22c55e","#3b82f6","#f59e0b","#ef4444","#a78bfa","#06b6d4"];
+
+  useEffect(()=>{
+    const el=containerRef.current;if(!el)return;
+    const obs=new ResizeObserver(entries=>{const{width}=entries[0].contentRect;if(width>0)setW(Math.floor(width));});
+    obs.observe(el);return()=>obs.disconnect();
+  },[]);
+
+  useEffect(()=>{
+    const cvs=ref.current;if(!cvs)return;
+    const ctx=cvs.getContext("2d");if(!ctx)return;
+    const H=320;
+    cvs.width=w*2;cvs.height=H*2;ctx.scale(2,2);
+    cvs.style.width=w+"px";cvs.style.height=H+"px";
+    
+    const pad={t:24,b:30,l:50,r:16};
+    const cH=H-pad.t-pad.b;
+    
+    // Normalize all series to base 100
+    const series:Record<string,number[]>={};
+    let maxLen=0;
+    for(const sym of symbols){
+      const data=prices[sym];if(!data)continue;
+      const slice=data.slice(-VISIBLE);
+      const base=slice[0]?.close||1;
+      series[sym]=slice.map(c=>(c.close/base)*100);
+      maxLen=Math.max(maxLen,series[sym].length);
+    }
+    
+    let allVals=Object.values(series).flat();
+    if(!allVals.length)return;
+    const mn=Math.min(...allVals),mx=Math.max(...allVals),range=mx-mn||1;
+    const pMn=mn-range*.05,pMx=mx+range*.05;
+    const yP=(v:number)=>pad.t+(1-(v-pMn)/(pMx-pMn))*cH;
+    const xP=(i:number)=>pad.l+i*(w-pad.l-pad.r)/(maxLen-1);
+
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,H);
+    
+    // Grid
+    ctx.strokeStyle="rgba(148,163,184,.06)";
+    for(let i=0;i<5;i++){const y=pad.t+i*(cH/4);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
+    
+    // 100 line
+    ctx.strokeStyle="rgba(148,163,184,.2)";ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(pad.l,yP(100));ctx.lineTo(w-pad.r,yP(100));ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Y axis
+    ctx.fillStyle=C.textMuted;ctx.font="10px monospace";ctx.textAlign="right";
+    for(let i=0;i<5;i++){const v=pMx-(pMx-pMn)*i/4;ctx.fillText(v.toFixed(0),pad.l-6,pad.t+i*(cH/4)+4);}
+
+    // Draw lines
+    symbols.forEach((sym,si)=>{
+      const data=series[sym];if(!data)return;
+      ctx.strokeStyle=COLORS[si%COLORS.length];ctx.lineWidth=2;ctx.beginPath();
+      data.forEach((v,i)=>{
+        const x=xP(i),y=yP(v);
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+    });
+
+    // Legend
+    ctx.font="10px monospace";ctx.textAlign="left";
+    let lx=pad.l;
+    symbols.forEach((sym,si)=>{
+      ctx.fillStyle=COLORS[si%COLORS.length];
+      ctx.fillRect(lx,8,14,3);
+      ctx.fillText(sym,lx+18,12);
+      lx+=55;
+    });
+  },[symbols,prices,w]);
+
+  return (
+    <div ref={containerRef} style={{width:"100%"}}>
+      <canvas ref={ref} style={{borderRadius:6,display:"block"}}/>
+    </div>
+  );
+}
+// ── COT Chart (Barchart-style: stacked bars + net line) ───────────────────
+
+function COTChart({history,type}:{history:COTHistoryEntry[];type:"legacy"|"disaggregated"}) {
+  const ref=useRef<HTMLCanvasElement>(null);
+  const containerRef=useRef<HTMLDivElement>(null);
+  const [w,setW]=useState(900);
+  const [hoverIdx,setHoverIdx]=useState<number|null>(null);
+
+  useEffect(()=>{
+    const el=containerRef.current;if(!el)return;
+    const obs=new ResizeObserver(entries=>{const{width}=entries[0].contentRect;if(width>0)setW(Math.floor(width));});
+    obs.observe(el);return()=>obs.disconnect();
+  },[]);
+
+  useEffect(()=>{
+    const cvs=ref.current;if(!cvs||!history.length)return;
+    const ctx=cvs.getContext("2d");if(!ctx)return;
+    const H=280;
+    cvs.width=w*2;cvs.height=H*2;ctx.scale(2,2);
+    cvs.style.width=w+"px";cvs.style.height=H+"px";
+    
+    const pad={t:36,b:40,l:65,r:16};
+    const cH=H-pad.t-pad.b;
+    const data=history.slice(-52);
+    
+    // Extract long/short/net for the appropriate type
+    type Series={date:string;long:number;short:number;net:number;oi:number;label1:string;label2:string};
+    let series:Series[]=[];
+    
+    if(type==="legacy"){
+      series=data.map(r=>({
+        date:r.date,
+        long:r.noncomm_long||0, short:-(r.noncomm_short||0),
+        net:r.noncomm_net||(r.noncomm_long||0)-(r.noncomm_short||0),
+        oi:r.open_interest||0,
+        label1:"Non-Comm Long", label2:"Non-Comm Short"
+      }));
+    } else {
+      series=data.map(r=>({
+        date:r.date,
+        long:r.managed_money_long||0, short:-(r.managed_money_short||0),
+        net:r.managed_money_net||(r.managed_money_long||0)-(r.managed_money_short||0),
+        oi:r.open_interest||0,
+        label1:"MM Long", label2:"MM Short"
+      }));
+    }
+    if(!series.length)return;
+    
+    const allVals=series.flatMap(s=>[s.long,s.short,s.net]);
+    const maxAbs=Math.max(...allVals.map(Math.abs))||1;
+    const yP=(v:number)=>pad.t+cH/2-(v/maxAbs)*(cH/2)*0.85;
+    const barW=Math.max(3,Math.min(12,(w-pad.l-pad.r)/series.length-2));
+    const xC=(i:number)=>pad.l+(i+0.5)*(w-pad.l-pad.r)/series.length;
+
+    // Background
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,H);
+    
+    // Grid
+    ctx.strokeStyle="rgba(148,163,184,.06)";ctx.lineWidth=1;
+    for(let g=0;g<5;g++){
+      const y=pad.t+g*(cH/4);
+      ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();
+    }
+    
+    // Zero line
+    const zeroY=pad.t+cH/2;
+    ctx.strokeStyle="rgba(148,163,184,.25)";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(pad.l,zeroY);ctx.lineTo(w-pad.r,zeroY);ctx.stroke();
+    
+    // Y axis labels
+    ctx.fillStyle=C.textMuted;ctx.font="9px monospace";ctx.textAlign="right";
+    const step=maxAbs/2;
+    ctx.fillText(`+${(maxAbs/1000).toFixed(0)}K`,pad.l-6,pad.t+8);
+    ctx.fillText(`+${(step/1000).toFixed(0)}K`,pad.l-6,pad.t+cH/4+4);
+    ctx.fillText("0",pad.l-6,zeroY+4);
+    ctx.fillText(`-${(step/1000).toFixed(0)}K`,pad.l-6,pad.t+cH*3/4+4);
+    ctx.fillText(`-${(maxAbs/1000).toFixed(0)}K`,pad.l-6,H-pad.b-2);
+
+    // Stacked bars (Long = green up, Short = red down)
+    series.forEach((s,i)=>{
+      const x=xC(i);
+      const isHov=hoverIdx===i;
+      // Long bar (positive, goes UP from zero)
+      if(s.long>0){
+        const y1=zeroY,y2=yP(s.long);
+        ctx.fillStyle=isHov?"rgba(34,197,94,.6)":"rgba(34,197,94,.35)";
+        ctx.fillRect(x-barW/2,y2,barW,y1-y2);
+      }
+      // Short bar (negative, goes DOWN from zero)
+      if(s.short<0){
+        const y1=zeroY,y2=yP(s.short);
+        ctx.fillStyle=isHov?"rgba(239,68,68,.6)":"rgba(239,68,68,.35)";
+        ctx.fillRect(x-barW/2,y1,barW,y2-y1);
+      }
+    });
+
+    // Net position line (thick, on top)
+    ctx.strokeStyle="#f59e0b";ctx.lineWidth=2.5;ctx.beginPath();
+    series.forEach((s,i)=>{
+      const x=xC(i),y=yP(s.net);
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    
+    // Net position dots at start and end
+    [0,series.length-1].forEach(i=>{
+      const s=series[i];
+      ctx.fillStyle="#f59e0b";
+      ctx.beginPath();ctx.arc(xC(i),yP(s.net),3.5,0,Math.PI*2);ctx.fill();
+    });
+
+    // X axis dates
+    ctx.fillStyle=C.textMuted;ctx.font="8px monospace";ctx.textAlign="center";
+    const dateStep=Math.max(1,Math.floor(series.length/6));
+    series.forEach((s,i)=>{
+      if(i%dateStep===0||i===series.length-1){
+        const d=s.date.slice(5); // MM-DD
+        ctx.fillText(d,xC(i),H-pad.b+14);
+      }
+    });
+
+    // Legend bar
+    const ly=12;
+    ctx.font="bold 10px monospace";ctx.textAlign="left";
+    // Long
+    ctx.fillStyle=C.green;ctx.fillRect(pad.l,ly,14,8);
+    ctx.fillStyle=C.textDim;ctx.font="9px monospace";
+    ctx.fillText(series[0].label1,pad.l+18,ly+8);
+    // Short
+    ctx.fillStyle=C.red;ctx.fillRect(pad.l+110,ly,14,8);
+    ctx.fillStyle=C.textDim;
+    ctx.fillText(series[0].label2,pad.l+128,ly+8);
+    // Net
+    ctx.strokeStyle="#f59e0b";ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(pad.l+230,ly+4);ctx.lineTo(pad.l+248,ly+4);ctx.stroke();
+    ctx.fillStyle=C.textDim;ctx.font="9px monospace";
+    ctx.fillText("Net Position",pad.l+252,ly+8);
+    
+    // Current values box (top right)
+    if(series.length>0){
+      const last=series[series.length-1];
+      const bx=w-pad.r-130,by=pad.t-6;
+      ctx.fillStyle="rgba(22,27,34,.9)";
+      ctx.fillRect(bx,by,126,52);
+      ctx.strokeStyle=C.border;ctx.lineWidth=1;
+      ctx.strokeRect(bx,by,126,52);
+      
+      ctx.font="bold 10px monospace";ctx.textAlign="left";
+      ctx.fillStyle="#f59e0b";
+      ctx.fillText(`Net: ${(last.net/1000).toFixed(1)}K`,bx+8,by+15);
+      ctx.fillStyle=C.green;ctx.font="9px monospace";
+      ctx.fillText(`Long: ${(last.long/1000).toFixed(1)}K`,bx+8,by+30);
+      ctx.fillStyle=C.red;
+      ctx.fillText(`Short: ${(Math.abs(last.short)/1000).toFixed(1)}K`,bx+8,by+43);
+    }
+
+    // Hover tooltip
+    if(hoverIdx!==null&&hoverIdx>=0&&hoverIdx<series.length){
+      const s=series[hoverIdx];
+      const hx=xC(hoverIdx);
+      // Vertical line
+      ctx.strokeStyle="rgba(148,163,184,.3)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.moveTo(hx,pad.t);ctx.lineTo(hx,H-pad.b);ctx.stroke();
+      ctx.setLineDash([]);
+      // Tooltip box
+      const tx=Math.min(hx+10,w-140),ty=pad.t+20;
+      ctx.fillStyle="rgba(22,27,34,.95)";ctx.fillRect(tx,ty,130,65);
+      ctx.strokeStyle=C.border;ctx.strokeRect(tx,ty,130,65);
+      ctx.font="bold 9px monospace";ctx.textAlign="left";
+      ctx.fillStyle=C.textDim;ctx.fillText(s.date,tx+6,ty+13);
+      ctx.fillStyle="#f59e0b";ctx.fillText(`Net: ${(s.net/1000).toFixed(1)}K`,tx+6,ty+27);
+      ctx.fillStyle=C.green;ctx.fillText(`Long: ${(s.long/1000).toFixed(1)}K`,tx+6,ty+40);
+      ctx.fillStyle=C.red;ctx.fillText(`Short: ${(Math.abs(s.short)/1000).toFixed(1)}K`,tx+6,ty+53);
+    }
+  },[history,type,w,hoverIdx]);
+
+  const handleMouse=(e:React.MouseEvent)=>{
+    const rect=ref.current?.getBoundingClientRect();if(!rect)return;
+    const x=e.clientX-rect.left;
+    const data=history.slice(-52);
+    const pad={l:65,r:16};
+    const bW=(w-pad.l-pad.r)/data.length;
+    const i=Math.floor((x-pad.l)/bW);
+    if(i>=0&&i<data.length)setHoverIdx(i);else setHoverIdx(null);
+  };
+
+  return (
+    <div ref={containerRef} style={{width:"100%"}}>
+      <canvas ref={ref} style={{borderRadius:6,display:"block",cursor:"crosshair"}}
+        onMouseMove={handleMouse} onMouseLeave={()=>setHoverIdx(null)}/>
+    </div>
+  );
+}
+// ── Main Dashboard ─────────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  // State
+  const [prices,setPrices] = useState<PriceData|null>(null);
+  const [season,setSeason] = useState<SeasonData|null>(null);
+  const [spreads,setSpreads] = useState<SpreadsData|null>(null);
+  const [stocks,setStocks] = useState<StocksData|null>(null);
+  const [cot,setCot] = useState<COTData|null>(null);
+  const [reading,setReading] = useState<DailyReading|null>(null);
+  const [physical,setPhysical] = useState<any>(null);
+  const [physIntl,setPhysIntl] = useState<any>(null);
+  const [selected,setSelected] = useState("ZC");
+  const [tab,setTab] = useState<Tab>("Gráfico + COT");
+  const [loading,setLoading] = useState(true);
+  const [errors,setErrors] = useState<string[]>([]);
+  const [compareSyms,setCompareSyms] = useState<string[]>(["ZC","ZS"]);
+
+  // Load data
+  useEffect(()=>{
+    const errs:string[]=[];
+    Promise.all([
+      fetch("/data/raw/price_history.json").then(r=>{if(!r.ok)throw new Error("prices");return r.json();}).then(setPrices).catch(()=>errs.push("prices")),
+      fetch("/data/processed/seasonality.json").then(r=>{if(!r.ok)throw new Error("season");return r.json();}).then(setSeason).catch(()=>errs.push("season")),
+      fetch("/data/processed/spreads.json").then(r=>{if(!r.ok)throw new Error("spreads");return r.json();}).then(setSpreads).catch(()=>errs.push("spreads")),
+      fetch("/data/processed/stocks_watch.json").then(r=>{if(!r.ok)throw new Error("stocks");return r.json();}).then(setStocks).catch(()=>errs.push("stocks")),
+      fetch("/data/processed/cot.json").then(r=>{if(!r.ok)throw new Error("cot");return r.json();}).then(setCot).catch(()=>errs.push("cot")),
+      fetch("/data/processed/daily_reading.json").then(r=>{if(!r.ok)throw new Error("reading");return r.json();}).then(setReading).catch(()=>errs.push("reading")),
+      fetch("/data/processed/physical.json").then(r=>{if(!r.ok)throw new Error("physical");return r.json();}).then(setPhysical).catch(()=>errs.push("physical")),
+      fetch("/data/processed/physical_intl.json").then(r=>{if(!r.ok)throw new Error("physIntl");return r.json();}).then(setPhysIntl).catch(()=>errs.push("physIntl")),
+    ]).finally(()=>{setErrors(errs);setLoading(false);});
+  },[]);
+
+  // Helpers
+  const lastDate = prices&&prices[selected]?.length ? prices[selected][prices[selected].length-1].date : "—";
+  const pipelineOk = !loading && errors.length === 0;
+
+  const getPrice = (sym:string):number|null => {
+    if(!prices||!prices[sym]||!prices[sym].length)return null;
+    return prices[sym][prices[sym].length-1].close;
+  };
+  
+  const getChange = (sym:string):{abs:number;pct:number}|null => {
+    if(!prices||!prices[sym]||prices[sym].length<2)return null;
+    const arr=prices[sym];const last=arr[arr.length-1];const prev=arr[arr.length-2];
+    return {abs:last.close-prev.close,pct:((last.close-prev.close)/prev.close)*100};
+  };
+  
+  const getSeasonDev = (sym:string):{current:number;avg:number;dev:number}|null => {
+    if(!season||!season[sym])return null;
+    const e=season[sym];
+    const curr=e.series["current"];
+    const avg=e.series["average"];
+    if(!curr?.length||!avg?.length)return null;
+    const lastCurr=curr[curr.length-1].close;
+    const lastDay=curr[curr.length-1].day;
+    let closest=avg[0];
+    for(const aa of avg){if(Math.abs(aa.day-lastDay)<Math.abs(closest.day-lastDay))closest=aa;}
+    const dev=((lastCurr-closest.close)/closest.close)*100;
+    return {current:lastCurr,avg:closest.close,dev};
+  };
+
+  const stocksList = stocks ? Object.values(stocks.commodities) : [];
+  const spreadList = spreads ? Object.entries(spreads.spreads).map(([k,v])=>({key:k,...v})) : [];
+  const hasCOT = (sym:string) => cot?.commodities?.[sym]?.legacy?.history?.length || cot?.commodities?.[sym]?.disaggregated?.history?.length;
+  // ── Tab: Gráfico + COT ──────────────────────────────────────────────────
+  const cotComm = cot?.commodities?.[selected];
+  const cotLegacy = cotComm?.legacy;
+  const cotDisagg = cotComm?.disaggregated;
+  
+  const renderGraficoCOT = () => (
+    <div>
+      {prices && prices[selected] ? (
+        <PriceChart candles={prices[selected]} symbol={selected} />
+      ) : (
+        <DataPlaceholder title="Sem dados de preço" detail={`${selected} não encontrado em price_history.json`} />
+      )}
+      <div style={{marginTop:20}}>
+        <SectionTitle>📊 COT — Commitment of Traders (CFTC)</SectionTitle>
+        {hasCOT(selected) ? (
+          <>
+            {/* Summary cards */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:16}}>
+              {cotLegacy?.latest && (()=>{
+                const l=cotLegacy.latest;
+                const commNet=l.comm_net||0;const ncNet=l.noncomm_net||0;
+                return <>
+                  <div style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.red}`}}>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4}}>COMMERCIAL NET</div>
+                    <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:commNet>=0?C.green:C.red}}>{(commNet/1000).toFixed(1)}K</div>
+                    <div style={{fontSize:9,color:C.textMuted}}>{commNet>=0?"LONG (Hedgers buying)":"SHORT (Hedgers selling)"}</div>
+                  </div>
+                  <div style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.green}`}}>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4}}>NON-COMMERCIAL NET</div>
+                    <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:ncNet>=0?C.green:C.red}}>{(ncNet/1000).toFixed(1)}K</div>
+                    <div style={{fontSize:9,color:C.textMuted}}>{ncNet>=0?"LONG (Specs bullish)":"SHORT (Specs bearish)"}</div>
+                  </div>
+                  <div style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.blue}`}}>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4}}>OPEN INTEREST</div>
+                    <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.text}}>{((l.open_interest||0)/1000).toFixed(0)}K</div>
+                    <div style={{fontSize:9,color:C.textMuted}}>Total contracts</div>
+                  </div>
+                </>;
+              })()}
+              {cotDisagg?.latest && (()=>{
+                const d=cotDisagg.latest;
+                const mmNet=d.managed_money_net||0;const prodNet=d.producer_net||0;
+                return <>
+                  <div style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.amber}`}}>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4}}>MANAGED MONEY NET</div>
+                    <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:mmNet>=0?C.green:C.red}}>{(mmNet/1000).toFixed(1)}K</div>
+                    <div style={{fontSize:9,color:C.textMuted}}>{mmNet>=0?"Funds LONG":"Funds SHORT"}</div>
+                  </div>
+                  <div style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.purple}`}}>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4}}>PRODUCER NET</div>
+                    <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:prodNet>=0?C.green:C.red}}>{(prodNet/1000).toFixed(1)}K</div>
+                    <div style={{fontSize:9,color:C.textMuted}}>{prodNet>=0?"Producers LONG":"Producers hedging"}</div>
+                  </div>
+                </>;
+              })()}
+            </div>
+            {/* Charts side by side */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+              {cotLegacy?.history?.length ? (
+                <div style={{background:C.panelAlt,borderRadius:8,padding:16,border:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.textDim,marginBottom:4}}>LEGACY — Non-Commercial Positioning</div>
+                  <div style={{fontSize:9,color:C.textMuted,marginBottom:10}}>{cotLegacy.weeks} weeks | Last: {cotLegacy.latest?.date}</div>
+                  <COTChart history={cotLegacy.history} type="legacy" />
+                </div>
+              ) : null}
+              {cotDisagg?.history?.length ? (
+                <div style={{background:C.panelAlt,borderRadius:8,padding:16,border:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.textDim,marginBottom:4}}>DISAGGREGATED — Managed Money</div>
+                  <div style={{fontSize:9,color:C.textMuted,marginBottom:10}}>{cotDisagg.weeks} weeks | Last: {cotDisagg.latest?.date}</div>
+                  <COTChart history={cotDisagg.history} type="disaggregated" />
+                </div>
+              ) : null}
+            </div>
+            {/* Data table */}
+            {cotLegacy?.latest && (
+              <div style={{marginTop:16,overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                  <thead><TableHeader cols={["Report","Long","Short","Net","% OI","Date"]} /></thead>
+                  <tbody>
+                    {(()=>{
+                      const l=cotLegacy.latest;const oi=l.open_interest||1;
+                      const rows=[
+                        {name:"Commercial",long:l.comm_long||0,short:l.comm_short||0,net:l.comm_net||0},
+                        {name:"Non-Commercial",long:l.noncomm_long||0,short:l.noncomm_short||0,net:l.noncomm_net||0},
+                      ];
+                      if(cotDisagg?.latest){
+                        const d=cotDisagg.latest;
+                        rows.push(
+                          {name:"Managed Money",long:d.managed_money_long||0,short:d.managed_money_short||0,net:d.managed_money_net||0},
+                          {name:"Producer/Merchant",long:d.producer_long||0,short:d.producer_short||0,net:d.producer_net||0},
+                          {name:"Swap Dealers",long:d.swap_long||0,short:d.swap_short||0,net:d.swap_net||0},
+                        );
+                      }
+                      return rows.map((r,i)=>(
+                        <tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
+                          <td style={{padding:"8px 12px",fontWeight:600}}>{r.name}</td>
+                          <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.green}}>{(r.long/1000).toFixed(1)}K</td>
+                          <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.red}}>{(r.short/1000).toFixed(1)}K</td>
+                          <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:r.net>=0?C.green:C.red}}>{r.net>=0?"+":""}{(r.net/1000).toFixed(1)}K</td>
+                          <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{(Math.abs(r.net)/oi*100).toFixed(1)}%</td>
+                          <td style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:C.textMuted}}>{l.date}</td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div style={{marginTop:8,fontSize:9,color:C.textMuted}}>
+              Fonte: CFTC Commitments of Traders (CSV) | {cot?.source} | Ano: {cot?.year}
+            </div>
+          </>
+        ) : (
+          <DataPlaceholder title="COT — Dados Pendentes" 
+            detail="Execute collect_cot.py para coletar dados CFTC para esta commodity." />
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Tab: Comparativo ───────────────────────────────────────────────────
+  const renderComparativo = () => (
+    <div>
+      <SectionTitle>📈 Comparativo Normalizado (Base 100)</SectionTitle>
+      <div style={{marginBottom:16,display:"flex",gap:8,flexWrap:"wrap"}}>
+        {COMMODITIES.map(c=>{
+          const isSel=compareSyms.includes(c.sym);
+          return (
+            <button key={c.sym} onClick={()=>{
+              if(isSel) setCompareSyms(compareSyms.filter(s=>s!==c.sym));
+              else if(compareSyms.length<6) setCompareSyms([...compareSyms,c.sym]);
+            }} style={{
+              padding:"5px 12px",fontSize:10,fontWeight:isSel?700:500,borderRadius:4,cursor:"pointer",
+              background:isSel?"rgba(59,130,246,.15)":"transparent",
+              color:isSel?C.blue:C.textMuted,border:`1px solid ${isSel?C.blue:C.border}`,
+              transition:"all .15s"
+            }}>{c.sym}</button>
+          );
+        })}
+      </div>
+      <div style={{fontSize:10,color:C.textMuted,marginBottom:16}}>Selecione até 6 contratos para comparar (últimos 120 dias)</div>
+      {prices ? <CompareChart symbols={compareSyms} prices={prices} /> : <DataPlaceholder title="Carregando..." detail="" />}
+      
+      {prices && (
+        <div style={{marginTop:20,overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead><TableHeader cols={["Contrato","Último","1D","1M","3M","YTD","Min 52w","Max 52w"]} /></thead>
+            <tbody>
+              {compareSyms.map(sym=>{
+                const d=prices[sym];if(!d?.length)return null;
+                const last=d[d.length-1].close;
+                const d1=d.length>1?((last-d[d.length-2].close)/d[d.length-2].close*100):0;
+                const d21=d.length>21?((last-d[d.length-22].close)/d[d.length-22].close*100):0;
+                const d63=d.length>63?((last-d[d.length-64].close)/d[d.length-64].close*100):0;
+                const yr=d[d.length-1].date.slice(0,4);
+                const ytdStart=d.find(c=>c.date.startsWith(yr));
+                const ytd=ytdStart?((last-ytdStart.close)/ytdStart.close*100):0;
+                const last252=d.slice(-252);
+                const min52=Math.min(...last252.map(c=>c.low));
+                const max52=Math.max(...last252.map(c=>c.high));
+                const nm=COMMODITIES.find(c=>c.sym===sym)?.name||sym;
+                return (
+                  <tr key={sym} style={{borderBottom:`1px solid ${C.border}`}}>
+                    <td style={{padding:"8px 12px",fontWeight:600}}>{sym} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:600}}>{last.toFixed(2)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:d1>=0?C.green:C.red}}>{d1>=0?"+":""}{d1.toFixed(2)}%</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:d21>=0?C.green:C.red}}>{d21>=0?"+":""}{d21.toFixed(2)}%</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:d63>=0?C.green:C.red}}>{d63>=0?"+":""}{d63.toFixed(2)}%</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:ytd>=0?C.green:C.red}}>{ytd>=0?"+":""}{ytd.toFixed(2)}%</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace"}}>{min52.toFixed(2)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace"}}>{max52.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Tab: Spreads ───────────────────────────────────────────────────────
+  const renderSpreads = () => (
+    <div>
+      <SectionTitle>⚖️ Spreads — Análise de Regime</SectionTitle>
+      {spreadList.length>0 ? (
+        <div style={{display:"grid",gap:16}}>
+          {spreadList.map(sp=>{
+            const regCol = sp.regime==="NORMAL"?C.green:sp.regime==="EXTREMO"?C.red:C.amber;
+            const trendIcon = sp.trend==="SUBINDO"?"↗":sp.trend==="CAINDO"?"↘":"→";
+            const trendCol = sp.trend==="SUBINDO"?C.green:sp.trend==="CAINDO"?C.red:C.textMuted;
+            return (
+              <div key={sp.key} style={{background:C.panelAlt,borderRadius:8,padding:16,border:`1px solid ${C.border}`,
+                borderLeft:`3px solid ${regCol}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:C.text}}>{SPREAD_NAMES[sp.key]||sp.name}</div>
+                    <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{sp.description||""}</div>
+                  </div>
+                  <Badge label={sp.regime} color={regCol} />
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 200px",gap:20,alignItems:"center"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+                    <div>
+                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>VALOR ATUAL</div>
+                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:C.text}}>{sp.current.toFixed(4)}</div>
+                      <div style={{fontSize:10,color:C.textMuted}}>{sp.unit}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>Z-SCORE 1Y</div>
+                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",
+                        color:Math.abs(sp.zscore_1y)>1.5?C.red:Math.abs(sp.zscore_1y)>1?C.amber:C.green}}>
+                        {sp.zscore_1y>=0?"+":""}{sp.zscore_1y.toFixed(2)}
+                      </div>
+                      <div style={{fontSize:10,color:C.textMuted}}>{Math.abs(sp.zscore_1y)>2?"Extremo":Math.abs(sp.zscore_1y)>1?"Elevado":"Normal"}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>PERCENTIL</div>
+                      <PctBar val={sp.percentile} />
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>TENDÊNCIA</div>
+                      <div style={{fontSize:14,fontWeight:600,color:trendCol}}>
+                        {trendIcon} {sp.trend||"—"} 
+                        {sp.trend_pct?<span style={{fontSize:11,marginLeft:4}}>({sp.trend_pct>0?"+":""}{sp.trend_pct?.toFixed(1)}%)</span>:null}
+                      </div>
+                    </div>
+                  </div>
+                  {sp.history && sp.history.length>0 && (
+                    <SpreadChart history={sp.history} regime={sp.regime} />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <DataPlaceholder title="Sem dados de spreads" detail="Execute o pipeline para calcular spreads" />
+      )}
+    </div>
+  );
+  // ── Tab: Sazonalidade ───────────────────────────────────────────────────
+  const renderSazonalidade = () => (
+    <div>
+      <SectionTitle>📅 Sazonalidade — {selected} ({COMMODITIES.find(c=>c.sym===selected)?.name})</SectionTitle>
+      {season && season[selected] ? (
+        <SeasonChart entry={season[selected]} />
+      ) : (
+        <DataPlaceholder title="Sem dados" detail={`${selected} não encontrado em seasonality.json`} />
+      )}
+      <div style={{marginTop:24}}>
+        <SectionTitle>📊 Preço Atual vs Média Histórica (5 Anos)</SectionTitle>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead><TableHeader cols={["Commodity","Atual","Média 5Y","Desvio %","Sinal"]} /></thead>
+            <tbody>
+              {COMMODITIES.map(c=>{
+                const sd=getSeasonDev(c.sym);
+                if(!sd) return (
+                  <tr key={c.sym} style={{borderBottom:`1px solid ${C.border}`}}>
+                    <td style={{padding:"8px 12px",fontWeight:600}}>{c.sym} <span style={{color:C.textMuted,fontWeight:400}}>({c.name})</span></td>
+                    <td colSpan={4} style={{padding:"8px 12px",color:C.textMuted,textAlign:"center"}}>—</td>
+                  </tr>
+                );
+                const sigCol = Math.abs(sd.dev)>15?C.red:Math.abs(sd.dev)>5?C.amber:C.green;
+                const sigLabel = sd.dev<-15?"ABAIXO":sd.dev>15?"ACIMA":Math.abs(sd.dev)>5?"DESVIADO":"NORMAL";
+                return (
+                  <tr key={c.sym} onClick={()=>setSelected(c.sym)} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer",
+                    background:c.sym===selected?"rgba(59,130,246,.08)":"transparent"}}>
+                    <td style={{padding:"8px 12px",fontWeight:600}}>{c.sym} <span style={{color:C.textMuted,fontWeight:400}}>({c.name})</span></td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:600}}>{sd.current.toFixed(2)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textMuted}}>{sd.avg.toFixed(2)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"right"}}><DevBar val={sd.dev} /></td>
+                    <td style={{padding:"8px 12px",textAlign:"right"}}><Badge label={sigLabel} color={sigCol} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Tab: Stocks Watch ──────────────────────────────────────────────────
+  const renderStocksWatch = () => {
+    const aperto = stocksList.filter(s=>s.state.includes("APERTO")||s.state==="PRECO_ELEVADO"||s.state==="PRECO_DEPRIMIDO");
+    const excesso = stocksList.filter(s=>s.state.includes("EXCESSO")||s.state==="PRECO_ACIMA_MEDIA"||s.state==="PRECO_ABAIXO_MEDIA");
+    const neutro = stocksList.filter(s=>s.state==="NEUTRO"||s.state==="PRECO_NEUTRO");
+    
+    return (
+      <div>
+        <SectionTitle>📦 Stocks Watch — Estado por Commodity</SectionTitle>
+        
+        {/* Summary cards */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
+          <div style={{background:C.redBg,borderRadius:8,padding:16,border:`1px solid ${C.redBorder}`,textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:800,color:C.red}}>{aperto.length}</div>
+            <div style={{fontSize:11,color:C.red,fontWeight:600}}>ALERTA</div>
+            <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Aperto ou extremo</div>
+          </div>
+          <div style={{background:C.amberBg,borderRadius:8,padding:16,border:`1px solid ${C.amberBorder}`,textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:800,color:C.amber}}>{neutro.length}</div>
+            <div style={{fontSize:11,color:C.amber,fontWeight:600}}>NEUTRO</div>
+            <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Equilibrado</div>
+          </div>
+          <div style={{background:C.greenBg,borderRadius:8,padding:16,border:`1px solid ${C.greenBorder}`,textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:800,color:C.green}}>{excesso.length}</div>
+            <div style={{fontSize:11,color:C.green,fontWeight:600}}>ATENCAO</div>
+            <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Acima media ou excesso</div>
+          </div>
+        </div>
+
+        {stocksList.length>0 ? (
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead><TableHeader cols={["Commodity","Preço","Desvio vs Média","Fonte","Estado","Fatores"]} /></thead>
+              <tbody>
+                {stocksList.map(st=>{
+                  const nm=COMMODITIES.find(c=>c.sym===st.symbol)?.name||st.symbol;
+                  const stateCol=(st.state.includes("APERTO")||st.state==="PRECO_DEPRIMIDO"||st.state==="PRECO_ELEVADO")?C.red:(st.state.includes("EXCESSO")||st.state==="PRECO_ACIMA_MEDIA"||st.state==="PRECO_ABAIXO_MEDIA")?C.amber:C.green;
+                  const stateLabel=st.state.replace(/_/g," ");
+                  return (
+                    <tr key={st.symbol} onClick={()=>setSelected(st.symbol)} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
+                      <td style={{padding:"10px 12px",fontWeight:600}}>{st.symbol} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
+                      <td style={{padding:"10px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:600}}>{st.price?.toFixed(2)||"—"}</td>
+                      <td style={{padding:"10px 12px",textAlign:"right"}}><DevBar val={st.price_vs_avg} /></td>
+                      <td style={{padding:"10px 12px",textAlign:"center"}}><Badge label={st.data_available?.stock_real?"USDA":"PROXY"} color={st.data_available?.stock_real?C.green:C.textMuted} /></td>
+                      <td style={{padding:"10px 12px",textAlign:"right"}}><Badge label={stateLabel} color={stateCol} /></td>
+                      <td style={{padding:"10px 12px",fontSize:10,color:C.textDim,maxWidth:300}}>{st.factors.join("; ")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <DataPlaceholder title="Sem dados" detail="Execute o pipeline para calcular stocks watch" />
+        )}
+      </div>
+    );
+  };
+
+  // ── Tab: Custo Produção ────────────────────────────────────────────────
+  const renderCustoProducao = () => (
+    <div>
+      <SectionTitle>💰 Custo de Produção — Preço Real vs Custo</SectionTitle>
+      <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
+        Comparação entre preço de mercado e custo de produção por região. Margem positiva = produtor lucrando.
+      </div>
+      {COST_DATA.map(cd=>{
+        const p=getPrice(cd.sym);
+        const anyProfit = cd.regions.some(r=>p && p > r.cost);
+        const anyLoss = cd.regions.some(r=>p && p < r.cost);
+        return (
+          <div key={cd.sym} style={{marginBottom:24,background:C.panelAlt,borderRadius:8,padding:16,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:14,fontWeight:700,color:C.text}}>
+                {cd.commodity} ({cd.sym})
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                {p && <span style={{fontSize:12,fontFamily:"monospace",color:C.text}}>Mercado: <strong>{p.toFixed(2)}</strong> {cd.futuresUnit}</span>}
+                {anyLoss && <Badge label="REGIÕES EM PREJUÍZO" color={C.red} />}
+                {!anyLoss && anyProfit && <Badge label="TODAS LUCRANDO" color={C.green} />}
+              </div>
+            </div>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead><TableHeader cols={["Região","Custo","Preço Mercado","Margem","Status"]} /></thead>
+              <tbody>
+                {cd.regions.map((r,i)=>{
+                  const margin = p ? ((p - r.cost) / r.cost) * 100 : null;
+                  const status = margin === null ? "—" : margin > 20 ? "LUCRO" : margin > 0 ? "MARGINAL" : "PREJUÍZO";
+                  const statusCol = margin === null ? C.textMuted : margin > 20 ? C.green : margin > 0 ? C.amber : C.red;
+                  return (
+                    <tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
+                      <td style={{padding:"8px 12px",fontWeight:500}}>{r.region}</td>
+                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace"}}>{r.cost.toFixed(1)} <span style={{color:C.textMuted}}>{r.unit}</span></td>
+                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:600}}>{p?p.toFixed(2):"—"}</td>
+                      <td style={{padding:"8px 12px",textAlign:"right"}}>
+                        {margin !== null ? <MarginBar price={p!} cost={r.cost} /> : <span style={{color:C.textMuted}}>—</span>}
+                      </td>
+                      <td style={{padding:"8px 12px",textAlign:"right"}}><Badge label={status} color={statusCol} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{marginTop:8,fontSize:9,color:C.textMuted}}>Fontes: {cd.regions.map(r=>r.source).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+  // ── Tab: Físico Intl ────────────────────────────────────────────────────
+  const renderFisicoIntl = () => {
+    const physData = physical;
+    const usCash = physData?.us_cash || {};
+    const usList = Object.entries(usCash) as [string,any][];
+    const basisColor = (v:number) => v < -10 ? C.red : v < -5 ? C.amber : v < 0 ? C.textDim : C.green;
+    return (
+    <div>
+      {/* ── US CASH MARKETS (dados reais USDA) ── */}
+      <SectionTitle>🇺🇸 Mercado Físico EUA — Cash vs Futures</SectionTitle>
+      <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
+        Preços cash USDA (Prices Received) vs front-month futures. Atualizado: {physData?.timestamp?.slice(0,10) || "—"}
+      </div>
+      {usList.length === 0 ? (
+        <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12}}>
+          Dados físicos não carregados. Execute o pipeline para gerar physical.json
+        </div>
+      ) : (
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,marginBottom:32}}>
+          <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+            {["Commodity","Cash","Futures","Basis","Basis %","Trend","12m History","Fonte"].map(h=>(
+              <th key={h} style={{padding:"8px 10px",textAlign:h==="Commodity"||h==="Fonte"||h==="Trend"||h==="12m History"?"left":"right",
+                fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5}}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {usList.map(([sym,d])=>{
+              const hist = d.history || [];
+              const maxH = Math.max(...hist.map((h:any)=>h.value));
+              const minH = Math.min(...hist.map((h:any)=>h.value));
+              const rangeH = maxH - minH || 1;
+              const sparkW = 120; const sparkH = 28;
+              const points = hist.map((h:any,i:number)=>`${(i/(hist.length-1))*sparkW},${sparkH-((h.value-minH)/rangeH)*sparkH}`).join(" ");
+              return (
+              <tr key={sym} style={{borderBottom:`1px solid ${C.border}`}}>
+                <td style={{padding:"8px 10px",fontWeight:600}}>
+                  <span style={{color:C.text}}>{sym}</span>
+                  <span style={{color:C.textMuted,marginLeft:6,fontSize:10}}>{d.label}</span>
+                </td>
+                <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:C.text,fontSize:13}}>
+                  {d.cash_price?.toFixed(1)} <span style={{fontSize:9,color:C.textMuted}}>{d.cash_unit}</span>
+                </td>
+                <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>
+                  {d.futures_price?.toFixed(1)}
+                </td>
+                <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace",fontWeight:600,color:basisColor(d.basis_pct)}}>
+                  {d.basis > 0 ? "+" : ""}{d.basis?.toFixed(1)}
+                </td>
+                <td style={{padding:"8px 10px",textAlign:"right"}}>
+                  <span style={{display:"inline-block",padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:700,
+                    color:basisColor(d.basis_pct),
+                    background:d.basis_pct<-10?C.redBg:d.basis_pct<-5?C.amberBg:d.basis_pct<0?"rgba(148,163,184,.1)":C.greenBg}}>
+                    {d.basis_pct > 0 ? "+" : ""}{d.basis_pct?.toFixed(1)}%
+                  </span>
+                </td>
+                <td style={{padding:"8px 10px",color:C.textDim,fontSize:10}}>{d.trend}</td>
+                <td style={{padding:"8px 10px"}}>
+                  <svg width={sparkW} height={sparkH} style={{display:"block"}}>
+                    <polyline points={points} fill="none" stroke={C.cyan} strokeWidth={1.5} />
+                    <circle cx={(hist.length-1)/(hist.length-1)*sparkW} cy={sparkH-((hist[hist.length-1]?.value-minH)/rangeH)*sparkH} r={2.5} fill={C.cyan} />
+                  </svg>
+                  <div style={{fontSize:8,color:C.textMuted,display:"flex",justifyContent:"space-between",width:sparkW}}>
+                    <span>{hist[0]?.period}</span><span>{hist[hist.length-1]?.period}</span>
+                  </div>
+                </td>
+                <td style={{padding:"8px 10px"}}>
+                  <span style={{display:"inline-block",padding:"2px 8px",borderRadius:4,fontSize:9,fontWeight:600,
+                    color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`}}>USDA</span>
+                </td>
+              </tr>
+            );})}
+          </tbody>
+        </table>
+      )}
+
+      {/* ── INTERNATIONAL (dados reais) ── */}
+      <SectionTitle>🌍 Mercado Físico Internacional</SectionTitle>
+      <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
+        {physIntl ? <>Fontes: CEPEA/ESALQ via Notícias Agrícolas + MAGyP FOB Argentina. Atualizado: {physIntl.timestamp?.slice(0,10) || "\u2014"} | <span style={{color:C.green}}>{physIntl.markets_with_data} com dados</span> / {physIntl.total_markets} total</> : "Carregando dados internacionais..."}
+      </div>
+      {(()=>{
+        const intlData = physIntl?.international || {};
+        const entries = Object.entries(intlData) as [string,any][];
+        if(entries.length===0) return <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12}}>Execute o pipeline para gerar physical_intl.json</div>;
+        const withData = entries.filter(([,d])=>d.price!=null);
+        const noData = entries.filter(([,d])=>d.price==null);
+        const srcBadge = (s:string) => {
+          const col = s.includes("CEPEA")?C.green:s.includes("MAGyP")?C.blue:C.textMuted;
+          const bg = s.includes("CEPEA")?C.greenBg:s.includes("MAGyP")?C.blueBg:"rgba(148,163,184,.06)";
+          const bdr = s.includes("CEPEA")?C.greenBorder:s.includes("MAGyP")?"rgba(59,130,246,.3)":"rgba(148,163,184,.15)";
+          return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:4,fontSize:9,fontWeight:600,color:col,background:bg,border:`1px solid ${bdr}`}}>{s}</span>;
+        };
+        return <>
+          {/* With data */}
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,marginBottom:24}}>
+            <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+              {["Mercado","Preço","Unidade","Data","Variação","Sparkline","Fonte"].map(h=>(
+                <th key={h} style={{padding:"8px 10px",textAlign:h==="Mercado"||h==="Fonte"||h==="Sparkline"?"left":"right",
+                  fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {withData.map(([sym,d])=>{
+                const hist = d.history||[];
+                const sparkW=100; const sparkH=24;
+                let points="";
+                if(hist.length>=2){
+                  const vals=hist.map((h:any)=>h.value);
+                  const mx=Math.max(...vals);const mn=Math.min(...vals);const rng=mx-mn||1;
+                  points=vals.map((v:number,i:number)=>`${(i/(vals.length-1))*sparkW},${sparkH-((v-mn)/rng)*sparkH}`).join(" ");
+                }
+                const trendColor = d.trend?.startsWith("+")?C.green:d.trend?.startsWith("-")?C.red:d.trend==="—"?C.textMuted:C.textDim;
+                return (
+                <tr key={sym} style={{borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"8px 10px",fontWeight:600}}>
+                    <span style={{color:C.text}}>{d.label}</span>
+                  </td>
+                  <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:C.text,fontSize:13}}>
+                    {typeof d.price==="number"?d.price.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):"\u2014"}
+                  </td>
+                  <td style={{padding:"8px 10px",textAlign:"right",fontSize:9,color:C.textMuted}}>{d.price_unit}</td>
+                  <td style={{padding:"8px 10px",textAlign:"right",fontSize:10,color:C.textDim}}>{d.period}</td>
+                  <td style={{padding:"8px 10px",textAlign:"right"}}>
+                    <span style={{fontFamily:"monospace",fontWeight:600,fontSize:11,color:trendColor}}>{d.trend}</span>
+                  </td>
+                  <td style={{padding:"8px 10px"}}>
+                    {points ? <svg width={sparkW} height={sparkH} style={{display:"block"}}>
+                      <polyline points={points} fill="none" stroke={C.cyan} strokeWidth={1.5}/>
+                    </svg> : <span style={{fontSize:9,color:C.textMuted}}>{"\u2014"}</span>}
+                  </td>
+                  <td style={{padding:"8px 10px"}}>{srcBadge(d.source)}</td>
+                </tr>);
+              })}
+            </tbody>
+          </table>
+          {/* Without data */}
+          {noData.length>0 && <>
+            <div style={{fontSize:11,fontWeight:600,color:C.textMuted,marginBottom:8,marginTop:16}}>{"\u26a0\ufe0f"} Mercados sem API gratuita ({noData.length})</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
+              {noData.map(([sym,d])=>(
+                <div key={sym} style={{padding:"8px 12px",background:"rgba(148,163,184,.04)",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10}}>
+                  <span style={{color:C.textDim}}>{d.label}</span>
+                  <span style={{float:"right",color:C.textMuted,fontSize:9}}>{d.source}</span>
+                </div>
+              ))}
+            </div>
+          </>}
+        </>;
+      })()}
+    </div>
+    );
+  };
+  // ── Tab: Leitura do Dia ────────────────────────────────────────────────
+  const renderLeituraDoDia = () => (
+    <div>
+      <SectionTitle>📝 Leitura do Dia — Análise Integrada</SectionTitle>
+      
+      {reading ? (
+        <>
+          {/* Narrative blocks */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16,marginBottom:24}}>
+            {reading.blocos.map((bl,i)=>{
+              const colors=[C.amber,C.red,C.purple,C.cyan,C.green,C.blue];
+              const color=colors[i%colors.length];
+              return (
+                <div key={i} style={{padding:18,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,borderLeft:`4px solid ${color}`}}>
+                  <div style={{fontSize:13,fontWeight:700,color:color,marginBottom:8}}>{bl.title}</div>
+                  <div style={{fontSize:11,color:C.textDim,lineHeight:1.7}}>{bl.body}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Questions */}
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>❓ Perguntas do Dia</div>
+            {reading.perguntas.map((q,i)=>(
+              <div key={i} style={{display:"flex",gap:12,marginBottom:10,padding:"12px 16px",background:C.panelAlt,borderRadius:6,border:`1px solid ${C.border}`}}>
+                <span style={{fontSize:16,fontWeight:800,color:C.blue,fontFamily:"monospace",minWidth:24}}>{i+1}.</span>
+                <span style={{fontSize:11,color:C.textDim,lineHeight:1.6}}>{q}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Quantitative Summary */}
+          <div style={{padding:18,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12}}>📊 Resumo Quantitativo (Dados Reais)</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16}}>
+              {Object.entries(reading.resumo).map(([key,val])=>(
+                <div key={key}>
+                  <div style={{fontSize:9,color:C.textMuted,textTransform:"uppercase",marginBottom:4}}>{key.replace(/_/g," ")}</div>
+                  <div style={{fontSize:12,color:C.text,fontWeight:500}}>{val}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sources */}
+          <div style={{padding:"12px 16px",borderRadius:6,background:"rgba(148,163,184,.03)",border:`1px solid rgba(148,163,184,.08)`,fontSize:9,color:C.textMuted}}>
+            <strong>DISCLAIMER:</strong> Material informativo e educacional. Fontes: {reading.sources.join(", ")}. 
+            Gerado em {reading.date}. Não constitui recomendação de investimento.
+          </div>
+        </>
+      ) : (
+        <DataPlaceholder title="Leitura não disponível" detail="Execute o pipeline para gerar a leitura do dia" />
+      )}
+    </div>
+  );
+
+  // ── Tab Switch ─────────────────────────────────────────────────────────
+  const renderTab = () => {
+    switch(tab) {
+      case "Gráfico + COT": return renderGraficoCOT();
+      case "Comparativo": return renderComparativo();
+      case "Spreads": return renderSpreads();
+      case "Sazonalidade": return renderSazonalidade();
+      case "Stocks Watch": return renderStocksWatch();
+      case "Custo Produção": return renderCustoProducao();
+      case "Físico Intl": return renderFisicoIntl();
+      case "Leitura do Dia": return renderLeituraDoDia();
+      default: return null;
+    }
+  };
+  // ── Main Return ────────────────────────────────────────────────────────
+  return (
+    <div style={{display:"flex",minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI','Helvetica Neue',sans-serif"}}>
+      {/* Sidebar */}
+      <div style={{width:220,minHeight:"100vh",background:C.panel,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"18px 16px 10px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{fontSize:16,fontWeight:800,letterSpacing:1.5,color:C.text}}>AGRIMACRO</div>
+          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,marginTop:3}}>COMMODITIES DASHBOARD v3.1</div>
+        </div>
+        
+        {/* Commodities list */}
+        <div style={{flex:1,overflowY:"auto",padding:"10px 0"}}>
+          {["Grãos","Softs","Pecuária","Energia","Metais","Macro"].map(grp=>(
+            <div key={grp}>
+              <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
+              {COMMODITIES.filter(c=>c.group===grp).map(c=>{
+                const p=getPrice(c.sym);const ch=getChange(c.sym);const sel=c.sym===selected;
+                return (
+                  <div key={c.sym} onClick={()=>setSelected(c.sym)} style={{
+                    display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 16px",cursor:"pointer",
+                    background:sel?"rgba(59,130,246,.12)":"transparent",borderLeft:sel?`3px solid ${C.blue}`:"3px solid transparent",
+                    transition:"all .15s",
+                  }}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:sel?700:500,color:sel?C.text:C.textDim}}>{c.sym}</div>
+                      <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"—"}</div>
+                      {ch && <div style={{fontSize:9,fontFamily:"monospace",color:ch.pct>=0?C.green:C.red}}>{ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        
+        {/* Pipeline status */}
+        <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,fontSize:9}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:pipelineOk?C.green:C.red}}/>
+            <span style={{color:C.textMuted}}>{pipelineOk?"Pipeline Online":"Dados Parciais"}</span>
+          </div>
+          <div style={{color:C.textMuted}}>Última atualização: {lastDate}</div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{padding:"14px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.panel}}>
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
+            <div style={{fontSize:16,fontWeight:700}}>{COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
+            <Badge label="DADOS REAIS" color={C.green} />
+            {pipelineOk && <Badge label="PIPELINE ONLINE" color={C.blue} />}
+          </div>
+          <div style={{fontSize:11,color:C.textMuted}}>{lastDate}</div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.border}`,background:C.panel,overflowX:"auto"}}>
+          {TABS.map(t=>(
+            <button key={t} onClick={()=>setTab(t)} style={{
+              padding:"12px 18px",fontSize:11,fontWeight:tab===t?700:500,
+              color:tab===t?C.blue:C.textDim,background:"transparent",border:"none",cursor:"pointer",
+              borderBottom:tab===t?`2px solid ${C.blue}`:"2px solid transparent",whiteSpace:"nowrap",
+              transition:"all .15s"
+            }}>{t}</button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{flex:1,overflow:"auto",padding:24}}>
+          {loading ? <LoadingSpinner /> : renderTab()}
+        </div>
+      </div>
+    </div>
+  );
+}
+

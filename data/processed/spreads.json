@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-02-04T21:25:25.712717",
+  "spreads": {
+    "soy_crush": {
+      "name": "Soy Crush",
+      "unit": "USD/bu",
+      "status": "ok",
+      "current": 1.7212,
+      "date": "2026-02-04",
+      "zscore_1y": 0.88,
+      "zscore_3y": 0.47,
+      "percentile": 64.8,
+      "regime": "NORMAL",
+      "points": 1257
+    },
+    "ke_zw": {
+      "name": "KE-ZW",
+      "unit": "cents/bu",
+      "status": "ok",
+      "current": 3.5,
+      "date": "2026-02-04",
+      "zscore_1y": 0.28,
+      "zscore_3y": -0.66,
+      "percentile": 29.8,
+      "regime": "NORMAL",
+      "points": 1257
+    },
+    "zl_cl": {
+      "name": "ZL/CL",
+      "unit": "ratio",
+      "status": "ok",
+      "current": 0.8692,
+      "date": "2026-02-04",
+      "zscore_1y": 1.03,
+      "zscore_3y": 1.51,
+      "percentile": 87.4,
+      "regime": "DISSONANCIA",
+      "points": 1257
+    },
+    "feedlot": {
+      "name": "Feedlot Margin",
+      "unit": "USD/cwt",
+      "status": "ok",
+      "current": 24.44,
+      "date": "2026-02-04",
+      "zscore_1y": 0.8,
+      "zscore_3y": 0.41,
+      "percentile": 74.2,
+      "regime": "NORMAL",
+      "points": 1257
+    },
+    "zc_zm": {
+      "name": "ZC/ZM",
+      "unit": "ratio",
+      "status": "ok",
+      "current": 0.5162,
+      "date": "2026-02-04",
+      "zscore_1y": -0.55,
+      "zscore_3y": 0.53,
+      "percentile": 47.3,
+      "regime": "NORMAL",
+      "points": 1257
+    },
+    "zc_zs": {
+      "name": "ZC/ZS Ratio",
+      "unit": "ratio",
+      "status": "ok",
+      "current": 0.3925,
+      "date": "2026-02-04",
+      "zscore_1y": -0.89,
+      "zscore_3y": -0.24,
+      "percentile": 30.6,
+      "regime": "NORMAL",
+      "points": 1257
+    }
+  }
+}

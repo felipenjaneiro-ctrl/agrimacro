@@ -1,4 +1,4 @@
-﻿"""
+"""
 Agri-Macro Report v1.0 - Relatorio Diario Preliminar
 Gera relatorio estruturado em PT-BR para produtores rurais e profissionais de commodities.
 Usa Claude API para analise + dados reais do dashboard.
@@ -140,6 +140,25 @@ def build_market_context():
                 years = list(data["series"].keys())
                 ctx.append(f"  {sym}: {len(years)} anos de dados disponiveis")
 
+    # 10. Weather data (if available)
+    weather = load_json("weather_agro.json")
+    if weather and weather.get("regions"):
+        ctx.append("\n=== CLIMA AGRICOLA ===")
+        for region_key, region_data in weather["regions"].items():
+            label = region_data.get("label", region_key)
+            current = region_data.get("current", {})
+            precip_vs = region_data.get("precip_vs_normal_pct", "N/A")
+            alert = region_data.get("alert", "nenhum")
+            ctx.append(f"  {label}: Temp={current.get('temp_c','N/A')}C | Precip vs Normal: {precip_vs}% | Alerta: {alert}")
+        enso = weather.get("enso_status", "N/A")
+        ctx.append(f"  ENSO: {enso}")
+
+    # 11. News headlines (if available)
+    if news and news.get("news"):
+        ctx.append("\n=== NOTICIAS RECENTES (top 10) ===")
+        for art in news["news"][:10]:
+            ctx.append(f"  [{art.get('source','')}] {art.get('title','')}")
+
     return "\n".join(ctx)
 
 def generate_report_with_claude(context):
@@ -155,9 +174,12 @@ def generate_report_with_claude(context):
     weekday_names = ["segunda-feira","terca-feira","quarta-feira","quinta-feira","sexta-feira","sabado","domingo"]
     weekday = weekday_names[datetime.now().weekday()]
 
-    system_prompt = f"""Voce e o analista-chefe da Agri-Macro, uma plataforma gratuita e educativa de inteligencia em commodities agricolas. 
+    system_prompt = f"""Voce e o analista-chefe da Agri-Macro, uma plataforma gratuita e educativa de inteligencia em commodities agricolas.
 Seu publico-alvo: produtores rurais brasileiros, pecuaristas, traders de commodities, profissionais do agronegocio.
-Hoje e {weekday}, {today}.
+
+*** DATA DO RELATORIO: {weekday}, {today} ***
+Use ESTA data em todos os campos do relatorio. NAO use a data dos dados de mercado.
+Os dados de mercado podem ter sido coletados em dias anteriores (finais de semana, feriados), mas o relatorio e de HOJE.
 
 REGRAS:
 - Escreva em portugues brasileiro, tom profissional mas acessivel
@@ -168,6 +190,7 @@ REGRAS:
 - NAO faca recomendacoes de investimento - apenas informe e eduque
 - Inclua contexto de COMO os dados afetam o produtor rural na pratica
 - Use analogias do campo quando possivel para explicar conceitos de mercado
+- No resumo_executivo, COMECE com "{weekday.capitalize()}, {today}" para deixar claro a data
 
 FORMATO DO RELATORIO (retorne JSON valido):
 {{
@@ -175,7 +198,7 @@ FORMATO DO RELATORIO (retorne JSON valido):
   "subtitulo": "Frase de destaque do dia",
   "data": "{today}",
   "dia_semana": "{weekday}",
-  "resumo_executivo": "Paragrafo de 3-4 linhas resumindo o dia no mercado",
+  "resumo_executivo": "Paragrafo de 3-4 linhas resumindo o dia no mercado — COMECE com a data de hoje",
   "destaques": [
     {{"titulo": "...", "corpo": "2-3 paragrafos", "impacto_produtor": "Como isso afeta o produtor", "commodity": "SYM"}}
   ],
@@ -200,11 +223,14 @@ FORMATO DO RELATORIO (retorne JSON valido):
 
 Retorne APENAS o JSON, sem markdown, sem comentarios, sem texto antes ou depois."""
 
-    user_prompt = f"""Com base nos dados de mercado abaixo, gere o relatorio diario da Agri-Macro para hoje.
+    user_prompt = f"""DATA DO RELATORIO: {weekday}, {today}
+(Os dados abaixo podem ter datas anteriores — isso e normal. O relatorio e de HOJE, {today}.)
+
+Com base nos dados de mercado abaixo, gere o relatorio diario da Agri-Macro para HOJE ({weekday}, {today}).
 
 {context}
 
-Gere o JSON do relatorio seguindo exatamente o formato especificado."""
+Gere o JSON do relatorio seguindo exatamente o formato especificado. Lembre-se: data = "{today}", dia_semana = "{weekday}"."""
 
     try:
         resp = requests.post(
@@ -240,6 +266,11 @@ Gere o JSON do relatorio seguindo exatamente o formato especificado."""
         text = text.strip()
 
         report = json.loads(text)
+
+        # Force correct date in output regardless of what Claude returned
+        report["data"] = today
+        report["dia_semana"] = weekday
+
         return report
 
     except json.JSONDecodeError as e:
@@ -269,7 +300,7 @@ def main():
         "generator": "Agri-Macro Report v1.0",
         "model": "claude-sonnet-4-20250514",
         "context_chars": len(context),
-        "data_sources": ["prices","cot","spreads","stocks","physical","physical_intl","fred","calendar","seasonality"]
+        "data_sources": ["prices","cot","spreads","stocks","physical","physical_intl","fred","calendar","seasonality","weather","news"]
     }
 
     # Save
@@ -279,6 +310,7 @@ def main():
 
     print(f"  [OK] Report saved: {OUT}")
     print(f"  Titulo: {report.get('titulo','')}")
+    print(f"  Data: {report.get('data','')} ({report.get('dia_semana','')})")
     print(f"  Destaques: {len(report.get('destaques',[]))}")
     print(f"  Score volatilidade: {report.get('score_volatilidade','')}/10")
 

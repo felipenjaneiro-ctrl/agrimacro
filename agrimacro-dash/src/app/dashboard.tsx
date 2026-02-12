@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    AgriMacro v3.2 — Dashboard Profissional de Commodities Agrícolas
@@ -19,6 +19,32 @@ interface SpreadInfo {
   history?:{date:string;value:number}[];
 }
 interface SpreadsData { timestamp:string; spreads:Record<string,SpreadInfo>; }
+
+interface EIASeries {
+  name:string; latest_period:string|null; latest_value:number|null;
+  unit:string; wow_change_pct:number|null; mom_change_pct:number|null;
+  yoy_change_pct:number|null; high_52w:number|null; low_52w:number|null;
+  pct_range_52w:number|null;
+  history:{period:string;value:number;unit:string}[];
+}
+interface EIAData {
+  metadata:{source:string;collected_at:string;series_ok:number;series_total:number};
+  series:Record<string,EIASeries>;
+  analysis_summary:string[];
+}
+
+interface EIASeries {
+  name:string; latest_period:string|null; latest_value:number|null;
+  unit:string; wow_change_pct:number|null; mom_change_pct:number|null;
+  yoy_change_pct:number|null; high_52w:number|null; low_52w:number|null;
+  pct_range_52w:number|null;
+  history:{period:string;value:number;unit:string}[];
+}
+interface EIAData {
+  metadata:{source:string;collected_at:string;series_ok:number;series_total:number};
+  series:Record<string,EIASeries>;
+  analysis_summary:string[];
+}
 
 interface StockItem {
   symbol:string; price:number; avg_5y?:number; price_vs_avg:number; state:string;
@@ -69,7 +95,7 @@ interface FuturesData {
   commodities:Record<string,FuturesCommodity>;
 }
 
-type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Portfolio";
+type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio";
 
 // ── Color Theme ────────────────────────────────────────────────────────────
 const C = {
@@ -106,7 +132,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Portfolio"];
+const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio"];
 
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
@@ -117,6 +143,66 @@ const SPREAD_NAMES:Record<string,string> = {
   soy_crush:"Soy Crush Margin",ke_zw:"KC−CBOT Wheat",zl_cl:"Soy Oil / Crude",
   feedlot:"Feedlot Margin",zc_zm:"Corn / Meal",zc_zs:"Corn / Soy Ratio",
 };
+
+const SPREAD_DETAILS:Record<string,{whatIsIt:string;whyMatters:string}> = {
+  soy_crush:{
+    whatIsIt:"Lucro das esmagadoras ao transformar soja em farelo + óleo. Quando a margem está alta, esmagadoras compram mais soja.",
+    whyMatters:"Margem alta = mais demanda por soja = preço da soja tende a subir.",
+  },
+  ke_zw:{
+    whatIsIt:"Diferença de preço entre trigo de alta proteína (KC) e trigo comum (CBOT). Normalmente o trigo duro vale mais.",
+    whyMatters:"Prêmio sumindo = excesso de trigo duro ou falta de trigo mole. Sinal de mudança no mercado.",
+  },
+  zl_cl:{
+    whatIsIt:"Compara o preço do óleo de soja com o petróleo. Quando o óleo está muito caro em relação ao petróleo, biodiesel fica menos competitivo.",
+    whyMatters:"Ratio muito alto = óleo de soja caro demais → pode perder demanda do biodiesel → pressão de baixa no óleo.",
+  },
+  feedlot:{
+    whatIsIt:"Lucro do confinador: preço de venda do boi gordo menos o custo do boi magro e da ração.",
+    whyMatters:"Margem positiva = confinadores entram, mais boi no mercado no futuro. Margem negativa = confinadores saem, oferta cai.",
+  },
+  zc_zm:{
+    whatIsIt:"Compara o custo do milho com o farelo de soja na formulação de ração. Quem está mais barato ganha espaço na mistura.",
+    whyMatters:"Ratio baixo = milho mais competitivo na ração → mais demanda por milho. Ratio alto = farelo ganha espaço.",
+  },
+  zc_zs:{
+    whatIsIt:"Quantos bushels de milho uma de soja compra. Acima de 2.4 = mais vantajoso plantar soja. Abaixo de 2.2 = milho ganha.",
+    whyMatters:"Esse número influencia o que o produtor americano vai plantar na próxima safra — e isso afeta os preços futuros.",
+  },
+};
+
+const SPREAD_FRIENDLY_NAMES:Record<string,string> = {
+  soy_crush:"Margem de Esmagamento (Soja)",
+  ke_zw:"Prêmio Trigo Duro vs Mole (KC–CBOT)",
+  zl_cl:"Óleo de Soja vs Petróleo",
+  feedlot:"Margem de Confinamento (Feedlot)",
+  zc_zm:"Milho vs Farelo (Ração Animal)",
+  zc_zs:"Soja vs Milho (Decisão de Plantio)",
+};
+
+function getAlertLevel(sp:{regime:string;zscore_1y:number;percentile:number}):"ok"|"atencao"|"alerta" {
+  if(sp.regime==="EXTREMO"||Math.abs(sp.zscore_1y)>=2||sp.percentile>=95||sp.percentile<=5) return "alerta";
+  if(sp.regime!=="NORMAL"||Math.abs(sp.zscore_1y)>=1.3||sp.percentile>=90||sp.percentile<=10) return "atencao";
+  return "ok";
+}
+
+function getVerdict(sp:{key?:string;regime:string;zscore_1y:number;percentile:number;current:number;trend?:string;trend_pct?:number;name:string}):string {
+  const pctLabel = sp.percentile>=90?"no nível mais caro":sp.percentile>=75?"acima da média":sp.percentile<=10?"no nível mais barato":sp.percentile<=25?"abaixo da média":"dentro do normal";
+  const trendLabel = sp.trend==="SUBINDO"?"e subindo":sp.trend==="CAINDO"?"e caindo":"e estável";
+  const alert = getAlertLevel(sp);
+  const prefix = alert==="alerta"?"🔴 ":alert==="atencao"?"⚠️ ":"";
+  return prefix + (SPREAD_FRIENDLY_NAMES[sp.key||""]||sp.name) + " está " + pctLabel + " no último ano " + trendLabel + (sp.trend_pct?` (${sp.trend_pct>0?"+":""}${sp.trend_pct?.toFixed(1)}%).`:".");
+}
+
+function getThermometerZone(pct:number):{text:string;color:string} {
+  if(pct<=10) return {text:"Muito Barato",color:"#22c55e"};
+  if(pct<=25) return {text:"Barato",color:"#4ade80"};
+  if(pct<=40) return {text:"Abaixo da Média",color:"#60a5fa"};
+  if(pct<=60) return {text:"Na Média",color:"#94a3b8"};
+  if(pct<=75) return {text:"Acima da Média",color:"#fbbf24"};
+  if(pct<=90) return {text:"Caro",color:"#f97316"};
+  return {text:"Muito Caro",color:"#ef4444"};
+}
 // ── Cost of Production Data ────────────────────────────────────────────────
 const COST_DATA:{sym:string;commodity:string;futuresUnit:string;regions:{region:string;cost:number;unit:string;source:string}[]}[] = [
   {sym:"ZC",commodity:"Corn",futuresUnit:"¢/bu",regions:[
@@ -250,16 +336,31 @@ function PctBar({val}:{val:number}) {
 
 function MarginBar({price,cost}:{price:number;cost:number}) {
   const margin = ((price-cost)/cost)*100;
-  const color = margin>20?C.green:margin>0?C.amber:C.red;
-  const label = margin>0?`+${margin.toFixed(0)}%`:`${margin.toFixed(0)}%`;
-  const status = margin>20?"LUCRO":margin>0?"MARGINAL":"PREJUÍZO";
+  const color = margin>20?"#10b981":margin>10?"#22c55e":margin>0?"#fbbf24":"#ef4444";
+  const bgColor = margin>20?"rgba(16,185,129,0.08)":margin>10?"rgba(34,197,94,0.06)":margin>0?"rgba(251,191,36,0.06)":"rgba(239,68,68,0.08)";
+  const label = margin>20?"Lucrando bem":margin>10?"Lucro moderado":margin>0?"Margem apertada":"No prejuízo";
+  const icon = margin>20?"💰":margin>10?"✅":margin>0?"⚠️":"🔴";
+  const barWidth = Math.min(Math.abs(margin), 60);
+  const barDirection = margin >= 0 ? "right" : "left";
   return (
-    <div style={{display:"flex",alignItems:"center",gap:6}}>
-      <div style={{width:50,height:6,background:"rgba(148,163,184,.1)",borderRadius:3,overflow:"hidden"}}>
-        <div style={{height:"100%",width:`${Math.min(Math.abs(margin),100)}%`,background:color,borderRadius:3}}/>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:8,background:bgColor,minWidth:280}}>
+      <span style={{fontSize:16}}>{icon}</span>
+      <div style={{flex:1}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <span style={{fontSize:12,fontWeight:700,color}}>{label}</span>
+          <span style={{fontSize:13,fontWeight:800,fontFamily:"monospace",color}}>
+            {margin>0?"+":""}{margin.toFixed(0)}%
+          </span>
+        </div>
+        <div style={{position:"relative",height:8,background:"rgba(148,163,184,0.1)",borderRadius:4,overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,bottom:0,
+            [barDirection]:barDirection==="right"?0:undefined,
+            left:barDirection==="right"?`${50-barWidth/2}%`:undefined,
+            width:`${barWidth}%`,background:color,borderRadius:4,
+            boxShadow:`0 0 8px ${color}40`,transition:"width 0.5s ease"}}/>
+          <div style={{position:"absolute",top:-2,bottom:-2,left:"50%",width:1,background:"rgba(255,255,255,0.15)"}}/>
+        </div>
       </div>
-      <span style={{fontSize:10,fontFamily:"monospace",fontWeight:600,color}}>{label}</span>
-      <span style={{fontSize:9,color:C.textMuted}}>({status})</span>
     </div>
   );
 }
@@ -686,36 +787,39 @@ function SeasonChart({entry}:{entry:SeasonEntry}) {
 
 function SpreadChart({history,regime}:{history:{date:string;value:number}[];regime:string}) {
   const ref=useRef<HTMLCanvasElement>(null);
-  
   useEffect(()=>{
     const cvs=ref.current;if(!cvs||!history.length)return;
     const ctx=cvs.getContext("2d");if(!ctx)return;
-    const W=200,H=50;
+    const W=230,H=60;
     cvs.width=W*2;cvs.height=H*2;ctx.scale(2,2);
     cvs.style.width=W+"px";cvs.style.height=H+"px";
-    
     const vals=history.map(h=>h.value);
     const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
     const yP=(v:number)=>5+(1-(v-mn)/range)*(H-10);
     const xP=(i:number)=>5+i*(W-10)/(vals.length-1);
-    
-    ctx.fillStyle=C.panelAlt;ctx.fillRect(0,0,W,H);
-    
-    const color=regime==="EXTREMO"?C.red:regime==="NORMAL"?C.green:C.amber;
-    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
-    vals.forEach((v,i)=>{
-      const x=xP(i),y=yP(v);
-      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-    
-    // Current dot
+    ctx.clearRect(0,0,W,H);
+    const color=regime==="EXTREMO"?"#ef4444":regime==="NORMAL"?"#3b82f6":"#f59e0b";
+    // Area fill
+    ctx.beginPath();
+    vals.forEach((v,i)=>{const x=xP(i),y=yP(v);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.lineTo(xP(vals.length-1),H);ctx.lineTo(xP(0),H);ctx.closePath();
+    const grad=ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,color+"30");grad.addColorStop(1,color+"00");
+    ctx.fillStyle=grad;ctx.fill();
+    // Line
+    ctx.beginPath();
+    vals.forEach((v,i)=>{const x=xP(i),y=yP(v);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineCap="round";ctx.lineJoin="round";ctx.stroke();
+    // Dot
     const lastY=yP(vals[vals.length-1]);
-    ctx.fillStyle=color;
-    ctx.beginPath();ctx.arc(W-5,lastY,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=color;ctx.beginPath();ctx.arc(xP(vals.length-1),lastY,4,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="rgba(0,0,0,0.4)";ctx.lineWidth=1;ctx.stroke();
+    // Arrow
+    const isUp=vals[vals.length-1]>vals[0];
+    ctx.fillStyle=isUp?"#10b981":"#ef4444";ctx.font="bold 14px sans-serif";
+    ctx.textAlign="right";ctx.fillText(isUp?"↑":"↓",W-2,14);
   },[history,regime]);
-
-  return <canvas ref={ref} style={{borderRadius:4,display:"block"}}/>;
+  return <canvas ref={ref} style={{borderRadius:6,display:"block"}}/>;
 }
 
 // ── Compare Chart ──────────────────────────────────────────────────────────
@@ -994,6 +1098,7 @@ export default function Dashboard() {
   const [prices,setPrices] = useState<PriceData|null>(null);
   const [season,setSeason] = useState<SeasonData|null>(null);
   const [spreads,setSpreads] = useState<SpreadsData|null>(null);
+  const [eiaData,setEiaData] = useState<EIAData|null>(null);
   const [stocks,setStocks] = useState<StocksData|null>(null);
   const [cot,setCot] = useState<COTData|null>(null);
   const [reading,setReading] = useState<DailyReading|null>(null);
@@ -1027,6 +1132,7 @@ export default function Dashboard() {
       fetch("/data/raw/price_history.json").then(r=>{if(!r.ok)throw new Error("prices");return r.json();}).then(setPrices).catch(()=>errs.push("prices")),
       fetch("/data/processed/seasonality.json").then(r=>{if(!r.ok)throw new Error("season");return r.json();}).then(setSeason).catch(()=>errs.push("season")),
       fetch("/data/processed/spreads.json").then(r=>{if(!r.ok)throw new Error("spreads");return r.json();}).then(setSpreads).catch(()=>errs.push("spreads")),
+      fetch("/data/processed/eia_data.json").then(r=>{if(!r.ok)throw new Error("eia");return r.json();}).then(setEiaData).catch(()=>errs.push("eia")),
       fetch("/data/processed/stocks_watch.json").then(r=>{if(!r.ok)throw new Error("stocks");return r.json();}).then(setStocks).catch(()=>errs.push("stocks")),
       fetch("/data/processed/cot.json").then(r=>{if(!r.ok)throw new Error("cot");return r.json();}).then(setCot).catch(()=>errs.push("cot")),
       fetch("/data/processed/daily_reading.json").then(r=>{if(!r.ok)throw new Error("reading");return r.json();}).then(setReading).catch(()=>errs.push("reading")),
@@ -1395,56 +1501,162 @@ export default function Dashboard() {
   );
 
   // ── Tab: Spreads ───────────────────────────────────────────────────────
-  const renderSpreads = () => (
+      const renderSpreads = () => {
+    const alertCounts = {alerta:0,atencao:0,ok:0};
+    spreadList.forEach(sp=>{const al=getAlertLevel({...sp,key:sp.key});alertCounts[al]++;});
+    const sorted=[...spreadList].sort((a,b)=>{
+      const ord={alerta:0,atencao:1,ok:2};
+      return (ord[getAlertLevel({...a,key:a.key})]??2)-(ord[getAlertLevel({...b,key:b.key})]??2);
+    });
+
+    return (
     <div>
-      <SectionTitle>⚖️ Spreads — Análise de Regime</SectionTitle>
+      <SectionTitle>Relações de Preço — O que está caro ou barato?</SectionTitle>
+      <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
+        Estas relações comparam preços entre commodities ligadas entre si.
+        Quando uma relação sai do normal, pode indicar oportunidade ou risco.
+        <strong style={{color:C.textDim}}> Vermelho = atenção. Verde = tranquilo.</strong>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
+        <div style={{background:alertCounts.alerta>0?"rgba(239,68,68,0.06)":"rgba(34,197,94,0.04)",
+          border:`1px solid ${alertCounts.alerta>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
+          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,fontWeight:800,color:alertCounts.alerta>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{alertCounts.alerta}</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>🔴 Pede atenção</div>
+        </div>
+        <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
+          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{alertCounts.atencao}</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>⚠️ Fique atento</div>
+        </div>
+        <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
+          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,fontWeight:800,color:"#4ade80",fontFamily:"monospace"}}>{alertCounts.ok}</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>✅ Sem preocupação</div>
+        </div>
+      </div>
+
       {spreadList.length>0 ? (
-        <div style={{display:"grid",gap:16}}>
-          {spreadList.map(sp=>{
-            const regCol = sp.regime==="NORMAL"?C.green:sp.regime==="EXTREMO"?C.red:C.amber;
-            const trendIcon = sp.trend==="SUBINDO"?"↗":sp.trend==="CAINDO"?"↘":"→";
-            const trendCol = sp.trend==="SUBINDO"?C.green:sp.trend==="CAINDO"?C.red:C.textMuted;
+        <div style={{display:"grid",gap:14}}>
+          {sorted.map(sp=>{
+            const alert=getAlertLevel({...sp,key:sp.key});
+            const borderColor=alert==="alerta"?"#ef4444":alert==="atencao"?"#f59e0b":"rgba(59,130,246,0.3)";
+            const bgTint=alert==="alerta"?"rgba(239,68,68,0.02)":alert==="atencao"?"rgba(245,158,11,0.02)":"transparent";
+            const details=SPREAD_DETAILS[sp.key]||{whatIsIt:"",whyMatters:""};
+            const friendlyName=SPREAD_FRIENDLY_NAMES[sp.key]||SPREAD_NAMES[sp.key]||sp.name;
+            const verdict=getVerdict({...sp,key:sp.key});
+            const zone=getThermometerZone(sp.percentile);
+            const trendPct=sp.trend_pct||0;
+            const trendColor=Math.abs(trendPct)<3?"#94a3b8":trendPct>0?"#10b981":"#ef4444";
+            const trendWord=Math.abs(trendPct)<3?"estável":trendPct>0?"subindo":"caindo";
+            const trendArrow=Math.abs(trendPct)<3?"→":trendPct>0?"↑":"↓";
+            const alertBadge=alert==="alerta"
+              ?{icon:"🔴",label:"Atenção!",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
+              :alert==="atencao"
+              ?{icon:"⚠️",label:"Fique atento",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"}
+              :{icon:"✅",label:"Sem preocupação",bg:"rgba(34,197,94,0.08)",border:"rgba(34,197,94,0.25)",color:"#4ade80"};
+
+            const thermSegments=[
+              {start:0,end:25,color:"#22c55e"},
+              {start:25,end:40,color:"#4ade80"},
+              {start:40,end:60,color:"#94a3b8"},
+              {start:60,end:75,color:"#fbbf24"},
+              {start:75,end:100,color:"#ef4444"},
+            ];
+            const markerPos=Math.min(98,Math.max(2,sp.percentile));
+
             return (
-              <div key={sp.key} style={{background:C.panelAlt,borderRadius:8,padding:16,border:`1px solid ${C.border}`,
-                borderLeft:`3px solid ${regCol}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div key={sp.key} style={{background:bgTint,borderRadius:"0 12px 12px 0",padding:"20px 24px",
+                border:`1px solid ${C.border}`,borderLeft:`4px solid ${borderColor}`}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                  <h3 style={{margin:0,fontSize:17,fontWeight:700,color:C.text,lineHeight:1.3}}>{friendlyName}</h3>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 14px",borderRadius:20,
+                    background:alertBadge.bg,border:`1px solid ${alertBadge.border}`}}>
+                    <span style={{fontSize:13}}>{alertBadge.icon}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:alertBadge.color}}>{alertBadge.label}</span>
+                  </span>
+                </div>
+
+                {/* 3-column layout */}
+                <div style={{display:"grid",gridTemplateColumns:"180px 1fr 240px",gap:24,alignItems:"center",marginBottom:14}}>
+                  {/* Value */}
                   <div>
-                    <div style={{fontSize:14,fontWeight:700,color:C.text}}>{SPREAD_NAMES[sp.key]||sp.name}</div>
-                    <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{sp.description||""}</div>
-                  </div>
-                  <Badge label={sp.regime} color={regCol} />
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 200px",gap:20,alignItems:"center"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-                    <div>
-                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>VALOR ATUAL</div>
-                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:C.text}}>{sp.current.toFixed(4)}</div>
-                      <div style={{fontSize:10,color:C.textMuted}}>{sp.unit}</div>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4,fontWeight:600,letterSpacing:1}}>VALOR ATUAL</div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                      <span style={{fontSize:28,fontWeight:800,fontFamily:"monospace",color:C.text,letterSpacing:-1}}>
+                        {sp.current.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:4})}
+                      </span>
+                      <span style={{fontSize:11,color:C.textMuted}}>{sp.unit}</span>
                     </div>
-                    <div>
-                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>Z-SCORE 1Y</div>
-                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",
-                        color:Math.abs(sp.zscore_1y)>1.5?C.red:Math.abs(sp.zscore_1y)>1?C.amber:C.green}}>
-                        {sp.zscore_1y>=0?"+":""}{sp.zscore_1y.toFixed(2)}
-                      </div>
-                      <div style={{fontSize:10,color:C.textMuted}}>{Math.abs(sp.zscore_1y)>2?"Extremo":Math.abs(sp.zscore_1y)>1?"Elevado":"Normal"}</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>PERCENTIL</div>
-                      <PctBar val={sp.percentile} />
-                    </div>
-                    <div>
-                      <div style={{fontSize:9,color:C.textMuted,marginBottom:2}}>TENDÊNCIA</div>
-                      <div style={{fontSize:14,fontWeight:600,color:trendCol}}>
-                        {trendIcon} {sp.trend||"—"} 
-                        {sp.trend_pct?<span style={{fontSize:11,marginLeft:4}}>({sp.trend_pct>0?"+":""}{sp.trend_pct?.toFixed(1)}%)</span>:null}
-                      </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6}}>
+                      <span style={{fontSize:14,color:trendColor}}>{trendArrow}</span>
+                      <span style={{fontSize:12,color:trendColor,fontWeight:600}}>
+                        {trendWord} ({trendPct>0?"+":""}{trendPct.toFixed(1)}%)
+                      </span>
                     </div>
                   </div>
-                  {sp.history && sp.history.length>0 && (
-                    <SpreadChart history={sp.history} regime={sp.regime} />
-                  )}
+
+                  {/* Thermometer */}
+                  <div>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>COMPARADO AO ÚLTIMO ANO</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:13,fontWeight:700,color:zone.color}}>{zone.text}</span>
+                      <span style={{fontSize:11,color:C.textMuted,fontFamily:"monospace"}}>posição: {sp.percentile}%</span>
+                    </div>
+                    <div style={{position:"relative",height:20,borderRadius:10,overflow:"hidden",display:"flex"}}>
+                      {thermSegments.map((seg,i)=>(
+                        <div key={i} style={{flex:seg.end-seg.start,background:seg.color+"20",
+                          borderRight:i<thermSegments.length-1?"1px solid rgba(0,0,0,0.3)":"none"}} />
+                      ))}
+                      <div style={{position:"absolute",top:-3,bottom:-3,
+                        left:`calc(${markerPos}% - 4px)`,width:8,borderRadius:4,
+                        background:zone.color,boxShadow:`0 0 10px ${zone.color}90, 0 0 20px ${zone.color}40`,
+                        transition:"left 0.6s ease"}} />
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:10,color:"rgba(255,255,255,0.25)"}}>
+                      <span>Barato</span><span>Médio</span><span>Caro</span>
+                    </div>
+                  </div>
+
+                  {/* Sparkline */}
+                  <div>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>TENDÊNCIA (20 DIAS)</div>
+                    {sp.history && sp.history.length>0 ? (
+                      <SpreadChart history={sp.history} regime={sp.regime} />
+                    ) : <div style={{color:C.textMuted,fontSize:11}}>Sem histórico</div>}
+                  </div>
                 </div>
+
+                {/* Verdict */}
+                <div style={{padding:"10px 14px",borderRadius:8,marginBottom:10,
+                  background:alert==="alerta"?"rgba(239,68,68,0.06)":alert==="atencao"?"rgba(245,158,11,0.06)":"rgba(255,255,255,0.02)",
+                  border:`1px solid ${alert==="alerta"?"rgba(239,68,68,0.15)":alert==="atencao"?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.05)"}`}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>📋 RESUMO</div>
+                  <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>{verdict}</div>
+                </div>
+
+                {/* Expandable explanation */}
+                {details.whatIsIt && (
+                  <details style={{cursor:"pointer"}}>
+                    <summary style={{fontSize:12,color:C.textMuted,padding:"4px 0",listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10}}>▶</span> O que é isso? Como me afeta?
+                    </summary>
+                    <div style={{marginTop:8,padding:14,borderRadius:8,
+                      background:"rgba(59,130,246,0.05)",border:"1px solid rgba(59,130,246,0.12)"}}>
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#60a5fa",marginBottom:4,letterSpacing:0.5}}>📖 O QUE É</div>
+                        <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whatIsIt}</div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",marginBottom:4,letterSpacing:0.5}}>💰 POR QUE ME INTERESSA</div>
+                        <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whyMatters}</div>
+                      </div>
+                    </div>
+                  </details>
+                )}
               </div>
             );
           })}
@@ -1452,8 +1664,21 @@ export default function Dashboard() {
       ) : (
         <DataPlaceholder title="Sem dados de spreads" detail="Execute o pipeline para calcular spreads" />
       )}
+
+      {/* Help footer */}
+      <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
+        background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>💡 Como ler esta página</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
+          <div><strong style={{color:C.textDim}}>Barra "Caro/Barato"</strong><br/>Mostra onde o preço está comparado ao último ano. Bolinha na ponta vermelha = caro. Na verde = barato.</div>
+          <div><strong style={{color:C.textDim}}>Gráfico de tendência</strong><br/>Mostra pra onde o preço está indo nos últimos 20 dias. Seta ↑ = subindo, ↓ = caindo.</div>
+          <div><strong style={{color:C.textDim}}>Clique "O que é isso?"</strong><br/>Cada relação tem uma explicação simples do que significa e por que interessa ao produtor rural.</div>
+        </div>
+      </div>
     </div>
-  );
+    );
+  };
+
   // ── Tab: Sazonalidade ───────────────────────────────────────────────────
   const renderSazonalidade = () => (
     <div>
@@ -1738,56 +1963,420 @@ export default function Dashboard() {
     );
   };
   // ── Tab: Custo Produção ────────────────────────────────────────────────
-  const renderCustoProducao = () => (
+  const renderCustoProducao = () => {
+    const allRegions:{sym:string;commodity:string;region:string;cost:number;unit:string;price:number|null;margin:number|null;source:string}[] = [];
+    COST_DATA.forEach(cd=>{
+      const p=getPrice(cd.sym);
+      cd.regions.forEach(r=>{
+        const margin = p ? ((p - r.cost) / r.cost) * 100 : null;
+        allRegions.push({sym:cd.sym,commodity:cd.commodity,region:r.region,cost:r.cost,unit:r.unit,price:p,margin,source:r.source});
+      });
+    });
+    const prejuizo = allRegions.filter(r=>r.margin!==null && r.margin<0).length;
+    const apertado = allRegions.filter(r=>r.margin!==null && r.margin>=0 && r.margin<=10).length;
+    const lucro = allRegions.filter(r=>r.margin!==null && r.margin>10).length;
+
+    return (
     <div>
-      <SectionTitle>💰 Custo de Produção — Preço Real vs Custo</SectionTitle>
-      <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
-        Comparação entre preço de mercado e custo de produção por região. Margem positiva = produtor lucrando.
+      <SectionTitle>Custo de Produção — Quem lucra e quem perde?</SectionTitle>
+      <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
+        Compara o preço atual de mercado com o custo de produção em cada região.
+        <strong style={{color:C.textDim}}> Barra verde = lucro. Amarela = apertado. Vermelha = prejuízo.</strong>
       </div>
+
+      {/* Summary cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
+        <div style={{background:prejuizo>0?"rgba(239,68,68,0.06)":"rgba(34,197,94,0.04)",
+          border:`1px solid ${prejuizo>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
+          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,fontWeight:800,color:prejuizo>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{prejuizo}</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>🔴 No prejuízo</div>
+        </div>
+        <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
+          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{apertado}</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>⚠️ Margem apertada</div>
+        </div>
+        <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
+          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,fontWeight:800,color:"#4ade80",fontFamily:"monospace"}}>{lucro}</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>💰 Lucrando</div>
+        </div>
+      </div>
+
       {COST_DATA.map(cd=>{
         const p=getPrice(cd.sym);
-        const anyProfit = cd.regions.some(r=>p && p > r.cost);
-        const anyLoss = cd.regions.some(r=>p && p < r.cost);
+        const margins = cd.regions.map(r=>p ? ((p - r.cost) / r.cost) * 100 : null);
+        const hasPrejuizo = margins.some(m=>m!==null && m<0);
+        const allLucro = margins.every(m=>m!==null && m>0);
+        const bestRegion = cd.regions.reduce((best,r,i)=>
+          (margins[i]!==null && (best.margin===null || margins[i]!>best.margin)) ? {region:r.region,margin:margins[i]!} : best,
+          {region:"",margin:null as number|null}
+        );
+        const worstRegion = cd.regions.reduce((worst,r,i)=>
+          (margins[i]!==null && (worst.margin===null || margins[i]!<worst.margin)) ? {region:r.region,margin:margins[i]!} : worst,
+          {region:"",margin:null as number|null}
+        );
+
+        const headerBorder = hasPrejuizo?"#ef4444":allLucro?"#10b981":"#f59e0b";
+        const headerBg = hasPrejuizo?"rgba(239,68,68,0.03)":allLucro?"rgba(16,185,129,0.03)":"transparent";
+        const alertBadge = hasPrejuizo
+          ?{icon:"🔴",label:"Regiões no prejuízo",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
+          :allLucro
+          ?{icon:"💰",label:"Todas lucrando",bg:"rgba(16,185,129,0.1)",border:"rgba(16,185,129,0.3)",color:"#34d399"}
+          :{icon:"⚠️",label:"Margens apertadas",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"};
+
         return (
-          <div key={cd.sym} style={{marginBottom:24,background:C.panelAlt,borderRadius:8,padding:16,border:`1px solid ${C.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:14,fontWeight:700,color:C.text}}>
-                {cd.commodity} ({cd.sym})
+          <div key={cd.sym} style={{marginBottom:16,background:headerBg,borderRadius:"0 12px 12px 0",
+            padding:"20px 24px",border:`1px solid ${C.border}`,borderLeft:`4px solid ${headerBorder}`}}>
+
+            {/* Header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+              <div>
+                <h3 style={{margin:0,fontSize:17,fontWeight:700,color:C.text,lineHeight:1.3}}>{cd.commodity}</h3>
+                {p && <div style={{fontSize:13,color:C.textMuted,marginTop:4}}>
+                  Preço de mercado: <strong style={{color:C.text,fontFamily:"monospace",fontSize:15}}>
+                    {p.toLocaleString("en-US",{minimumFractionDigits:2})}
+                  </strong> <span style={{fontSize:11}}>{cd.futuresUnit}</span>
+                </div>}
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                {p && <span style={{fontSize:12,fontFamily:"monospace",color:C.text}}>Mercado: <strong>{p.toFixed(2)}</strong> {cd.futuresUnit}</span>}
-                {anyLoss && <Badge label="REGIÕES EM PREJUÍZO" color={C.red} />}
-                {!anyLoss && anyProfit && <Badge label="TODAS LUCRANDO" color={C.green} />}
+              <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 14px",borderRadius:20,
+                background:alertBadge.bg,border:`1px solid ${alertBadge.border}`}}>
+                <span style={{fontSize:13}}>{alertBadge.icon}</span>
+                <span style={{fontSize:11,fontWeight:700,color:alertBadge.color}}>{alertBadge.label}</span>
+              </span>
+            </div>
+
+            {/* Regions as visual cards */}
+            <div style={{display:"grid",gap:10}}>
+              {cd.regions.map((r,i)=>{
+                const margin = p ? ((p - r.cost) / r.cost) * 100 : null;
+                const isBest = bestRegion.region === r.region;
+                const isWorst = worstRegion.region === r.region && hasPrejuizo;
+                return (
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"220px 120px 1fr",gap:16,alignItems:"center",
+                    padding:"12px 16px",borderRadius:10,
+                    background:isWorst?"rgba(239,68,68,0.04)":isBest?"rgba(16,185,129,0.04)":"rgba(255,255,255,0.02)",
+                    border:`1px solid ${isWorst?"rgba(239,68,68,0.15)":isBest?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.04)"}`}}>
+
+                    {/* Region name */}
+                    <div>
+                      <div style={{fontSize:14,fontWeight:600,color:C.text}}>{r.region}</div>
+                      <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Fonte: {r.source}</div>
+                    </div>
+
+                    {/* Cost */}
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:9,color:C.textMuted,fontWeight:600,letterSpacing:1,marginBottom:2}}>CUSTO</div>
+                      <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:C.textDim}}>
+                        {r.cost.toLocaleString("en-US",{minimumFractionDigits:1})}
+                      </div>
+                      <div style={{fontSize:10,color:C.textMuted}}>{r.unit}</div>
+                    </div>
+
+                    {/* Margin bar */}
+                    {p ? <MarginBar price={p} cost={r.cost} /> : <span style={{color:C.textMuted,fontSize:12}}>Sem preço</span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Verdict */}
+            <div style={{marginTop:14,padding:"10px 14px",borderRadius:8,
+              background:hasPrejuizo?"rgba(239,68,68,0.06)":allLucro?"rgba(16,185,129,0.05)":"rgba(245,158,11,0.05)",
+              border:`1px solid ${hasPrejuizo?"rgba(239,68,68,0.15)":allLucro?"rgba(16,185,129,0.12)":"rgba(245,158,11,0.12)"}`}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>📋 RESUMO</div>
+              <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>
+                {hasPrejuizo && worstRegion.margin!==null && bestRegion.margin!==null
+                  ? `🔴 ${worstRegion.region.replace(/^.{4}/,"")} está no prejuízo (${worstRegion.margin.toFixed(0)}%). O produtor mais competitivo é ${bestRegion.region.replace(/^.{4}/,"")} com margem de +${bestRegion.margin.toFixed(0)}%. Preço precisa subir para viabilizar todas as regiões.`
+                  : allLucro && bestRegion.margin!==null && worstRegion.margin!==null
+                  ? `💰 Todas as regiões lucrando. Melhor margem: ${bestRegion.region.replace(/^.{4}/,"")} (+${bestRegion.margin.toFixed(0)}%). Margem mais apertada: ${worstRegion.region.replace(/^.{4}/,"")} (+${(worstRegion.margin).toFixed(0)}%).`
+                  : bestRegion.margin!==null && worstRegion.margin!==null
+                  ? `⚠️ Margens apertadas em algumas regiões. ${bestRegion.region.replace(/^.{4}/,"")} lidera com +${bestRegion.margin.toFixed(0)}%. Atenção para regiões com margem abaixo de 10%.`
+                  : "Dados de preço indisponíveis para cálculo."
+                }
               </div>
             </div>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-              <thead><TableHeader cols={["Região","Custo","Preço Mercado","Margem","Status"]} /></thead>
-              <tbody>
-                {cd.regions.map((r,i)=>{
-                  const margin = p ? ((p - r.cost) / r.cost) * 100 : null;
-                  const status = margin === null ? "—" : margin > 20 ? "LUCRO" : margin > 0 ? "MARGINAL" : "PREJUÍZO";
-                  const statusCol = margin === null ? C.textMuted : margin > 20 ? C.green : margin > 0 ? C.amber : C.red;
-                  return (
-                    <tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-                      <td style={{padding:"8px 12px",fontWeight:500}}>{r.region}</td>
-                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace"}}>{r.cost.toFixed(1)} <span style={{color:C.textMuted}}>{r.unit}</span></td>
-                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:600}}>{p?p.toFixed(2):"—"}</td>
-                      <td style={{padding:"8px 12px",textAlign:"right"}}>
-                        {margin !== null ? <MarginBar price={p!} cost={r.cost} /> : <span style={{color:C.textMuted}}>—</span>}
-                      </td>
-                      <td style={{padding:"8px 12px",textAlign:"right"}}><Badge label={status} color={statusCol} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div style={{marginTop:8,fontSize:9,color:C.textMuted}}>Fontes: {cd.regions.map(r=>r.source).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}</div>
+
+            {/* Sources */}
+            <div style={{marginTop:8,fontSize:9,color:C.textMuted}}>
+              Fontes: {cd.regions.map(r=>r.source).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}
+            </div>
           </div>
         );
       })}
+
+      {/* Help footer */}
+      <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
+        background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>💡 Como ler esta página</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
+          <div><strong style={{color:C.textDim}}>Barra de margem</strong><br/>Verde = lucro bom (acima de 20%). Amarela = margem apertada. Vermelha = produtor está perdendo dinheiro.</div>
+          <div><strong style={{color:C.textDim}}>Custo por região</strong><br/>Quanto custa produzir em cada local. Regiões com custo mais baixo conseguem lucrar mesmo com preços em queda.</div>
+          <div><strong style={{color:C.textDim}}>Resumo</strong><br/>Mostra quem está na melhor e pior situação. Se muitas regiões estão no prejuízo, a oferta tende a cair — o que pode subir o preço.</div>
+        </div>
+      </div>
     </div>
-  );
-  // ── Tab: Físico Intl ────────────────────────────────────────────────────
+    );
+  };
+
+
+  // ── Tab: Energia ─────────────────────────────────────────────────────────
+  const renderEnergia = () => {
+    const s = eiaData?.series || {};
+    const get = (id:string) => s[id] || null;
+
+    // Helper: spark SVG
+    const Spark = ({data,color,w=180,h=50}:{data:{period:string;value:number}[];color:string;w?:number;h?:number}) => {
+      if(!data||data.length<2) return <span style={{color:C.textMuted,fontSize:11}}>—</span>;
+      const vals = [...data].reverse().map(d=>d.value);
+      const mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;
+      const pts=vals.map((v,i)=>`${(i/(vals.length-1))*w},${h-4-((v-mn)/rng)*(h-8)}`).join(" ");
+      return (
+        <svg width={w} height={h} style={{display:"block"}}>
+          <defs><linearGradient id={`sg-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.25}/><stop offset="100%" stopColor={color} stopOpacity={0}/>
+          </linearGradient></defs>
+          <polygon points={`0,${h} ${pts} ${w},${h}`} fill={`url(#sg-${color.replace('#','')})`}/>
+          <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx={w} cy={h-4-((vals[vals.length-1]-mn)/rng)*(h-8)} r={3} fill={color} stroke="rgba(0,0,0,0.4)" strokeWidth={1}/>
+        </svg>
+      );
+    };
+
+    // Helper: range bar (52w)
+    const RangeBar = ({series}:{series:EIASeries|null}) => {
+      if(!series||series.pct_range_52w===null||series.high_52w===null||series.low_52w===null) return null;
+      const pct = series.pct_range_52w;
+      const color = pct>=80?"#ef4444":pct>=60?"#f59e0b":pct>=40?"#94a3b8":pct>=20?"#60a5fa":"#22c55e";
+      const label = pct>=80?"Perto da máxima":pct>=60?"Acima da média":pct>=40?"Na média":pct>=20?"Abaixo da média":"Perto da mínima";
+      return (
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.textMuted,marginBottom:4}}>
+            <span>Mín: {series.low_52w.toLocaleString("en-US",{maximumFractionDigits:1})}</span>
+            <span style={{color,fontWeight:700}}>{label}</span>
+            <span>Máx: {series.high_52w.toLocaleString("en-US",{maximumFractionDigits:1})}</span>
+          </div>
+          <div style={{position:"relative",height:10,borderRadius:5,overflow:"hidden",
+            background:"linear-gradient(90deg, #22c55e20 0%, #60a5fa20 25%, #94a3b820 50%, #f59e0b20 75%, #ef444420 100%)"}}>
+            <div style={{position:"absolute",top:-1,bottom:-1,left:`calc(${Math.min(98,Math.max(2,pct))}% - 5px)`,
+              width:10,borderRadius:5,background:color,boxShadow:`0 0 8px ${color}80`,transition:"left 0.6s ease"}}/>
+          </div>
+        </div>
+      );
+    };
+
+    // Helper: change badge
+    const ChgBadge = ({val,suffix="WoW"}:{val:number|null|undefined;suffix?:string}) => {
+      if(val===null||val===undefined) return <span style={{color:C.textMuted,fontSize:10}}>—</span>;
+      const color = val>0?"#10b981":val<0?"#ef4444":"#94a3b8";
+      const arrow = val>0?"↑":val<0?"↓":"→";
+      return <span style={{fontSize:11,fontWeight:600,color}}>{arrow} {val>0?"+":""}{val.toFixed(1)}% {suffix}</span>;
+    };
+
+    // ── Data cards config ──
+    const priceCards = [
+      {id:"wti_spot",label:"Petróleo WTI",icon:"🛢️",color:"#f59e0b",
+        why:"Preço do petróleo afeta o custo do diesel, frete e insumos agrícolas. Petróleo em alta = custo do produtor sobe."},
+      {id:"natural_gas_spot",label:"Gás Natural (Henry Hub)",icon:"🔥",color:"#3b82f6",
+        why:"Gás natural é matéria-prima de fertilizantes nitrogenados (ureia). Gás caro = adubo caro."},
+      {id:"diesel_retail",label:"Diesel (Preço Bomba EUA)",icon:"⛽",color:"#ef4444",
+        why:"Diesel é o principal combustível do campo — colheitadeiras, caminhões, irrigação. Cada centavo afeta a margem do produtor."},
+      {id:"gasoline_retail",label:"Gasolina (Preço Bomba EUA)",icon:"🚗",color:"#a855f7",
+        why:"Gasolina alta incentiva etanol de milho, aumentando demanda por milho e puxando preços agrícolas."},
+    ];
+
+    const stockCards = [
+      {id:"crude_stocks",label:"Estoques Petróleo Cru",icon:"🛢️",color:"#f59e0b",unit:"MBbl",
+        why:"Estoques altos = petróleo tende a cair = diesel mais barato = custo agrícola menor. Estoques baixos = risco de alta."},
+      {id:"gasoline_stocks",label:"Estoques Gasolina",icon:"⛽",color:"#a855f7",unit:"MBbl",
+        why:"Estoques baixos de gasolina = mais demanda por etanol = mais demanda por milho = milho sobe."},
+      {id:"distillate_stocks",label:"Estoques Diesel/Destilados",icon:"🏭",color:"#ef4444",unit:"MBbl",
+        why:"Estoque de diesel apertado = risco de frete caro na colheita. Produtor deve monitorar antes de contratar transporte."},
+      {id:"ethanol_stocks",label:"Estoques Etanol",icon:"🌽",color:"#22c55e",unit:"MBbl",
+        why:"Etanol consome ~40% do milho americano. Estoques baixos de etanol = usinas precisam comprar mais milho."},
+    ];
+
+    const prodCards = [
+      {id:"ethanol_production",label:"Produção Etanol",icon:"🌽",color:"#22c55e",unit:"MBbl/d",
+        why:"Produção alta de etanol = forte demanda por milho. Queda na produção = demanda enfraquecendo."},
+      {id:"refinery_utilization",label:"Utilização Refinarias",icon:"🏭",color:"#f59e0b",unit:"%",
+        why:"Refinarias a pleno = demanda forte por combustíveis. Se cair abaixo de 85%, sinal de desaceleração econômica."},
+      {id:"crude_production",label:"Produção Petróleo EUA",icon:"🇺🇸",color:"#3b82f6",unit:"MBbl/d",
+        why:"EUA é o maior produtor mundial. Produção recorde = petróleo tende a cair = diesel mais barato para o campo."},
+    ];
+
+    if(!eiaData) return (
+      <div>
+        <SectionTitle>Energia — Petróleo, Gás e Combustíveis</SectionTitle>
+        <DataPlaceholder title="Sem dados EIA" detail="Execute o pipeline para coletar dados da EIA (Energy Information Administration)" />
+      </div>
+    );
+
+    // Count alerts
+    const alertCount = Object.values(s).filter(v=>v.pct_range_52w!==null&&(v.pct_range_52w>=80||v.pct_range_52w<=20)).length;
+
+    return (
+    <div>
+      <SectionTitle>Energia — Petróleo, Gás e Combustíveis</SectionTitle>
+      <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
+        Dados semanais da EIA (Energy Information Administration). Energia afeta diretamente o custo do produtor rural
+        — diesel, frete, fertilizantes e demanda por etanol.
+        <strong style={{color:C.textDim}}> Atualizado: {eiaData.metadata.collected_at?.slice(0,10)||"—"}</strong>
+      </div>
+
+      {/* ── PREÇOS ── */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>💲 Preços — Quanto custa a energia?</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:28}}>
+        {priceCards.map(pc=>{
+          const d = get(pc.id);
+          if(!d||!d.latest_value) return null;
+          const trendUp = (d.wow_change_pct||0)>0;
+          return (
+            <div key={pc.id} style={{background:C.panelAlt,borderRadius:12,padding:"18px 20px",
+              border:`1px solid ${C.border}`,borderLeft:`4px solid ${pc.color}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:20}}>{pc.icon}</span>
+                  <span style={{fontSize:14,fontWeight:700,color:C.text}}>{pc.label}</span>
+                </div>
+                <ChgBadge val={d.wow_change_pct} />
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:32,fontWeight:800,fontFamily:"monospace",color:C.text,letterSpacing:-1}}>
+                    ${d.latest_value.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:3})}
+                  </div>
+                  <div style={{fontSize:11,color:C.textMuted}}>{d.unit} • {d.latest_period}</div>
+                  <div style={{display:"flex",gap:12,marginTop:6}}>
+                    <ChgBadge val={d.mom_change_pct} suffix="MoM"/>
+                    {d.yoy_change_pct!==null && <ChgBadge val={d.yoy_change_pct} suffix="YoY"/>}
+                  </div>
+                </div>
+                <Spark data={d.history.slice(0,26)} color={pc.color} />
+              </div>
+              <div style={{marginTop:12}}><RangeBar series={d}/></div>
+              <details style={{marginTop:10,cursor:"pointer"}}>
+                <summary style={{fontSize:11,color:C.textMuted,listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:9}}>▶</span> Por que me interessa?
+                </summary>
+                <div style={{marginTop:6,padding:"8px 12px",borderRadius:6,background:"rgba(59,130,246,0.05)",
+                  border:"1px solid rgba(59,130,246,0.1)",fontSize:12,color:C.textDim,lineHeight:1.5}}>
+                  💰 {pc.why}
+                </div>
+              </details>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── ESTOQUES ── */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>📦 Estoques — Quanto tem guardado?</div>
+      <div style={{fontSize:12,color:C.textMuted,marginBottom:14,lineHeight:1.5}}>
+        Estoques baixos = risco de preço subir. Estoques altos = pressão de baixa.
+        A barra mostra onde o estoque está dentro do range do último ano.
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:28}}>
+        {stockCards.map(sc=>{
+          const d = get(sc.id);
+          if(!d||!d.latest_value) return null;
+          const pct = d.pct_range_52w;
+          const isLow = pct!==null && pct<=25;
+          const isHigh = pct!==null && pct>=75;
+          const alertColor = isLow?"#f59e0b":isHigh?"#3b82f6":"rgba(255,255,255,0.05)";
+          const alertBg = isLow?"rgba(245,158,11,0.04)":isHigh?"rgba(59,130,246,0.04)":"transparent";
+          return (
+            <div key={sc.id} style={{background:alertBg,borderRadius:12,padding:"18px 20px",
+              border:`1px solid ${C.border}`,borderLeft:`4px solid ${sc.color}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:18}}>{sc.icon}</span>
+                  <span style={{fontSize:14,fontWeight:700,color:C.text}}>{sc.label}</span>
+                </div>
+                {isLow && <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:12,
+                  background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",color:"#fbbf24"}}>⚠️ Baixo</span>}
+                {isHigh && <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:12,
+                  background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.3)",color:"#60a5fa"}}>📦 Alto</span>}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:26,fontWeight:800,fontFamily:"monospace",color:C.text}}>
+                    {d.latest_value>=1000?`${(d.latest_value/1000).toFixed(1)}M`:d.latest_value.toLocaleString("en-US")}
+                  </div>
+                  <div style={{fontSize:11,color:C.textMuted}}>{sc.unit} • {d.latest_period}</div>
+                  <div style={{marginTop:4}}><ChgBadge val={d.wow_change_pct} /></div>
+                </div>
+                <Spark data={d.history.slice(0,26)} color={sc.color} />
+              </div>
+              <div style={{marginTop:12}}><RangeBar series={d}/></div>
+              <details style={{marginTop:10,cursor:"pointer"}}>
+                <summary style={{fontSize:11,color:C.textMuted,listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:9}}>▶</span> Por que me interessa?
+                </summary>
+                <div style={{marginTop:6,padding:"8px 12px",borderRadius:6,background:"rgba(59,130,246,0.05)",
+                  border:"1px solid rgba(59,130,246,0.1)",fontSize:12,color:C.textDim,lineHeight:1.5}}>
+                  💰 {sc.why}
+                </div>
+              </details>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── PRODUÇÃO ── */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>⚙️ Produção e Refino</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:28}}>
+        {prodCards.map(pc=>{
+          const d = get(pc.id);
+          if(!d||!d.latest_value) return null;
+          return (
+            <div key={pc.id} style={{background:C.panelAlt,borderRadius:12,padding:"16px 18px",
+              border:`1px solid ${C.border}`,borderLeft:`4px solid ${pc.color}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                <span style={{fontSize:16}}>{pc.icon}</span>
+                <span style={{fontSize:13,fontWeight:700,color:C.text}}>{pc.label}</span>
+              </div>
+              <div style={{fontSize:26,fontWeight:800,fontFamily:"monospace",color:C.text}}>
+                {pc.id==="refinery_utilization"
+                  ? `${d.latest_value.toFixed(1)}%`
+                  : d.latest_value>=1000
+                  ? `${(d.latest_value/1000).toFixed(1)}M`
+                  : d.latest_value.toLocaleString("en-US")}
+              </div>
+              <div style={{fontSize:11,color:C.textMuted}}>{pc.unit} • {d.latest_period}</div>
+              <div style={{marginTop:4}}><ChgBadge val={d.wow_change_pct}/></div>
+              <div style={{marginTop:10}}>
+                <Spark data={d.history.slice(0,26)} color={pc.color} w={160} h={40}/>
+              </div>
+              <details style={{marginTop:8,cursor:"pointer"}}>
+                <summary style={{fontSize:11,color:C.textMuted,listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:9}}>▶</span> Por que me interessa?
+                </summary>
+                <div style={{marginTop:6,padding:"8px 10px",borderRadius:6,background:"rgba(59,130,246,0.05)",
+                  border:"1px solid rgba(59,130,246,0.1)",fontSize:11,color:C.textDim,lineHeight:1.5}}>
+                  💰 {pc.why}
+                </div>
+              </details>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Help footer */}
+      <div style={{padding:"16px 20px",borderRadius:12,
+        background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>💡 Como a energia afeta o agro</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
+          <div><strong style={{color:C.textDim}}>Diesel e frete</strong><br/>Petróleo sobe → diesel sobe → custo de produção e transporte agrícola aumenta. Produtor perde margem.</div>
+          <div><strong style={{color:C.textDim}}>Etanol e milho</strong><br/>~40% do milho dos EUA vira etanol. Mais demanda por etanol = mais demanda por milho = preço do milho sobe.</div>
+          <div><strong style={{color:C.textDim}}>Gás e fertilizantes</strong><br/>Gás natural é matéria-prima da ureia. Gás caro → adubo caro → custo da lavoura sobe, especialmente milho e trigo.</div>
+        </div>
+      </div>
+    </div>
+    );
+  };
+
+      // ── Tab: Físico Intl ────────────────────────────────────────────────────
   const renderFisicoIntl = () => {
     const physData = physical;
     const usCash = physData?.us_cash || {};
@@ -1943,7 +2532,7 @@ export default function Dashboard() {
   const renderLeituraDoDia = () => {
     const catColors:Record<string,string> = {"usda":"#f59e0b","cftc":"#3b82f6","macro":"#a855f7","eia":"#22c55e","expiry":"#ef4444"};
     const catLabels:Record<string,string> = {"usda":"USDA","cftc":"CFTC","macro":"MACRO","eia":"EIA","expiry":"VENC"};
-    const today = new Date().toISOString().slice(0,10);
+    const today = new Date().toLocaleDateString("sv-SE");
     const upcoming = calendar?.events?.filter((e:any)=>e.date>=today).slice(0,20) || [];
     const highImpact = upcoming.filter((e:any)=>e.impact==="high");
     const fredEntries = news?.fred ? Object.entries(news.fred) : [];
@@ -2231,6 +2820,7 @@ export default function Dashboard() {
       case "Spreads": return renderSpreads();
       case "Sazonalidade": return renderSazonalidade();
       case "Stocks Watch": return renderStocksWatch();
+      case "Energia": return renderEnergia();
       case "Custo Produção": return renderCustoProducao();
       case "Físico Intl": return renderFisicoIntl();
       case "Leitura do Dia": return renderLeituraDoDia();
@@ -2299,6 +2889,7 @@ export default function Dashboard() {
                 {ibkrRefreshing?"↻ Atualizando...":"IBKR Refresh"}
               </button>
               <span style={{fontSize:10,color:C.textMuted}}>IBKR: {ibkrTime}</span>
+              <a href="/api/latest-pdf" target="_blank" rel="noopener noreferrer" style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#a855f7",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",letterSpacing:0.5,textDecoration:"none",marginLeft:8}}>PDF Report</a>
             </div>
           </div>
           <div style={{fontSize:11,color:C.textMuted}}>{lastDate}</div>
@@ -2324,5 +2915,8 @@ export default function Dashboard() {
     </div>
   );
 }
+
+
+
 
 
