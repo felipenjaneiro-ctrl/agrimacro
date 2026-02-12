@@ -16,13 +16,78 @@ USDA_STOCKS = {
     "ZS": {"commodity": "SOYBEANS", "stat": "STOCKS", "filter": "SOYBEANS - STOCKS, MEASURED IN BU", "unit": "billion bu", "divisor": 1e9},
     "ZW": {"commodity": "WHEAT", "stat": "STOCKS", "filter": "WHEAT - STOCKS, MEASURED IN BU", "unit": "billion bu", "divisor": 1e9},
     "KE": {"commodity": "WHEAT", "stat": "STOCKS", "filter": "WHEAT - STOCKS, MEASURED IN BU", "unit": "billion bu", "divisor": 1e9},
-    "CT": {"commodity": "COTTON", "stat": "STOCKS", "filter": "COTTON, (EXCL UPLAND) - STOCKS, MEASURED IN RUNNING BALES", "unit": "thousand running bales", "divisor": 1},
     "LE": {"commodity": "CATTLE", "stat": "INVENTORY", "filter": "CATTLE, INCL CALVES - INVENTORY", "unit": "million head", "divisor": 1e6},
     "GF": {"commodity": "CATTLE", "stat": "INVENTORY", "filter": "CATTLE, ON FEED - INVENTORY", "unit": "million head", "divisor": 1e6},
     "HE": {"commodity": "HOGS", "stat": "INVENTORY", "filter": "HOGS - INVENTORY", "unit": "million head", "divisor": 1e6},
 }
 
-PRICE_PROXY_ONLY = ["ZM", "ZL", "SB", "KC", "CC", "OJ", "CL", "NG", "GC", "SI", "DX"]
+PRICE_PROXY_ONLY = ["CT", "ZM", "ZL", "SB", "KC", "CC", "OJ", "CL", "NG", "GC", "SI", "DX"]
+
+
+# --- PSD INTEGRATION v3.3 ---
+PSD_STOCK_FILE = Path(__file__).parent / ".." / "agrimacro-dash" / "public" / "data" / "processed" / "psd_ending_stocks.json"
+
+PSD_UNIT_MAP = {
+    "CT": "mil fardos 480lb",
+    "ZM": "mil ton metricas",
+    "ZL": "mil ton metricas",
+    "SB": "mil ton metricas",
+    "KC": "mil sacas 60kg",
+    "OJ": "ton metricas",
+}
+
+
+def load_psd_stocks():
+    """Load PSD ending stocks data if available"""
+    try:
+        psd_path = PSD_STOCK_FILE.resolve()
+        if psd_path.exists():
+            with open(psd_path, encoding="utf-8") as f:
+                data = json.load(f)
+            comms = data.get("commodities", {})
+            print(f"  [PSD] Loaded {len(comms)} commodities from psd_ending_stocks.json")
+            return comms
+        else:
+            print(f"  [PSD] File not found: {psd_path}")
+            return {}
+    except Exception as e:
+        print(f"  [PSD] Error loading: {e}")
+        return {}
+
+
+def _make_psd_entry(symbol, psd, price, seasonality):
+    """Create stocks entry from PSD ending stocks data"""
+    current = psd["current"]
+    avg_5y = psd["avg_5y"]
+    deviation = psd["deviation"]
+    unit = PSD_UNIT_MAP.get(symbol, psd.get("unit", ""))
+    if deviation < -15:
+        state = "APERTO"
+    elif deviation < -5:
+        state = "NEUTRO_VIES_APERTO"
+    elif deviation > 15:
+        state = "EXCESSO"
+    elif deviation > 5:
+        state = "NEUTRO_VIES_EXCESSO"
+    else:
+        state = "NEUTRO"
+    factors = []
+    if state in ("APERTO", "NEUTRO_VIES_APERTO"):
+        factors.append(f"Estoque {abs(deviation):.1f}% abaixo da media (USDA PSD)")
+    elif state in ("EXCESSO", "NEUTRO_VIES_EXCESSO"):
+        factors.append(f"Estoque {deviation:.1f}% acima da media (USDA PSD)")
+    else:
+        factors.append(f"Estoque {deviation:+.1f}% vs media (USDA PSD)")
+    factors.append(f"Dado: ending stocks {psd.get('year', '?')} (USDA FAS)")
+    history = [{"year": h["year"], "period": "ANNUAL", "value": h["value"]} for h in psd.get("history", [])]
+    return {
+        "symbol": symbol, "price": round(price, 2) if price else None,
+        "stock_current": current, "stock_avg": avg_5y,
+        "stock_unit": unit, "price_vs_avg": deviation,
+        "state": state, "factors": factors,
+        "data_available": {"stock_real": True, "stock_source": "USDA PSD Online", "stock_proxy": False, "curve": False, "cot": False},
+        "stock_history": history
+    }
 
 
 def fetch_usda_stocks(commodity, stat, desc_filter=None, years_back=6):
@@ -61,6 +126,15 @@ def analyze_usda_stocks(records, divisor):
     if not records:
         return None
 
+    # --- DATA QUALITY LOG v3.3 ---
+    # Log unique short_desc values to catch mixed series
+    unique_descs = set(r.get("desc", "") for r in records)
+    if len(unique_descs) > 1:
+        print(f"    âš ï¸ MIXED SERIES ({len(unique_descs)} distinct):")
+        for d in sorted(unique_descs):
+            count = sum(1 for r in records if r.get("desc") == d)
+            print(f"       [{count:3d}] {d}")
+
     # Deduplicate: keep only the largest value per year+period (total, not sub-categories)
     seen = {}
     for r in records:
@@ -93,6 +167,11 @@ def analyze_usda_stocks(records, divisor):
         state = "NEUTRO_VIES_EXCESSO"
     else:
         state = "NEUTRO"
+    # --- SANITY CHECK v3.3 ---
+    # Flag extreme deviations (>80%) as suspicious data quality issues
+    if abs(deviation) > 80:
+        print(f"    âš ï¸ SANITY: desvio {deviation:+.1f}% extremo - possivel mistura de series")
+        state = "VERIFICAR_UNIDADE"
     trend = None
     trend_pct = None
     if len(records) >= 2:
@@ -165,6 +244,7 @@ def process_stocks_watch(seasonality_file):
     with open(seasonality_file, encoding="utf-8") as f:
         seasonality = json.load(f)
     result = {"timestamp": datetime.now().isoformat(), "commodities": {}}
+    psd_stocks = load_psd_stocks()
     all_symbols = list(USDA_STOCKS.keys()) + PRICE_PROXY_ONLY
     for symbol in all_symbols:
         if symbol in USDA_STOCKS:
@@ -203,10 +283,20 @@ def process_stocks_watch(seasonality_file):
                     result["commodities"][symbol] = _make_proxy_entry(symbol, proxy)
                     print(f"    No USDA data, using price proxy | {proxy['state']}")
         elif symbol in PRICE_PROXY_ONLY:
-            proxy = analyze_price_proxy(symbol, seasonality)
-            if proxy:
-                result["commodities"][symbol] = _make_proxy_entry(symbol, proxy)
-                print(f"  {symbol}: Price proxy | {proxy['state']} ({proxy['deviation']:+.1f}%)")
+            if symbol in psd_stocks:
+                price = None
+                if symbol in seasonality:
+                    curr = seasonality[symbol].get("series", {}).get("current", [])
+                    if curr:
+                        price = curr[-1]["close"]
+                result["commodities"][symbol] = _make_psd_entry(symbol, psd_stocks[symbol], price, seasonality)
+                psd_d = psd_stocks[symbol]
+                print(f"  {symbol}: PSD REAL | {result['commodities'][symbol]['state']} ({psd_d['deviation']:+.1f}%)")
+            else:
+                proxy = analyze_price_proxy(symbol, seasonality)
+                if proxy:
+                    result["commodities"][symbol] = _make_proxy_entry(symbol, proxy)
+                    print(f"  {symbol}: Price proxy | {proxy['state']} ({proxy['deviation']:+.1f}%)")
     return result
 
 
@@ -225,7 +315,7 @@ if __name__ == "__main__":
     print(f"\nSummary: {real_count} with real USDA data, {proxy_count} with price proxy")
     
     # Save to JSON
-    out_path = Path(r"C:\Users\felip\OneDrive") / "Área de Trabalho" / "agrimacro" / "agrimacro-dash" / "public" / "data" / "processed" / "stocks_watch.json"
+    out_path = Path(__file__).parent / ".." / "agrimacro-dash" / "public" / "data" / "processed" / "stocks_watch.json"
     with open(out_path, "w", encoding="utf-8") as fout:
         json.dump(result, fout, indent=2, ensure_ascii=False, default=str)
     print(f"\n[SAVED] {out_path}")

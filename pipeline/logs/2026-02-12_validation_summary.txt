@@ -1,0 +1,12 @@
+AgriMacro QA Summary — 2026-02-12
+Status: BLOCK
+Confiança: 0%
+Can Publish: False
+
+[BLOCK] RANGE_CRITICAL: Boi Gordo (Live Cattle): 242.60000610351562 FORA da faixa [80-220] — desvio 62%
+[BLOCK] RANGE_CRITICAL: Boi Engorda (Feeder Cattle): 345.1499938964844 FORA da faixa [100-320] — desvio 64%
+[BLOCK] RANGE_CRITICAL: Ouro: 5086.2001953125 FORA da faixa [1000-4000] — desvio 103%
+[BLOCK] RANGE_CRITICAL: Prata: 82.8499984741211 FORA da faixa [10-60] — desvio 137%
+[FLAG] SPREAD_RANGE: Esmagamento da Soja: -1124.1094 fora de [-100, 400]
+[FLAG] SPREAD_RANGE: Margem do Confinamento: -531.5500 fora de [-500, 200]
+[WARN] NO_META: price_history.json não contém _meta (sem rastreabilidade)

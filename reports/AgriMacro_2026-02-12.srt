@@ -1,223 +1,238 @@
 1
-00:00:00,000 --> 00:00:05,025
+00:00:00,000 --> 00:00:06,076
 Bom dia, produtor!
 
 2
-00:00:05,025 --> 00:00:10,051
-Quinta-feira, 12 de fevereiro, e o agro
-internacional acorda em festa!
+00:00:06,076 --> 00:00:12,153
+Quinta-feira, 12 de fevereiro de 2026, e começamos com notícia que
+alegra o coração do agricultor: grãos em alta forte hoje!
 
 3
-00:00:10,051 --> 00:00:15,076
-Grãos em alta lideram uma sessão positiva, com soja
-saltando 1,5% e café disparando 2%.
+00:00:12,153 --> 00:00:18,230
+O trigo lidera o rally com disparada de 2,8%, seguido
+pela soja que sustenta alta de 1,2%.
 
 4
-00:00:15,076 --> 00:00:20,102
-Mas atenção: nem tudo são flores, com
-cacau despencando mais de 3%.
+00:00:18,230 --> 00:00:24,307
+É um dia volátil nos mercados, mas com o complexo de grãos
+acelerando enquanto outros setores corrigem.
 
 5
-00:00:20,102 --> 00:00:25,128
+00:00:24,307 --> 00:00:30,384
 Vamos aos detalhes que importam
 para o seu bolso!
 
 6
-00:00:25,128 --> 00:00:33,039
-Você que planta soja, preste atenção: o
-complexo disparou hoje!
+00:00:30,384 --> 00:00:41,475
+Produtor, vamos começar pelo destaque do dia: o trigo de Kansas disparou 3% para
+554,25 centavos por bushel, puxando toda a família dos grãos.
 
 7
-00:00:33,039 --> 00:00:40,950
-A soja fechou a US$ 1.140,50 por
-bushel, alta de 1,5%.
+00:00:41,475 --> 00:00:52,567
+Segundo os dados da CME, essa é uma correção técnica
+importante após semanas de pressão.
 
 8
-00:00:40,950 --> 00:00:48,860
-O farelo foi ainda melhor, saltando 1,7% para US$
-307,90, e o óleo subiu 1,4% para US$ 57,85.
+00:00:52,567 --> 00:01:03,660
+Para você que planta trigo no Sul do país, essa alta externa oferece
+uma referência positiva para precificar sua safra 2026.
 
 9
-00:00:48,860 --> 00:00:56,771
-Segundo dados da CFTC, o dinheiro gerenciado mantém posição comprada
-líquida de 29.153 contratos, sinalizando confiança do mercado.
+00:01:03,660 --> 00:01:14,752
+A soja também não ficou para trás, subindo 1,2% para 1.136,50 centavos, apoiada por uma margem de esmagamento robusta de
+1,73 dólares por bushel - isso significa que está no percentil 82%, ou seja, bem acima da média histórica.
 
 10
-00:00:56,771 --> 00:01:04,682
-A margem de esmagamento está em US$ 1,77, no percentil 83% - ou
-seja, processadoras operando com boa rentabilidade.
+00:01:14,752 --> 00:01:25,843
+O milho ganhou terreno com alta de 0,8%,
+chegando aos 431,25 centavos.
 
 11
-00:01:04,682 --> 00:01:12,593
-Para você, produtor, isso significa uma janela
-interessante para vendas técnicas da nova safra.
+00:01:25,843 --> 00:01:36,936
+Mas atenção: os dados da CFTC mostram que os fundos especulativos ainda estão posicionados negativamente
+no trigo e milho, sinalizando espaço para mais correção se os fundamentos melhorarem.
 
 12
-00:01:12,593 --> 00:01:20,504
-Lembre-se: março historicamente traz
-volatilidade com o WASDE.
+00:01:36,936 --> 00:01:46,121
+Agora vamos falar de margens, que é onde o
+dinheiro aparece de verdade, produtor.
 
 13
-00:01:20,504 --> 00:01:28,415
-Quem tem integração deve avaliar travamento de margem
-no farelo aproveitando esse momento.
+00:01:46,121 --> 00:01:55,306
+A margem de esmagamento da soja está no percentil 82% - isso é música para os ouvidos de quem
+comercializa soja, porque margens elevadas tendem a sustentar a demanda por processamento.
 
 14
-00:01:28,415 --> 00:01:34,314
-Cafeicultores, chegou a hora de comemorar!
+00:01:55,306 --> 00:02:04,491
+Já o ratio soja-milho está comprimido em 0,38, no percentil 8% - isso favorece quem planta
+soja nos Estados Unidos, e pode influenciar as decisões de plantio por lá.
 
 15
-00:01:34,314 --> 00:01:40,213
-O café arábica subiu impressionantes 2% hoje,
-fechando em US$ 300,70 por libra.
+00:02:04,491 --> 00:02:13,676
+Para a pecuária, temos um alerta: o ratio milho-farelo está em 1,40, no
+percentil 17%, indicando compressão nas margens da atividade.
 
 16
-00:01:40,213 --> 00:01:46,111
-Isso coloca nossa commodity 10,8% acima
-da média de cinco anos!
+00:02:13,676 --> 00:02:22,861
+Mas calma, pecuarista brasileiro - isso pode se refletir
+em menores custos de ração aqui no Brasil.
 
 17
-00:01:46,111 --> 00:01:52,010
-Os comerciais estão com posição líquida vendida de 18.837 contratos
-segundo a CFTC, o que pode limitar quedas bruscas.
+00:02:22,861 --> 00:02:32,046
+A margem do confinamento americano está no percentil 88%,
+mostrando que por lá a atividade está rentável.
 
 18
-00:01:52,010 --> 00:01:57,909
-Mas atenção ao dilema clássico: vender na alta atual ou
-aguardar possível extensão do rally?
+00:02:32,046 --> 00:02:41,232
+Segundo os dados do COT, os fundos estão comprados em boi gordo e suíno
+nos EUA, sinalizando expectativa de alta nas carnes.
 
 19
-00:01:57,909 --> 00:02:03,807
-O histórico mostra que março pode
-trazer correções técnicas.
+00:02:41,232 --> 00:02:51,148
+No cenário macro, produtor, temos notícias que mantêm o
+ambiente favorável para as commodities brasileiras.
 
 20
-00:02:03,807 --> 00:02:09,706
-Nossa sugestão: vendas escalonadas.
+00:02:51,148 --> 00:03:01,064
+O real está estável em R$ 5,22 por dólar - essa é uma cotação que
+preserva nossa competitividade nas exportações.
 
 21
-00:02:09,706 --> 00:02:15,605
-Aproveite parte dessa valorização, mas mantenha
-margem para aproveitar altas adicionais.
+00:03:01,064 --> 00:03:10,980
+O DXY, que mede a força do dólar americano, está sem direção clara em 96,82 pontos, o
+que tradicionalmente favorece commodities cotadas na moeda americana.
 
 22
-00:02:15,605 --> 00:02:21,503
-Com o real estável em R$ 5,22, a
-competitividade está garantida.
+00:03:10,980 --> 00:03:20,896
+Os juros americanos seguem estáveis, com o Fed Funds em 3,64%, e a curva de
+juros normalizada indica que não há pressão inflacionária no radar.
 
 23
-00:02:21,503 --> 00:02:27,826
-Pecuaristas, um alerta importante!
+00:03:20,896 --> 00:03:30,812
+Mas atenção para o petróleo: o WTI recuou 3,1%
+para 62,91 dólares por barril.
 
 24
-00:02:27,826 --> 00:02:34,149
-A margem de confinamento está no percentil 99%, ou seja, em níveis
-extremamente comprimidos de US$ 895,95 por cabeça.
+00:03:30,812 --> 00:03:40,728
+Isso é uma faca de dois gumes - por um lado, reduz seus custos de produção com diesel e fertilizantes; por
+outro, diminui a demanda por biocombustíveis, impactando o mercado de etanol e biodiesel.
 
 25
-00:02:34,149 --> 00:02:40,471
-Isso significa pressão severa
-sobre suas margens.
+00:03:40,728 --> 00:03:50,046
+Vamos falar agora dos números que movem o
+mercado por trás dos panos, produtor.
 
 26
-00:02:40,471 --> 00:02:46,794
-O boi gordo mostra posição comprada líquida de 111.771
-contratos na CFTC, e o suíno com 123.396 contratos.
+00:03:50,046 --> 00:03:59,365
+Os estoques americanos continuam acima da média histórica para milho, soja e trigo
+- isso ainda representa uma pressão de médio prazo para os preços.
 
 27
-00:02:46,794 --> 00:02:53,117
-Os estoques estão neutros, mas a
-pressão sobre custos é real.
+00:03:59,365 --> 00:04:08,684
+Milho com 13,28 bilhões de bushels, soja com 3,29 bilhões e trigo com 1,68
+bilhão - todos na categoria 'neutro com viés de excesso'.
 
 28
-00:02:53,117 --> 00:02:59,439
-A boa notícia?
+00:04:08,684 --> 00:04:18,003
+No posicionamento dos fundos, segundo dados da CFTC, temos uma situação interessante: eles estão vendidos em milho
+com posição líquida negativa de 80.613 contratos e também negativos no trigo com 81.543 contratos.
 
 29
-00:02:59,439 --> 00:03:05,762
-O petróleo recuou 0,9% para US$ 64,32,
-aliviando custos de logística e ração.
+00:04:18,003 --> 00:04:27,322
+Já na soja, estão levemente comprados
+com 29.153 contratos.
 
 30
-00:03:05,762 --> 00:03:12,085
-O ratio milho-farelo está comprimido no percentil 17%,
-indicando oportunidade para quem trabalha com ração.
+00:04:27,322 --> 00:04:36,641
+Para as carnes, estão fortemente comprados: boi gordo com
+111.771 contratos e suíno com 123.396.
 
 31
-00:03:12,085 --> 00:03:18,407
-Fique atento aos custos e considere
-ajustes no manejo nutricional.
+00:04:36,641 --> 00:04:45,960
+Isso sugere que qualquer mudança de fundamento pode
+gerar movimento forte nos grãos.
 
 32
-00:03:18,407 --> 00:03:25,735
-No cenário macro, o Fed mantém juros em 3,64% com
-ambiente estável para commodities.
+00:04:45,960 --> 00:04:53,700
+No clima, produtor, temos uma situação
+que merece atenção.
 
 33
-00:03:25,735 --> 00:03:33,063
-O dólar brasileiro permanece competitivo em R$
-5,22, favorecendo nossas exportações.
+00:04:53,700 --> 00:05:01,440
+Aqui no Cerrado brasileiro, com Mato Grosso, Goiás e Mato Grosso do Sul, tivemos 43 milímetros de chuva
+na última semana - volume adequado para o desenvolvimento das culturas na fase final.
 
 34
-00:03:33,063 --> 00:03:40,391
-No clima, La Niña segue ativa
-com ONI em -0,55.
+00:05:01,440 --> 00:05:09,180
+O Sul do país registrou 20mm, também
+dentro do esperado.
 
 35
-00:03:40,391 --> 00:03:47,719
-O Cerrado recebeu 42mm de chuva nos últimos sete dias, enquanto o
-Sul teve 27mm - cenário adequado para a safra.
+00:05:09,180 --> 00:05:16,920
+Mas olha só o contraste: no Corn Belt americano, apenas 1 milímetro de
+precipitação em sete dias, com alertas de geada e seca.
 
 36
-00:03:47,719 --> 00:03:55,047
-Atenção para o Corn Belt americano: zero chuva e alertas de
-geada e seca podem impactar a safra americana.
+00:05:16,920 --> 00:05:24,660
+O Delta do Mississippi, importante região
+produtora, teve só 4mm.
 
 37
-00:03:55,047 --> 00:04:02,375
-Para você, isso pode significar oportunidades adicionais de
-preço conforme avançamos para o plantio americano.
+00:05:24,660 --> 00:05:32,400
+Isso pode impactar o desenvolvimento do trigo
+de inverno nos Estados Unidos.
 
 38
-00:04:02,375 --> 00:04:08,555
-Para fechar, a agenda: hoje o USDA divulga o Export Sales - dados
-de exportação americanos que podem mover grãos.
+00:05:32,400 --> 00:05:40,140
+A previsão aponta para manutenção do La Niña com índice ONI em -0,55, o que historicamente tende
+a beneficiar a produtividade no Brasil e criar mais stress hídrico na Argentina.
 
 39
-00:04:08,555 --> 00:04:14,735
-Amanhã, sexta, sai o COT com o
-posicionamento semanal dos fundos.
+00:05:40,140 --> 00:05:47,880
+Para quem está colhendo soja no Centro-Oeste, o tempo seco dos
+próximos dias vai ajudar na qualidade do grão.
 
 40
-00:04:14,735 --> 00:04:20,915
-Na próxima terça, 18, temos o
-relatório de petróleo da EIA.
+00:05:47,880 --> 00:05:56,004
+Para fechar, produtor, fique de olho na agenda: amanhã, sexta-feira, sai o relatório COT da CFTC com as
+posições atualizadas dos fundos - vai mostrar se eles mudaram de lado após essa alta dos grãos.
 
 41
-00:04:20,915 --> 00:04:27,096
-Fique ligado nesses números, eles movimentam o
-mercado e podem trazer oportunidades.
+00:05:56,004 --> 00:06:04,128
+Na próxima segunda temos o Export Sales do USDA, que pode
+trazer surpresas nas vendas externas americanas.
 
 42
-00:04:27,096 --> 00:04:31,367
-Resumindo: grãos em alta, café voando,
-mas pecuária sob pressão.
+00:06:04,128 --> 00:06:12,252
+E não esqueça: terça-feira tem o relatório EIA do
+petróleo, que pode impactar os biocombustíveis.
 
 43
-00:04:31,367 --> 00:04:35,639
-O mercado está dando sinais claros - quem souber
-interpretar vai sair na frente.
+00:06:12,252 --> 00:06:20,376
+São dados que podem mexer com os
+preços na próxima semana.
 
 44
-00:04:35,639 --> 00:04:39,912
-Uma pergunta fica: será que essa alta dos grãos
-se sustenta até o WASDE de março?
+00:06:20,376 --> 00:06:26,376
+Produtor, hoje foi um dia que mostrou a força do complexo de
+grãos em meio à volatilidade dos mercados.
 
 45
-00:04:39,912 --> 00:04:44,184
-Deixe sua opinião nos comentários.
+00:06:26,376 --> 00:06:32,376
+Com margens de esmagamento elevadas, dólar competitivo e clima
+favorável no Brasil, o momento pede estratégia.
 
 46
-00:04:44,184 --> 00:04:48,456
-Até amanhã!
+00:06:32,376 --> 00:06:38,376
+A pergunta que fica é: com os fundos ainda posicionados negativamente nos
+grãos, será que estamos vendo o início de uma correção maior?
+
+47
+00:06:38,376 --> 00:06:44,376
+Continue acompanhando a AgriMacro para não
+perder nenhum movimento.
+
+48
+00:06:44,376 --> 00:06:50,376
+Sucesso na sua atividade!
 

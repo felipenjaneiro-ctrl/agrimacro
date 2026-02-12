@@ -15,6 +15,14 @@ Melhorias v5:
 - 18 paginas total
 """
 import json, os, sys, math, re
+
+# ── AA+QA Engine Gate ────────────────────────────────────────
+try:
+    from aa_qa_engine import run_audit as _run_qa_audit
+    HAS_QA_ENGINE = True
+except ImportError:
+    HAS_QA_ENGINE = False
+    print("⚠️  aa_qa_engine.py não encontrado — QA desabilitado")
 from datetime import datetime
 from io import BytesIO
 from collections import defaultdict
@@ -27,6 +35,15 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.colors import HexColor
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+
+# ── Disclosure / Aviso Legal ──
+try:
+    from disclosure import get_cover_disclaimer, get_disclosure_page
+    HAS_DISCLOSURE = True
+except ImportError:
+    HAS_DISCLOSURE = False
+    print("⚠️  disclosure.py não encontrado — Disclosure desabilitado")
+
 
 # ── CONFIG ──
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +81,9 @@ NM_PROD = {
     "ZL":"Oleo de Soja","KC":"Cafe","SB":"Acucar","CT":"Algodao",
     "CC":"Cacau","OJ":"Suco de Laranja","LE":"Boi Gordo","GF":"Boi de Engorda",
     "HE":"Porco","CL":"Petroleo","NG":"Gas Natural","GC":"Ouro","SI":"Prata",
-}
+
+    "ETH":"Etanol Hidratado","ETN":"Etanol Anidro",
+    "RB":"Gasolina RBOB","HO":"Diesel/Heating Oil","DX":"Indice Dolar",}
 # Mapeamento completo de tickers para nomes em portugues (para substituicao em texto)
 TICKER_MAP = {
     "CT":"Algodao","SB":"Acucar","OJ":"Suco de Laranja","GC":"Ouro","SI":"Prata",
@@ -77,7 +96,7 @@ UNITS = {
     "ZS":"¢/bu","ZC":"¢/bu","ZW":"¢/bu","ZM":"$/ton","ZL":"¢/lb",
     "KC":"¢/lb","SB":"¢/lb","CT":"¢/lb","CC":"$/ton","OJ":"¢/lb",
     "LE":"¢/lb","GF":"¢/lb","HE":"¢/lb","CL":"$/bbl","NG":"$/MMBtu",
-    "GC":"$/oz","SI":"$/oz",
+    "GC":"$/oz","SI":"$/oz","RB":"$/gal","HO":"$/gal","DX":"index",
 }
 # Mapeamento fisico BR
 PHYS_MAP = {
@@ -97,7 +116,7 @@ OTHERS = [("ZW","Trigo"),("ZM","Far.Soja"),("ZL","Oleo Soja"),("SB","Acucar"),
 GRID_ALL = [(s,n) for s,n,*_ in DEDICATED] + OTHERS
 
 SPR_NM = {"soy_crush":"Esmagamento da Soja","ke_zw":"Trigo Duro vs Trigo Mole","zl_cl":"Oleo de Soja vs Petroleo",
-           "feedlot":"Margem do Confinamento","zc_zm":"Milho vs Farelo de Soja","zc_zs":"Relacao Milho/Soja"}
+           "feedlot":"Margem do Confinamento","zc_zm":"Milho vs Farelo de Soja","zc_zs":"Relacao Milho/Soja","le_gf":"Boi Gordo vs Engorda","crack":"Crack Spread (Refino)","gc_cl":"Ouro vs Petroleo"}
 SPR_EXPLAIN = {
     "soy_crush":"Lucro da industria comprando soja e vendendo oleo + farelo. Sobe = industria paga mais pela soja. Bom pra quem vende soja.",
     "ke_zw":"Premio do trigo de qualidade sobre o trigo comum. Reflete demanda da industria de panificacao.",
@@ -105,6 +124,9 @@ SPR_EXPLAIN = {
     "feedlot":"Conta do confinador: boi gordo menos boi magro menos milho. Positivo = lucro. Negativo = prejuizo.",
     "zc_zm":"Milho contra farelo na racao. Se milho sobe relativo ao farelo, racao fica mais cara.",
     "zc_zs":"Ratio classico. Abaixo de 2.3 = plante mais milho. Acima de 2.5 = plante mais soja.",
+    "le_gf":"Spread de reposicao. Gordo caro vs magro = lucro pro pecuarista. Magro subindo mais = aperto na oferta futura.",
+    "crack":"Margem do refino: gasolina menos petroleo. Alto = refinarias lucrando. Baixo = demanda fraca por combustivel.",
+    "gc_cl":"Ratio ouro/petroleo. Alto = medo e busca por seguranca. Baixo = economia aquecida.",
 }
 EIA_NM = {"wti_spot":"WTI Spot","brent_spot":"Brent Spot","henry_hub":"Gas Natural",
            "diesel_spot":"Diesel","crude_stocks":"Est. Petroleo","gasoline_stocks":"Est. Gasolina",
@@ -202,6 +224,168 @@ def replace_tickers(text):
     for ticker, name in sorted(TICKER_MAP.items(), key=lambda x: len(x[0]), reverse=True):
         result = re.sub(r'\b' + ticker + r'\b', name, result)
     return result
+
+
+
+# ── CONVERSAO & ARBITRAGEM ──
+# Fatores de conversao para comparar Brasil vs Chicago
+CONV = {
+    "ZS": {"bu_kg": 27.216, "sc_kg": 60},   # Soja: 1 bu = 27.216kg, saca = 60kg
+    "ZC": {"bu_kg": 25.4,   "sc_kg": 60},   # Milho: 1 bu = 25.4kg, saca = 60kg
+    "LE": {"lb_kg": 0.4536, "ar_kg": 15},   # Boi: 1 lb = 0.4536kg, 1@ = 15kg
+    "SB": {"lb_kg": 0.4536, "sc_kg": 50},   # Acucar: saca = 50kg
+}
+
+
+def sanitize_language(text, pr):
+    """Substitui linguagem exagerada quando variacao PROXIMA nao justifica.
+    Busca o % mencionado perto da palavra forte. Se nao achar, usa max global."""
+    if not text or not pr: return text
+    import re as _re
+    result = text
+    STRONG_WORDS = {
+        "dispara": ("sobe", 5.0),
+        "disparou": ("subiu", 5.0),
+        "disparada": ("alta", 5.0),
+        "despenca": ("recua", 5.0),
+        "despencou": ("caiu", 5.0),
+        "desaba": ("recua", 5.0),
+        "desabou": ("caiu", 5.0),
+        "derrete": ("cede", 5.0),
+        "derreteu": ("cedeu", 5.0),
+        "explode": ("avanca", 5.0),
+        "explodiu": ("avancou", 5.0),
+        "colapso": ("queda", 5.0),
+        "colapsou": ("caiu", 5.0),
+        "decolou": ("subiu", 5.0),
+        "catapultou": ("subiu forte", 5.0),
+        "afundou": ("caiu", 5.0),
+        "foguete": ("alta", 5.0),
+    }
+    for strong, (moderate, min_pct) in STRONG_WORDS.items():
+        if strong.lower() not in result.lower():
+            continue
+        # Busca % proximo da palavra (ate 30 chars depois)
+        pattern = _re.escape(strong) + r'.{0,30}?(\d+[.,]\d+)\s*%'
+        m = _re.search(pattern, result, _re.IGNORECASE)
+        if m:
+            nearby_pct = float(m.group(1).replace(",", "."))
+        else:
+            # Fallback: busca qualquer % na mesma frase
+            sentence_pattern = r'[^.]*' + _re.escape(strong) + r'[^.]*?(\d+[.,]\d+)\s*%'
+            m2 = _re.search(sentence_pattern, result, _re.IGNORECASE)
+            if m2:
+                nearby_pct = float(m2.group(1).replace(",", "."))
+            else:
+                nearby_pct = 0.0  # sem %, assume moderado
+        # Substitui se a variacao proxima nao justifica a palavra forte
+        if nearby_pct < min_pct:
+            result = _re.sub(_re.escape(strong), moderate, result, flags=_re.IGNORECASE)
+    return result
+
+
+def chicago_to_brl(sym, chicago_price, brl_usd):
+    """Converte preco de Chicago para unidade brasileira em R$"""
+    if not chicago_price or not brl_usd or brl_usd == 0: return None
+    c = CONV.get(sym)
+    if not c: return None
+    if sym in ("ZS", "ZC"):
+        # c/bu -> R$/saca
+        usd_per_bu = chicago_price / 100.0
+        sc_per_bu = c["sc_kg"] / c["bu_kg"]  # sacas por bushel (invertido: bushels por saca)
+        bu_per_sc = c["sc_kg"] / c["bu_kg"]  # quantos bushels cabem em 1 saca
+        usd_per_sc = usd_per_bu * bu_per_sc
+        return usd_per_sc * brl_usd
+    elif sym == "LE":
+        # c/lb -> R$/@
+        usd_per_lb = chicago_price / 100.0
+        lbs_per_ar = c["ar_kg"] / c["lb_kg"]  # lbs por arroba
+        usd_per_ar = usd_per_lb * lbs_per_ar
+        return usd_per_ar * brl_usd
+    elif sym == "SB":
+        # c/lb -> R$/saca 50kg
+        usd_per_lb = chicago_price / 100.0
+        lbs_per_sc = c["sc_kg"] / c["lb_kg"]  # lbs por saca
+        usd_per_sc = usd_per_lb * lbs_per_sc
+        return usd_per_sc * brl_usd
+    return None
+
+def get_brl_usd(bcb):
+    """Extrai taxa BRL/USD mais recente do bcb_data"""
+    rc = bcb.get("resumo_cambio", {})
+    v = rc.get("brl_usd_atual")
+    if v: return float(v)
+    brl = bcb.get("brl_usd", [])
+    if brl:
+        for r in reversed(brl):
+            val = r.get("valor") or r.get("value")
+            if val: return float(val)
+    return None
+
+def calc_arbitrages(pr, phys, bcb):
+    """Calcula arbitragens Brasil vs Chicago para soja, milho, boi, acucar"""
+    fx = get_brl_usd(bcb)
+    if not fx: return {}
+    intl = phys.get("international", {})
+    arbs = {}
+    items = [
+        ("ZS", "ZS_BR", "Soja", "R$/sc 60kg"),
+        ("ZC", "ZC_BR", "Milho", "R$/sc 60kg"),
+        ("LE", "LE_BR", "Boi Gordo", "R$/@"),
+        ("SB", "SB_BR", "Acucar", "R$/sc 50kg"),
+    ]
+    for chi_sym, br_key, name, unit in items:
+        chi_price = last_close(chi_sym, pr)
+        br_data = intl.get(br_key, {})
+        br_price = br_data.get("price")
+        if chi_price and br_price:
+            chi_brl = chicago_to_brl(chi_sym, chi_price, fx)
+            if chi_brl and chi_brl > 0:
+                spread = float(br_price) - chi_brl
+                spread_pct = (spread / chi_brl) * 100
+                arbs[chi_sym] = {
+                    "name": name,
+                    "br_price": float(br_price),
+                    "chi_price_usd": chi_price,
+                    "chi_price_brl": chi_brl,
+                    "spread_brl": spread,
+                    "spread_pct": spread_pct,
+                    "unit": unit,
+                    "fx": fx,
+                    "br_source": br_data.get("source", "CEPEA"),
+                }
+    return arbs
+
+def calc_extra_spreads(pr):
+    """Calcula spreads extras que nao estao no spreads.json"""
+    extras = {}
+    # Boi Gordo vs Boi Engorda (spread de reposicao)
+    le = last_close("LE", pr); gf = last_close("GF", pr)
+    if le and gf and gf > 0:
+        extras["le_gf"] = {"name": "Boi Gordo vs Boi Engorda", "current": le - gf,
+            "unit": "c/lb", "ratio": le / gf,
+            "explain": "Spread de reposicao. Gordo caro vs magro = lucro pro pecuarista. Magro subindo mais = aperto na oferta futura."}
+    # Crack spread (precisa RB e CL)
+    cl = last_close("CL", pr); rb = last_close("RB", pr)
+    if cl and rb:
+        # Simplificado: (RB * 42) - CL  (em $/bbl equivalente)
+        crack = (rb * 42) - cl
+        extras["crack"] = {"name": "Crack Spread (Gasolina)", "current": crack,
+            "unit": "$/bbl", "ratio": rb * 42 / cl if cl > 0 else 0,
+            "explain": "Margem do refino: gasolina menos petroleo. Alto = refinarias lucrando, estimula producao. Baixo = demanda fraca."}
+    # Ouro/Petroleo
+    gc = last_close("GC", pr)
+    if gc and cl and cl > 0:
+        extras["gc_cl"] = {"name": "Ouro / Petroleo", "current": gc / cl,
+            "unit": "ratio", "ratio": gc / cl,
+            "explain": "Poder de compra macro. Ratio alto = investidores buscando seguranca (ouro). Baixo = economia aquecida (petroleo)."}
+    # Milho/Soja ratio (ja existe no spreads.json mas recalculamos pra ter certeza)
+    zc = last_close("ZC", pr); zs = last_close("ZS", pr)
+    if zc and zs and zs > 0:
+        extras["corn_soy_ratio"] = {"name": "Relacao Milho/Soja", "current": zs / zc if zc > 0 else 0,
+            "unit": "ratio",
+            "explain": "Abaixo de 2.3 = plante mais milho. Acima de 2.5 = plante mais soja. Historico medio: 2.4."}
+    return extras
 
 
 # ── MPL SETUP ──
@@ -328,7 +512,7 @@ def chart_commodity_main(sym, pr, color=CYAN):
         ax.legend(fontsize=7, loc="upper center", framealpha=0.3)
     else:
         ax.text(0.5, 0.5, "Sem dados", transform=ax.transAxes, ha="center", va="center", fontsize=14, color=TEXT_MUT)
-    origin = "BRASIL" if sym in ("LE",) else "CHICAGO"
+    origin = "CHICAGO"  # Todos os futuros sao CHICAGO (CME/CBOT/ICE)
     ax.set_title(f"Preco Futuro ({origin}) — Ultimos 60 dias", fontsize=10, color=TEXT, pad=5)
     ax.tick_params(labelbottom=False, labelsize=7); ax.grid(True, alpha=0.15)
     for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.5)
@@ -496,7 +680,31 @@ def chart_eia(ed):
                 ax.plot(x, ma20, color=AMBER, lw=0.7, ls="--", alpha=0.6)
         nm=EIA_NM.get(key,key); lat=s.get("latest_value",""); un=hist[0].get("unit","") if hist else ""
         wow=s.get("wow_change_pct",0) or 0; ws="+" if wow>=0 else ""
-        ax.set_title(f"{nm}: {lat} {un}  ({ws}{wow:.1f}% s/s)",fontsize=8,color=TEXT,pad=3,fontweight="bold")
+        # Formata numeros EIA — v3.3: estoques ja vem em MBbl (mil barris)
+        # Nao aplicar K/M adicional em estoques (evita "844K MBbl" que confunde)
+        lat_fmt = lat
+        is_stock = "stock" in key.lower()
+        if lat and isinstance(lat, (int, float)):
+            if is_stock:
+                lat_fmt = f"{lat:,.0f}"  # Ex: 844,041 (sem K/M)
+            elif abs(lat) >= 1e6: lat_fmt = f"{lat/1e6:,.1f}M"
+            elif abs(lat) >= 1e3: lat_fmt = f"{lat/1e3:,.1f}K"
+            else: lat_fmt = f"{lat:,.1f}"
+        elif lat:
+            try:
+                lat_f = float(str(lat).replace(",",""))
+                if is_stock:
+                    lat_fmt = f"{lat_f:,.0f}"
+                elif abs(lat_f) >= 1e6: lat_fmt = f"{lat_f/1e6:,.1f}M"
+                elif abs(lat_f) >= 1e3: lat_fmt = f"{lat_f/1e3:,.1f}K"
+                else: lat_fmt = f"{lat_f:,.1f}"
+            except (ValueError, TypeError):
+                lat_fmt = str(lat)
+        # Unidade mais clara para estoques
+        un_display = un
+        if "stock" in key.lower() and un in ("","MBbl","thousand_bbl"):
+            un_display = "mil bbl"
+        ax.set_title(f"{nm}: {lat_fmt} {un_display}  ({ws}{wow:.1f}% s/s)",fontsize=8,color=TEXT,pad=3,fontweight="bold")
         ax.tick_params(labelbottom=False,labelsize=6); ax.grid(True,alpha=0.12)
         for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.4)
     for idx in range(len(sel),rows*2):
@@ -549,34 +757,58 @@ def chart_stocks(sw):
     if not comms: return None
     items=[]
     for sym,d in comms.items():
-        if d.get("stock_current") is not None and d.get("stock_avg") is not None:
-            items.append((NM_PROD.get(sym,sym),sym,d["stock_current"],d["stock_avg"],d.get("state",""),d.get("price_vs_avg",0)))
+        cur_raw = d.get("stock_current")
+        avg_raw = d.get("stock_avg")
+        if cur_raw is not None and avg_raw is not None:
+            try:
+                cur_f = float(cur_raw); avg_f = float(avg_raw)
+            except (ValueError, TypeError):
+                continue
+            if avg_f == 0: continue
+            # CALCULA desvio REAL de estoque (nao usa price_vs_avg!)
+            stock_dev = ((cur_f - avg_f) / avg_f) * 100
+            # Flag outliers extremos (>50% pode ser erro de unidade)
+            is_suspect = abs(stock_dev) > 50
+            items.append((NM_PROD.get(sym,sym), sym, cur_f, avg_f, d.get("state",""), stock_dev, is_suspect))
     if not items: return None
     items.sort(key=lambda x:abs(x[5]),reverse=True)
-    fig,ax=plt.subplots(figsize=(11,max(len(items)*0.48,3.5)))
+    fig,ax=plt.subplots(figsize=(11,max(len(items)*0.55,3.5)))
     fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
-    y=list(range(len(items)))
+    y_pos=list(range(len(items)))
     devs=[it[5] for it in items]
     colors=[]
-    for d in devs:
-        if d>15: colors.append(RED)
-        elif d>5: colors.append(AMBER)
-        elif d<-15: colors.append(CYAN)
-        elif d<-5: colors.append(BLUE)
+    for it in items:
+        dev = it[5]; suspect = it[6]
+        if suspect:
+            colors.append("#666666")  # Cinza = dado suspeito
+        elif dev>15: colors.append(RED)
+        elif dev>5: colors.append(AMBER)
+        elif dev<-15: colors.append(CYAN)
+        elif dev<-5: colors.append(BLUE)
         else: colors.append(TEXT_MUT)
-    ax.barh(y,devs,color=colors,alpha=0.7,height=0.6,zorder=3)
-    for i,(nm,sym,cur,avg,st,dev) in enumerate(items):
-        off=max(abs(dev)*0.05,1)
-        xt=dev+off if dev>=0 else dev-off
-        ax.text(xt,i,f"{dev:+.1f}%",va="center",ha="left" if dev>=0 else "right",fontsize=7,color=TEXT,fontweight="bold")
-    ax.set_yticks(y); ax.set_yticklabels([it[0] for it in items],fontsize=7.5)
+    # Limita barras extremas para nao comprimir o grafico
+    devs_capped = [max(min(d, 60), -60) for d in devs]
+    ax.barh(y_pos, devs_capped, color=colors, alpha=0.7, height=0.6, zorder=3)
+    for i, it in enumerate(items):
+        nm, sym, cur, avg, st, dev, suspect = it
+        off=max(abs(devs_capped[i])*0.05,1.5)
+        xt=devs_capped[i]+off if devs_capped[i]>=0 else devs_capped[i]-off
+        label = f"{dev:+.1f}%"
+        if suspect:
+            label += " VERIFICAR"
+        ax.text(xt,i,label,va="center",ha="left" if devs_capped[i]>=0 else "right",
+                fontsize=7,color="#ff6666" if suspect else TEXT,fontweight="bold")
+    ax.set_yticks(y_pos); ax.set_yticklabels([it[0] for it in items],fontsize=7.5)
     ax.axvline(0,color=BORDER,lw=0.8); ax.grid(True,axis="x",alpha=0.1); ax.invert_yaxis()
-    ax.set_xlabel("Estoque vs Media (%)",fontsize=7.5,color=TEXT_MUT)
-    # Limit x-axis so extreme values don't compress the chart
-    max_abs = max(abs(d) for d in devs) if devs else 50
-    ax.set_xlim(-min(max_abs*1.2, 100), max(max_abs*0.3, 20))
+    ax.set_xlabel("Estoque vs Media 5 Anos (%)",fontsize=7.5,color=TEXT_MUT)
+    ax.set_xlim(-70, 70)
+    # Nota de rodape sobre dados suspeitos
+    suspects = [it[0] for it in items if it[6]]
+    if suspects:
+        ax.text(0.5, -0.06, f"ATENCAO: {', '.join(suspects)} com desvio >50% — possivel erro de unidade/serie. Verificar fonte.",
+                transform=ax.transAxes, ha="center", fontsize=7, color="#ff6666", fontstyle="italic")
     for sp in ax.spines.values(): sp.set_visible(False)
-    fig.subplots_adjust(left=0.18,right=0.96,top=0.96,bottom=0.08)
+    fig.subplots_adjust(left=0.18,right=0.96,top=0.96,bottom=0.10)
     return fig2img(fig)
 
 
@@ -689,14 +921,211 @@ def chart_sugar_alcohol(pr, ed):
     fig.subplots_adjust(wspace=0.25, left=0.04, right=0.98, top=0.88, bottom=0.05)
     return fig2img(fig)
 
+
+
+def chart_arbitrage_bars(arbs, fx):
+    """Grafico de barras: BR vs Chicago convertido em R$"""
+    if not arbs: return None
+    items = list(arbs.items())
+    n = len(items)
+    fig, ax = plt.subplots(figsize=(11, max(n * 1.6, 4)))
+    fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
+    y_pos = list(range(n))
+    bar_h = 0.35
+    br_vals = [arbs[k]["br_price"] for k, _ in items]
+    chi_vals = [arbs[k]["chi_price_brl"] for k, _ in items]
+    ax.barh([y - bar_h/2 for y in y_pos], br_vals, bar_h, color=GREEN, alpha=0.8, label="Brasil (fisico)", zorder=3)
+    ax.barh([y + bar_h/2 for y in y_pos], chi_vals, bar_h, color=BLUE, alpha=0.8, label="Chicago (convertido R$)", zorder=3)
+    for i, (sym, data) in enumerate(items):
+        sp = data["spread_pct"]
+        sc = GREEN if sp > 0 else RED
+        txt = f"{sp:+.1f}%"
+        max_val = max(data["br_price"], data["chi_price_brl"])
+        ax.text(max_val * 1.02, i, txt, va="center", fontsize=11, color=sc, fontweight="bold")
+    names = [arbs[k]["name"] for k, _ in items]
+    ax.set_yticks(y_pos); ax.set_yticklabels(names, fontsize=11, fontweight="bold")
+    ax.legend(fontsize=9, loc="lower right", framealpha=0.5, fancybox=True, edgecolor=BORDER)
+    ax.set_xlabel(f"Preco em R$ (cambio: R$ {fx:.2f})", fontsize=9, color=TEXT_MUT)
+    ax.grid(True, axis="x", alpha=0.1); ax.invert_yaxis()
+    for sp in ax.spines.values(): sp.set_visible(False)
+    fig.subplots_adjust(left=0.14, right=0.88, top=0.96, bottom=0.08)
+    return fig2img(fig)
+
+
+def chart_spreads_grid(sd, extra_spreads):
+    """Grade de spreads mais legivel que o termometro"""
+    all_sp = {}
+    spreads = sd.get("spreads", {})
+    for k, v in spreads.items():
+        all_sp[k] = v
+    for k, v in extra_spreads.items():
+        if k not in all_sp:
+            all_sp[k] = v
+    if not all_sp: return None
+    items = list(all_sp.items())
+    n = len(items)
+    cols = 3; rows = math.ceil(n / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(11.5, rows * 2.0))
+    fig.patch.set_facecolor(BG)
+    if rows == 1: axes = [axes]
+    for idx, (k, sp) in enumerate(items):
+        r, c2 = divmod(idx, cols)
+        ax = axes[r][c2] if rows > 1 else axes[c2]
+        ax.set_facecolor(PANEL)
+        pctl = sp.get("percentile", 50)
+        nm = SPR_NM.get(k, sp.get("name", k))
+        cur = sp.get("current", "")
+        un = sp.get("unit", "")
+        # Barra horizontal de percentil
+        bar_colors = [GREEN, "#86efac", AMBER, "#fb923c", RED]
+        for zi in range(5):
+            ax.barh(0, 20, left=zi*20, height=0.6, color=bar_colors[zi], alpha=0.35)
+        mc = GREEN if pctl < 30 else (AMBER if pctl < 70 else RED)
+        ax.plot(pctl, 0.55, "v", color=mc, ms=14, zorder=5)
+        ax.text(pctl, 0.95, f"{pctl:.0f}", ha="center", va="bottom", fontsize=9, color=mc, fontweight="bold")
+        if cur:
+            cur_txt = f"{num_fmt(cur)} {un}" if isinstance(cur, (int, float)) else f"{cur} {un}"
+            ax.text(50, -0.55, cur_txt, ha="center", va="top", fontsize=8, color=TEXT_MUT)
+        ax.set_xlim(-2, 102); ax.set_ylim(-0.8, 1.3)
+        ax.set_title(nm, fontsize=9, color=TEXT, fontweight="bold", pad=2)
+        ax.axis("off")
+    # Hide unused
+    for idx in range(n, rows * cols):
+        r, c2 = divmod(idx, cols)
+        (axes[r][c2] if rows > 1 else axes[c2]).set_visible(False)
+    fig.suptitle("TERMOMETRO DE RELACOES — Nivel 0-100 (verde=barato, vermelho=caro)", fontsize=11, color=TEXT, fontweight="bold", y=0.99)
+    fig.subplots_adjust(hspace=0.9, wspace=0.2, left=0.03, right=0.97, top=0.92, bottom=0.02)
+    return fig2img(fig)
+
+
+def chart_cattle_compare(pr):
+    """Grafico comparativo Boi Gordo vs Boi Engorda"""
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.5))
+    fig.patch.set_facecolor(BG)
+    for idx, (sym, title, color) in enumerate([("LE", "Boi Gordo (Chicago) - c/lb", AMBER), ("GF", "Boi de Engorda (Chicago) - c/lb", CYAN)]):
+        ax = axes[idx]; ax.set_facecolor(PANEL)
+        v = closes(sym, pr, 60)
+        if len(v) > 3:
+            x = list(range(len(v)))
+            ax.plot(x, v, color=color, lw=1.8, zorder=3)
+            ax.fill_between(x, min(v)*0.998, v, alpha=0.12, color=color)
+            ax.scatter([x[-1]], [v[-1]], color=color, s=30, zorder=5, edgecolors="white", linewidths=0.6)
+            if len(v) >= 20:
+                ma20 = [np.mean(v[max(0,i-19):i+1]) for i in range(len(v))]
+                ax.plot(x, ma20, color=AMBER if sym == "GF" else CYAN, lw=0.8, ls="--", alpha=0.6)
+            ax.text(0.03, 0.90, f"{v[-1]:,.2f}", transform=ax.transAxes, fontsize=12, color=TEXT, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+            chg = ((v[-1]-v[0])/v[0])*100 if v[0]!=0 else 0
+            cc = GREEN if chg >= 0 else RED; ss = "+" if chg >= 0 else ""
+            ax.text(0.97, 0.90, f"{ss}{chg:.1f}%", transform=ax.transAxes, ha="right", fontsize=9, color=cc, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor="#0f1117", edgecolor=cc, alpha=0.7, lw=0.4))
+        ax.set_title(title, fontsize=10, color=TEXT, fontweight="bold", pad=3)
+        ax.tick_params(labelbottom=False, labelsize=6); ax.grid(True, alpha=0.12)
+        for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.4)
+    fig.subplots_adjust(wspace=0.2, left=0.05, right=0.98, top=0.88, bottom=0.05)
+    return fig2img(fig)
+
+
+
+def chart_energy_sugar_cross(pr, ed):
+    """Graficos cruzados: Petroleo vs Acucar, Etanol prod vs estoques, Diesel"""
+    fig, axes = plt.subplots(2, 3, figsize=(11.5, 5.5))
+    fig.patch.set_facecolor(BG)
+    # 1. Petroleo WTI 60d
+    ax = axes[0][0]; ax.set_facecolor(PANEL)
+    v = closes("CL", pr, 60)
+    if len(v) > 3:
+        x = list(range(len(v)))
+        ax.plot(x, v, color=AMBER, lw=1.5, zorder=3)
+        ax.fill_between(x, min(v)*0.998, v, alpha=0.12, color=AMBER)
+        ax.scatter([x[-1]], [v[-1]], color=AMBER, s=20, zorder=5, edgecolors="white", linewidths=0.4)
+        ax.text(0.03, 0.88, f"${v[-1]:,.1f}", transform=ax.transAxes, fontsize=10, color=TEXT, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.15", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+    ax.set_title("Petroleo WTI ($/bbl)", fontsize=8.5, color=TEXT, fontweight="bold", pad=2)
+    ax.tick_params(labelbottom=False, labelsize=5.5); ax.grid(True, alpha=0.12)
+    for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.3)
+    # 2. Acucar #11 60d
+    ax = axes[0][1]; ax.set_facecolor(PANEL)
+    v = closes("SB", pr, 60)
+    if len(v) > 3:
+        x = list(range(len(v)))
+        ax.plot(x, v, color=TEAL, lw=1.5, zorder=3)
+        ax.fill_between(x, min(v)*0.998, v, alpha=0.12, color=TEAL)
+        ax.scatter([x[-1]], [v[-1]], color=TEAL, s=20, zorder=5, edgecolors="white", linewidths=0.4)
+        ax.text(0.03, 0.88, f"{v[-1]:,.2f}", transform=ax.transAxes, fontsize=10, color=TEXT, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.15", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+    ax.set_title("Acucar #11 (c/lb)", fontsize=8.5, color=TEXT, fontweight="bold", pad=2)
+    ax.tick_params(labelbottom=False, labelsize=5.5); ax.grid(True, alpha=0.12)
+    for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.3)
+    # 3. Milho 60d (insumo etanol)
+    ax = axes[0][2]; ax.set_facecolor(PANEL)
+    v = closes("ZC", pr, 60)
+    if len(v) > 3:
+        x = list(range(len(v)))
+        ax.plot(x, v, color=GREEN, lw=1.5, zorder=3)
+        ax.fill_between(x, min(v)*0.998, v, alpha=0.12, color=GREEN)
+        ax.scatter([x[-1]], [v[-1]], color=GREEN, s=20, zorder=5, edgecolors="white", linewidths=0.4)
+        ax.text(0.03, 0.88, f"{v[-1]:,.1f}", transform=ax.transAxes, fontsize=10, color=TEXT, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.15", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+    ax.set_title("Milho (c/bu) - insumo etanol", fontsize=8.5, color=TEXT, fontweight="bold", pad=2)
+    ax.tick_params(labelbottom=False, labelsize=5.5); ax.grid(True, alpha=0.12)
+    for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.3)
+    # 4. Gas Natural 60d (custo fertilizante)
+    ax = axes[1][0]; ax.set_facecolor(PANEL)
+    v = closes("NG", pr, 60)
+    if len(v) > 3:
+        x = list(range(len(v)))
+        ax.plot(x, v, color=RED, lw=1.5, zorder=3)
+        ax.fill_between(x, min(v)*0.998, v, alpha=0.12, color=RED)
+        ax.scatter([x[-1]], [v[-1]], color=RED, s=20, zorder=5, edgecolors="white", linewidths=0.4)
+        ax.text(0.03, 0.88, f"${v[-1]:,.2f}", transform=ax.transAxes, fontsize=10, color=TEXT, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.15", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+    ax.set_title("Gas Natural ($/MMBtu) - adubo", fontsize=8.5, color=TEXT, fontweight="bold", pad=2)
+    ax.tick_params(labelbottom=False, labelsize=5.5); ax.grid(True, alpha=0.12)
+    for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.3)
+    # 5. Etanol producao EUA (EIA)
+    ax = axes[1][1]; ax.set_facecolor(PANEL)
+    series = ed.get("series", {})
+    eth = series.get("ethanol_production", {})
+    eth_hist = eth.get("history", [])
+    eth_vals = [h["value"] for h in eth_hist if h.get("value") is not None]
+    if len(eth_vals) > 3:
+        vp = eth_vals[-40:]; x = list(range(len(vp)))
+        ax.plot(x, vp, color=CYAN, lw=1.5, zorder=3)
+        ax.fill_between(x, min(vp)*0.998, vp, alpha=0.12, color=CYAN)
+        ax.scatter([x[-1]], [vp[-1]], color=CYAN, s=20, zorder=5, edgecolors="white", linewidths=0.4)
+        ax.text(0.03, 0.88, f"{vp[-1]:,.0f}", transform=ax.transAxes, fontsize=10, color=TEXT, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.15", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+    ax.set_title("Etanol EUA producao (MBbl/d)", fontsize=8.5, color=TEXT, fontweight="bold", pad=2)
+    ax.tick_params(labelbottom=False, labelsize=5.5); ax.grid(True, alpha=0.12)
+    for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.3)
+    # 6. Diesel retail EUA (EIA)
+    ax = axes[1][2]; ax.set_facecolor(PANEL)
+    diesel = series.get("diesel_retail", {})
+    diesel_hist = diesel.get("history", [])
+    diesel_vals = [h["value"] for h in diesel_hist if h.get("value") is not None]
+    if len(diesel_vals) > 3:
+        vp = diesel_vals[-40:]; x = list(range(len(vp)))
+        ax.plot(x, vp, color=PURPLE, lw=1.5, zorder=3)
+        ax.fill_between(x, min(vp)*0.998, vp, alpha=0.12, color=PURPLE)
+        ax.scatter([x[-1]], [vp[-1]], color=PURPLE, s=20, zorder=5, edgecolors="white", linewidths=0.4)
+        ax.text(0.03, 0.88, f"${vp[-1]:,.3f}", transform=ax.transAxes, fontsize=10, color=TEXT, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.15", facecolor=PANEL, edgecolor=BORDER, alpha=0.8))
+    ax.set_title("Diesel EUA retail ($/gal)", fontsize=8.5, color=TEXT, fontweight="bold", pad=2)
+    ax.tick_params(labelbottom=False, labelsize=5.5); ax.grid(True, alpha=0.12)
+    for sp in ax.spines.values(): sp.set_color(BORDER); sp.set_linewidth(0.3)
+    fig.subplots_adjust(hspace=0.45, wspace=0.22, left=0.04, right=0.98, top=0.94, bottom=0.03)
+    return fig2img(fig)
+
 # ═══════════════════════════════════════════
 #  PAGE FUNCTIONS
 # ═══════════════════════════════════════════
 
 # ── PAGE 1: CAPA + RESUMO ──
-def pg_cover(pdf, rd, dr, bcb):
+def pg_cover(pdf, rd, dr, bcb, pr=None):
     dbg(pdf)
-    titulo = rd.get("titulo","Relatorio AgriMacro")
+    titulo_raw = rd.get("titulo","Relatorio AgriMacro")
+    titulo = sanitize_language(titulo_raw, pr) if pr else titulo_raw
     subtitulo = rd.get("subtitulo","")
     pdf.setFillColor(HexColor(PURPLE)); pdf.rect(0,PAGE_H-130,PAGE_W,130,fill=1,stroke=0)
     pdf.setFillColor(HexColor("#fff")); pdf.setFont("Helvetica-Bold",9)
@@ -715,7 +1144,8 @@ def pg_cover(pdf, rd, dr, bcb):
     var30=rc.get("var_30d")
     if var30: pdf.setFont("Helvetica",8); pdf.drawRightString(rx,PAGE_H-68,f"Dolar 30d: {var30:+.1f}%")
     y = PAGE_H-150
-    resumo = rd.get("resumo_executivo","")
+    resumo_raw = rd.get("resumo_executivo","")
+    resumo = sanitize_language(resumo_raw, pr) if pr else resumo_raw
     if resumo:
         pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",11)
         pdf.drawString(M,y,"RESUMO DO DIA"); y-=14
@@ -754,7 +1184,7 @@ def pg_cover(pdf, rd, dr, bcb):
         for d in dests[:3]:
             if y<45: break
             t=d.get("titulo",""); cm=d.get("commodity",""); imp=d.get("impacto_produtor","")
-            t_clean = replace_tickers(t)
+            t_clean = sanitize_language(replace_tickers(t), pr) if pr else replace_tickers(t)
             imp_clean = replace_tickers(imp) if imp else ""
             t_lines = max(1, len(t_clean) // 85 + 1)
             i_lines = max(1, len(imp_clean) // 90 + 1) if imp_clean else 0
@@ -852,7 +1282,7 @@ def pg_commodity(pdf, sym, title, subtitle, accent, pr, cd, sw, phys, rd, dr, im
     h52 = hi52(sym, pr); l52 = lo52(sym, pr); hp = hilo_pct(sym, pr)
 
     panel(pdf, rx, y-80, rw, 82, bc=accent)
-    is_br_commodity = sym in ("LE","GF")
+    is_br_commodity = False  # LE e GF sao contratos CME Chicago, NAO B3
     origin_badge(pdf, rx+10, y-10, is_brazil=is_br_commodity)
     origin_label = "PRECO FUTURO - B3 (Brasil)" if is_br_commodity else "PRECO FUTURO - CHICAGO (EUA)"
     pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7); pdf.drawString(rx+65, y-10, origin_label)
@@ -919,7 +1349,7 @@ def pg_commodity(pdf, sym, title, subtitle, accent, pr, cd, sw, phys, rd, dr, im
         sc = STATE_CLR.get(state, TEXT_MUT)
         panel(pdf, rx, y-34, rw, 36, bc=sc)
         pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7)
-        pdf.drawString(rx+10, y-10, "ESTOQUES vs MEDIA (fundamento)")
+        pdf.drawString(rx+10, y-10, "ESTOQUES vs MEDIA 5 ANOS (USDA)")
         pdf.setFillColor(HexColor(sc)); pdf.setFont("Helvetica-Bold",11)
         pdf.drawString(rx+10, y-26, f"{pva:+.1f}% — {state_nm}")
         y -= 40
@@ -994,7 +1424,7 @@ def pg_variations_table(pdf, pr):
         lc=last_close(sym,pr); h=hi52(sym,pr); l=lo52(sym,pr)
         pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",7.5)
         pdf.drawString(cols[0],y,f"{NM_PROD.get(sym,nm)}")
-        is_br = sym in ("LE","GF")
+        is_br = False  # LE e GF sao CME Chicago
         origin_badge(pdf, cols[1], y, is_brazil=is_br)
         pdf.setFont("Helvetica",7.5)
         if lc: pdf.setFillColor(HexColor(TEXT)); pdf.drawString(cols[2],y,num_fmt(lc))
@@ -1060,10 +1490,85 @@ def pg_spreads(pdf, sd, img_sp):
             cy-=50
 
 
+
+
+# ── PAGE 9B: ARBITRAGEM BR vs CHICAGO ──
+def pg_arbitrage(pdf, pr, phys, bcb, img_arb):
+    """Pagina dedicada a arbitragem Brasil vs Chicago"""
+    dbg(pdf)
+    pdf.setFillColor(HexColor("#1a2040")); pdf.rect(0,PAGE_H-38,PAGE_W,38,fill=1,stroke=0)
+    pdf.setFillColor(HexColor(CYAN)); pdf.setFont("Helvetica-Bold",15)
+    pdf.drawString(M,PAGE_H-26,"ARBITRAGEM — Brasil vs Chicago em Reais")
+    pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7.5)
+    pdf.drawRightString(PAGE_W-M,PAGE_H-15,f"AgriMacro v3.2 | {TODAY_BR} ({WDAY})")
+    ey = PAGE_H - 54
+    pdf.setFillColor(HexColor(EXPLAIN_BG)); pdf.rect(M-5,ey-14,PAGE_W-2*M+10,18,fill=1,stroke=0)
+    pdf.setFillColor(HexColor(GREEN)); pdf.setFont("Helvetica-Bold",8)
+    pdf.drawString(M,ey-8,"COMO LER: ")
+    tw = pdf.stringWidth("COMO LER: ","Helvetica-Bold",8)
+    pdf.setFillColor(HexColor(TEXT2)); pdf.setFont("Helvetica",8)
+    pdf.drawString(M+tw,ey-8,"Positivo = Brasil mais caro que Chicago (premio). Negativo = Brasil mais barato (desconto). Inclui conversao cambial.")
+    y = PAGE_H - 78
+    fx = get_brl_usd(bcb)
+    arbs = calc_arbitrages(pr, phys, bcb)
+    # Cards de arbitragem
+    if arbs:
+        cw = (PAGE_W - 2*M - 30) / min(len(arbs), 4)
+        for i, (sym, data) in enumerate(arbs.items()):
+            if i >= 4: break
+            x = M + i*(cw+10)
+            sp = data["spread_pct"]; sp_brl = data["spread_brl"]
+            bc = GREEN if sp > 2 else (RED if sp < -2 else AMBER)
+            panel(pdf, x, y-90, cw, 92, bc=bc)
+            pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica-Bold",9)
+            pdf.drawString(x+10, y-14, data["name"])
+            # BR price
+            origin_badge(pdf, x+10, y-28, is_brazil=True)
+            pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",14)
+            pdf.drawString(x+60, y-28, f"R$ {data['br_price']:,.2f}")
+            # Chicago converted
+            origin_badge(pdf, x+10, y-44, is_brazil=False)
+            pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",10)
+            pdf.drawString(x+70, y-44, f"R$ {data['chi_price_brl']:,.2f}")
+            # Spread
+            pdf.setFillColor(HexColor(bc)); pdf.setFont("Helvetica-Bold",16)
+            direction = "PREMIO" if sp > 0 else "DESCONTO"
+            pdf.drawString(x+10, y-66, f"{sp:+.1f}%")
+            pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",7)
+            pdf.drawString(x+10, y-78, f"{direction} | R$ {sp_brl:+,.2f}/{data['unit'].split('/')[-1]}")
+            pdf.drawString(x+10, y-88, data["br_source"])
+        y -= 105
+    # Grafico
+    if img_arb:
+        pdf.drawImage(img_arb, 5, y-220, width=PAGE_W-10, height=215, preserveAspectRatio=True, mask="auto")
+        y -= 230
+    # Explicacao
+    if fx:
+        pdf.setFillColor(HexColor(PURPLE)); pdf.setFont("Helvetica-Bold",11)
+        pdf.drawString(M, y, "COMO FUNCIONA A ARBITRAGEM"); y -= 18
+        comp_w = (PAGE_W - 2*M - 15) / 2
+        explanations = [
+            (GREEN, "PREMIO BRASIL", "Preco fisico no Brasil acima de Chicago convertido. Pode significar: demanda interna forte, logistica cara, ou safra apertada. Exportador pode preferir vender no mercado interno."),
+            (RED, "DESCONTO BRASIL", "Preco fisico abaixo de Chicago convertido. Oportunidade de exportacao: produtor ganha mais vendendo para fora. Comum na colheita quando ha excesso de oferta local."),
+            (AMBER, "CAMBIO E O FATOR CHAVE", f"Cambio atual: R$ {fx:.2f}. Dolar subindo = Chicago convertido sobe em R$ = desconto BR diminui ou vira premio. Cada R$ 0,10 no dolar muda ~R$ 2-3 na saca de soja."),
+            (CYAN, "CUSTO DE INTERNACAO", "Lembre que entre Chicago e o interior do Brasil ha: frete maritimo, seguro, taxa portuaria, frete rodoviario e impostos. O spread 'real' precisa descontar esses custos (~US$ 30-50/ton)."),
+        ]
+        for idx, (clr, title, desc) in enumerate(explanations):
+            col = idx % 2; row = idx // 2
+            cx = M + col * (comp_w + 15)
+            cy = y - row * 60
+            panel(pdf, cx, cy-52, comp_w, 54, bc=clr)
+            pdf.setFillColor(HexColor(clr)); pdf.setFont("Helvetica-Bold",8.5)
+            pdf.drawString(cx+10, cy-13, title)
+            tblock(pdf, cx+10, cy-26, desc[:200], sz=7, clr=TEXT_MUT, mw=comp_w-22, ld=9)
+    pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6.5)
+    pdf.drawString(M, 22, f"Fontes: CEPEA/ESALQ, CME/CBOT, BCB | Cambio: R$ {fx:.4f} | Conversao: soja 60kg/sc, milho 60kg/sc, boi 15kg/@, acucar 50kg/sc")
+
+
 # ── PAGE 10: ESTOQUES ──
 def pg_stocks(pdf, sw, img_stocks):
-    dbg(pdf); hdr(pdf,"Estoques no Mundo — Tem produto ou ta faltando?",
-                  "Dados do USDA: estoque atual vs media historica",
+    dbg(pdf); hdr(pdf,"Estoques no Mundo vs Media 5 Anos — Tem produto ou ta faltando?",
+                  "Dados do USDA: estoque atual vs media dos ultimos 5 anos",
                   "Barra azul para esquerda = estoque curto, preco tende a subir. Barra para direita = sobra, preco pressionado.")
     # Cross-validation warning
     warn_y = PAGE_H - 78
@@ -1095,26 +1600,59 @@ def pg_stocks(pdf, sw, img_stocks):
         y -= 24
     y -= 8
     pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",9)
-    pdf.drawString(rx,y,"DETALHAMENTO"); y-=14
-    cols2=[rx,rx+80,rx+140,rx+195,rx+265]
-    hdrs3=["Produto","Estoque","Media","vs Media","Situacao"]
+    pdf.drawString(rx,y,"DETALHAMENTO DE ESTOQUES"); y-=14
+    cols2=[rx,rx+75,rx+135,rx+195,rx+270]
+    hdrs3=["Produto","Estoque","Media 5A","Desvio","Nota"]
     pdf.setFont("Helvetica-Bold",7); pdf.setFillColor(HexColor(TEXT_MUT))
     for j,h in enumerate(hdrs3): pdf.drawString(cols2[j],y,h)
     y-=3; pdf.setStrokeColor(HexColor(BORDER)); pdf.setLineWidth(0.3); pdf.line(rx,y,PAGE_W-M,y); y-=10
     for sym in list(comms.keys())[:14]:
         if y<50: break
         d=comms[sym]; nm=NM_PROD.get(sym,sym)
-        cur=d.get("stock_current"); avg=d.get("stock_avg"); pva=d.get("price_vs_avg",0)
-        st=d.get("state","")
-        sc=STATE_CLR.get(st,TEXT_MUT); sn=STATE_PT.get(st,st)
+        cur=d.get("stock_current"); avg=d.get("stock_avg")
+        # Calcula desvio REAL de estoque
+        stock_dev = None; is_suspect = False
+        if cur is not None and avg is not None:
+            try:
+                cur_f = float(cur); avg_f = float(avg)
+                if avg_f != 0:
+                    stock_dev = ((cur_f - avg_f) / avg_f) * 100
+                    is_suspect = abs(stock_dev) > 50
+            except (ValueError, TypeError):
+                pass
         pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica",7)
         pdf.drawString(cols2[0],y,f"{nm}")
-        if cur: pdf.drawString(cols2[1],y,f"{cur}")
-        if avg: pdf.drawString(cols2[2],y,f"{avg}")
-        if pva is not None:
-            cc=RED if pva>15 else (AMBER if pva>5 else (CYAN if pva<-15 else TEXT_MUT))
-            pdf.setFillColor(HexColor(cc)); pdf.drawString(cols2[3],y,f"{pva:+.1f}%")
-        pdf.setFillColor(HexColor(sc)); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(cols2[4],y,sn)
+        if cur is not None:
+            pdf.setFillColor(HexColor("#ff6666" if is_suspect else TEXT))
+            pdf.drawString(cols2[1],y,f"{num_fmt(float(cur),0) if cur else '-'}")
+        if avg is not None:
+            pdf.setFillColor(HexColor(TEXT_DIM))
+            pdf.drawString(cols2[2],y,f"{num_fmt(float(avg),0) if avg else '-'}")
+        # --- FAILSAFE v3.3: dados ausentes ---
+        if cur is None and avg is None and stock_dev is None:
+            pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica-Oblique",6)
+            pdf.drawString(cols2[1],y,"sem dado disponivel")
+        if stock_dev is not None:
+            if is_suspect:
+                cc = "#ff6666"  # Vermelho claro = dado suspeito
+            else:
+                cc=RED if stock_dev>15 else (AMBER if stock_dev>5 else (CYAN if stock_dev<-15 else TEXT_MUT))
+            pdf.setFillColor(HexColor(cc)); pdf.drawString(cols2[3],y,f"{stock_dev:+.1f}%")
+        # Nota: se suspeito, mostra aviso; senao mostra classificacao USDA
+        if is_suspect:
+            pdf.setFillColor(HexColor("#ff6666")); pdf.setFont("Helvetica-Bold",6)
+            pdf.drawString(cols2[4],y,"VERIFICAR UNIDADE")
+        else:
+            # Classificacao baseada em estoque (nao preco!)
+            if stock_dev is not None:
+                if stock_dev < -15: nota = "APERTO"
+                elif stock_dev < -5: nota = "ABAIXO"
+                elif stock_dev > 15: nota = "EXCESSO"
+                elif stock_dev > 5: nota = "ACIMA"
+                else: nota = "NEUTRO"
+                nc = CYAN if "APERTO" in nota else (RED if "EXCESSO" in nota else TEXT_MUT)
+                pdf.setFillColor(HexColor(nc)); pdf.setFont("Helvetica-Bold",6.5)
+                pdf.drawString(cols2[4],y,nota)
         y-=10
 
 
@@ -1205,7 +1743,7 @@ def pg_energy(pdf, ed, img_eia):
 
 
 # ── PAGE 13: ACUCAR & ALCOOL (NOVA!) ──
-def pg_sugar_alcohol(pdf, pr, ed, phys, bcb, img_sugar):
+def pg_sugar_alcohol(pdf, pr, ed, phys, bcb, img_sugar, sabr=None):
     """Pagina dedicada ao setor sucroalcooleiro"""
     dbg(pdf)
     pdf.setFillColor(HexColor("#1a3a1a")); pdf.rect(0,PAGE_H-38,PAGE_W,38,fill=1,stroke=0)
@@ -1221,18 +1759,26 @@ def pg_sugar_alcohol(pdf, pr, ed, phys, bcb, img_sugar):
     zc_price = last_close("ZC", pr)
     cw = (PAGE_W - 2*M - 30) / 4
     cards_sa = []
+    intl = phys.get("international",{})
     if sb_price:
         cards_sa.append(("Acucar (Chicago)", f"{sb_price:,.2f} c/lb", f"Dia: {chg_str(sb_chg_d)} | Mes: {chg_str(sb_chg_m)}", TEAL, False))
-    intl = phys.get("international",{})
     sb_br = intl.get("SB_BR",{})
     if sb_br and sb_br.get("price"):
         cards_sa.append(("Acucar (Brasil)", f"{sb_br['price']} {sb_br.get('price_unit','')}", f"Tendencia: {sb_br.get('trend','')}", GREEN, True))
     else:
         cards_sa.append(("Acucar (Brasil)", "Sem dado", "CEPEA/ESALQ", GREEN, True))
+    # Etanol BR (hidratado e anidro)
+    eth_br = intl.get("ETH_BR",{})
+    if eth_br and eth_br.get("price"):
+        cards_sa.append(("Etanol Hidratado BR", f"R$ {eth_br['price']:.4f}/L", f"{eth_br.get('trend','')}", CYAN, True))
+    etn_br = intl.get("ETN_BR",{})
+    if etn_br and etn_br.get("price"):
+        cards_sa.append(("Etanol Anidro BR", f"R$ {etn_br['price']:.4f}/L", f"{etn_br.get('trend','')}", PURPLE, True))
     series = ed.get("series",{})
     eth_prod = series.get("ethanol_production",{}); eth_lat = eth_prod.get("latest_value",""); eth_wow = eth_prod.get("wow_change_pct",0) or 0
-    cards_sa.append(("Etanol EUA (producao)", f"{eth_lat} mil bbl/dia" if eth_lat else "S/D", f"Semana: {eth_wow:+.1f}%", AMBER, False))
-    if zc_price:
+    if len(cards_sa) < 4:
+        cards_sa.append(("Etanol EUA (producao)", f"{eth_lat} mil bbl/dia" if eth_lat else "S/D", f"Semana: {eth_wow:+.1f}%", AMBER, False))
+    if len(cards_sa) < 4 and zc_price:
         zc_chg = pchg("ZC", pr, 1)
         cards_sa.append(("Milho (insumo etanol)", f"{zc_price:,.1f} c/bu", f"Dia: {chg_str(zc_chg)}", CYAN, False))
     for i, (title, val, sub, clr, is_br) in enumerate(cards_sa[:4]):
@@ -1305,6 +1851,241 @@ def pg_sugar_alcohol(pdf, pr, ed, phys, bcb, img_sugar):
             tblock(pdf, cx+8, y-26, desc, sz=6.5, clr=TEXT_MUT, mw=card_w-18, ld=8)
     pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6.5)
     pdf.drawString(M, 22, "Fontes: UNICA, CEPEA/ESALQ, EIA, CONSECANA | Dados de custos sao estimativas baseadas em medias setoriais")
+
+
+
+
+# ── PAGE: SINERGIA ENERGIA x SUCROALCOOLEIRO ──
+def pg_energy_sugar_cross(pdf, pr, ed, phys, bcb, img_cross):
+    """Pagina de dados cruzados entre energia e setor sucroalcooleiro"""
+    dbg(pdf)
+    pdf.setFillColor(HexColor("#1a1a3a")); pdf.rect(0,PAGE_H-38,PAGE_W,38,fill=1,stroke=0)
+    pdf.setFillColor(HexColor(AMBER)); pdf.setFont("Helvetica-Bold",14)
+    pdf.drawString(M,PAGE_H-26,"SINERGIA: ENERGIA x SUCROALCOOLEIRO")
+    pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",8)
+    pdf.drawString(M,PAGE_H-12,"Dados cruzados: petroleo, acucar, etanol, diesel, gas — como se conectam")
+    pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7.5)
+    pdf.drawRightString(PAGE_W-M,PAGE_H-15,f"AgriMacro v3.2 | {TODAY_BR} ({WDAY})")
+    ey = PAGE_H - 54
+    pdf.setFillColor(HexColor(EXPLAIN_BG)); pdf.rect(M-5,ey-14,PAGE_W-2*M+10,18,fill=1,stroke=0)
+    pdf.setFillColor(HexColor(GREEN)); pdf.setFont("Helvetica-Bold",8)
+    pdf.drawString(M,ey-8,"POR QUE IMPORTA: ")
+    tw = pdf.stringWidth("POR QUE IMPORTA: ","Helvetica-Bold",8)
+    pdf.setFillColor(HexColor(TEXT2)); pdf.setFont("Helvetica",8)
+    pdf.drawString(M+tw,ey-8,"Petroleo alto = etanol competitivo = usina faz mais etanol = menos acucar = acucar sobe. Diesel = custo do frete. Gas = custo do adubo.")
+    y = PAGE_H - 78
+    # ── Cards de resumo cruzado ──
+    cl_price = last_close("CL", pr)
+    sb_price = last_close("SB", pr)
+    ng_price = last_close("NG", pr)
+    zc_price = last_close("ZC", pr)
+    series = ed.get("series",{})
+    intl = phys.get("international",{})
+    cw = (PAGE_W - 2*M - 50) / 6
+    mini_cards = []
+    if cl_price: mini_cards.append(("Petroleo", f"${cl_price:,.1f}", "$/bbl", AMBER))
+    if sb_price: mini_cards.append(("Acucar", f"{sb_price:,.2f}", "c/lb", TEAL))
+    if ng_price: mini_cards.append(("Gas Nat.", f"${ng_price:,.2f}", "$/MMBtu", RED))
+    if zc_price: mini_cards.append(("Milho", f"{zc_price:,.1f}", "c/bu", GREEN))
+    eth_br = intl.get("ETH_BR",{})
+    if eth_br and eth_br.get("price"):
+        mini_cards.append(("Etanol BR", f"R${eth_br['price']:.2f}", "/litro", CYAN))
+    diesel_s = series.get("diesel_retail",{})
+    diesel_v = diesel_s.get("latest_value")
+    if diesel_v:
+        mini_cards.append(("Diesel EUA", f"${diesel_v:.3f}", "/gal", PURPLE))
+    for i, (title, val, unit, clr) in enumerate(mini_cards[:6]):
+        x = M + i*(cw+10)
+        panel(pdf, x, y-48, cw, 50, bc=clr)
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",6.5); pdf.drawString(x+6, y-10, title)
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",13); pdf.drawString(x+6, y-28, val[:12])
+        pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6); pdf.drawString(x+6, y-40, unit)
+    y -= 62
+    # ── Graficos 2x3 ──
+    if img_cross:
+        pdf.drawImage(img_cross, 5, y-250, width=PAGE_W-10, height=245, preserveAspectRatio=True, mask="auto")
+        y -= 260
+    # ── Painel de correlacoes e impactos ──
+    pdf.setFillColor(HexColor(PURPLE)); pdf.setFont("Helvetica-Bold",11)
+    pdf.drawString(M, y, "COMO TUDO SE CONECTA — Cadeia de impactos"); y -= 14
+    comp_w = (PAGE_W - 2*M - 20) / 3
+    connections = [
+        (AMBER, "PETROLEO SOBE",
+         "1) Etanol fica competitivo na bomba\n"
+         "2) Usina BR produz mais etanol, menos acucar\n"
+         "3) Menos acucar no mercado = preco sobe\n"
+         "4) Diesel sobe = frete do grao mais caro"),
+        (TEAL, "ACUCAR CHICAGO SOBE",
+         "1) Usina BR maximiza acucar (reduz etanol)\n"
+         "2) Oferta de etanol cai = preco sobe na bomba\n"
+         "3) Entressafra (dez-mar) amplifica o efeito\n"
+         "4) Exportador ganha com dolar + acucar alto"),
+        (GREEN, "MILHO SOBE",
+         "1) Etanol de milho (EUA) fica mais caro\n"
+         "2) Pode reduzir producao EUA de etanol\n"
+         "3) Racao animal mais cara = pressao no boi\n"
+         "4) Safrinha cara = margem do produtor aperta"),
+    ]
+    for i, (clr, title, desc) in enumerate(connections):
+        cx = M + i * (comp_w + 10)
+        # Calcula altura necessaria
+        lines = desc.replace("\\n", "\n").split("\n")
+        box_h = 16 + len(lines) * 10 + 4
+        panel(pdf, cx, y-box_h, comp_w, box_h, bc=clr)
+        pdf.setFillColor(HexColor(clr)); pdf.setFont("Helvetica-Bold",8.5)
+        pdf.drawString(cx+10, y-13, title)
+        dy = y - 27
+        for line in lines:
+            clean = line.strip()
+            if clean:
+                pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7)
+                pdf.drawString(cx+10, dy, clean[:60])
+                dy -= 10
+    y -= 70
+    # ── Paridade Etanol/Gasolina e Spread Acucar ──
+    if y > 60:
+        half_w = (PAGE_W - 2*M - 15) / 2
+        # Paridade etanol/gasolina
+        panel(pdf, M, y-52, half_w, 54, bc=CYAN)
+        pdf.setFillColor(HexColor(CYAN)); pdf.setFont("Helvetica-Bold",9)
+        pdf.drawString(M+10, y-13, "REGRA DA BOMBA: ETANOL vs GASOLINA")
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica",8)
+        pdf.drawString(M+10, y-27, "Se preco etanol < 70% da gasolina = vale abastecer etanol")
+        eth_br_data = intl.get("ETH_BR",{})
+        if eth_br_data and eth_br_data.get("price"):
+            eth_p = float(eth_br_data["price"])
+            # Estimativa gasolina BR: ~R$ 6.00/L (referencia ANP media nacional)
+            gas_est = 6.00
+            paridade = (eth_p / gas_est) * 100
+            pc = GREEN if paridade < 70 else (AMBER if paridade < 75 else RED)
+            veredito = "VALE ETANOL" if paridade < 70 else ("QUASE IGUAL" if paridade < 75 else "GASOLINA MELHOR")
+            pdf.setFillColor(HexColor(pc)); pdf.setFont("Helvetica-Bold",12)
+            pdf.drawString(M+10, y-42, f"Paridade: {paridade:.0f}% — {veredito}")
+            pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6.5)
+            pdf.drawString(M+10, y-52, f"Etanol: R$ {eth_p:.4f}/L | Gasolina ref: ~R$ {gas_est:.2f}/L (media nacional estimada)")
+        else:
+            pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",8)
+            pdf.drawString(M+10, y-42, "Dados de etanol BR indisponiveis — rode collect_physical_intl.py")
+        # Spread acucar BR vs Chicago
+        rx = M + half_w + 15
+        panel(pdf, rx, y-52, half_w, 54, bc=TEAL)
+        pdf.setFillColor(HexColor(TEAL)); pdf.setFont("Helvetica-Bold",9)
+        pdf.drawString(rx+10, y-13, "SPREAD: ACUCAR BRASIL vs CHICAGO")
+        sb_br_data = intl.get("SB_BR",{})
+        sb_chi = last_close("SB", pr)
+        fx = get_brl_usd(bcb) if "get_brl_usd" in dir() else None
+        if not fx:
+            rc = bcb.get("resumo_cambio",{}); fx = rc.get("brl_usd_atual")
+        if sb_br_data and sb_br_data.get("price") and sb_chi and fx:
+            br_p = float(sb_br_data["price"])
+            # Converter Chicago c/lb para R$/sc 50kg
+            chi_brl = (sb_chi / 100.0) * (50.0 / 0.4536) * float(fx)
+            spread = br_p - chi_brl
+            spread_pct = (spread / chi_brl) * 100 if chi_brl > 0 else 0
+            sc = GREEN if spread_pct > 0 else RED
+            direction = "PREMIO BR" if spread_pct > 0 else "DESCONTO BR"
+            pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica",8)
+            pdf.drawString(rx+10, y-27, f"Brasil: R$ {br_p:.2f}/sc 50kg | Chicago conv: R$ {chi_brl:.2f}/sc")
+            pdf.setFillColor(HexColor(sc)); pdf.setFont("Helvetica-Bold",11)
+            pdf.drawString(rx+10, y-42, f"{direction}: {spread_pct:+.1f}% (R$ {spread:+.2f}/sc)")
+        else:
+            pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",8)
+            pdf.drawString(rx+10, y-27, "Dados insuficientes para calcular spread")
+            pdf.drawString(rx+10, y-42, "Necessario: SB_BR + SB Chicago + cambio")
+    pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6.5)
+    pdf.drawString(M, 22, "Fontes: EIA, CEPEA/ESALQ, CME/CBOT, BCB, ANP (estimativa) | Paridade etanol/gasolina usa media nacional estimada")
+
+
+# ── PAGE 14: PECUARIA COMPARATIVA ──
+def pg_cattle_compare(pdf, pr, phys, bcb, img_cattle):
+    """Pagina dedicada: Boi Gordo vs Engorda, Brasil vs Chicago"""
+    dbg(pdf)
+    pdf.setFillColor(HexColor(AMBER)); pdf.rect(0,PAGE_H-38,PAGE_W,38,fill=1,stroke=0)
+    pdf.setFillColor(HexColor("#fff")); pdf.setFont("Helvetica-Bold",15)
+    pdf.drawString(M,PAGE_H-26,"PECUARIA — Gordo, Engorda e Reposicao")
+    pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7.5)
+    pdf.drawRightString(PAGE_W-M,PAGE_H-15,f"AgriMacro v3.2 | {TODAY_BR} ({WDAY})")
+    pdf.setFillColor(HexColor("#ffffffcc")); pdf.setFont("Helvetica",8)
+    pdf.drawString(M,PAGE_H-12,"Boi gordo, boi de engorda, spread de reposicao e arbitragem Brasil vs EUA")
+    y = PAGE_H - 55
+    # Cards
+    le = last_close("LE", pr); gf = last_close("GF", pr)
+    le_d = pchg("LE", pr, 1); gf_d = pchg("GF", pr, 1)
+    le_m = pchg("LE", pr, 21); gf_m = pchg("GF", pr, 21)
+    intl = phys.get("international", {})
+    le_br = intl.get("LE_BR", {})
+    fx = get_brl_usd(bcb)
+    cw = (PAGE_W - 2*M - 30) / 4
+    cards = []
+    if le_br and le_br.get("price"):
+        cards.append(("Boi Gordo BR", f"R$ {le_br['price']}", f"Tendencia: {le_br.get('trend','')}", GREEN, True))
+    if le:
+        cards.append(("Boi Gordo Chicago", f"{le:,.2f} c/lb", f"Dia: {chg_str(le_d)} | Mes: {chg_str(le_m)}", AMBER, False))
+    if gf:
+        cards.append(("Boi Engorda Chicago", f"{gf:,.2f} c/lb", f"Dia: {chg_str(gf_d)} | Mes: {chg_str(gf_m)}", CYAN, False))
+    if le and gf and gf > 0:
+        spread = le - gf; ratio = le / gf
+        cards.append(("Spread Gordo-Magro", f"{spread:,.2f} c/lb", f"Ratio: {ratio:.2f}x", PURPLE, False))
+    for i, (title, val, sub, clr, is_br) in enumerate(cards[:4]):
+        x = M + i*(cw+10)
+        panel(pdf, x, y-65, cw, 67, bc=clr)
+        if is_br: origin_badge(pdf, x+10, y-10, is_brazil=True)
+        else: origin_badge(pdf, x+10, y-10, is_brazil=False)
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont("Helvetica",7); pdf.drawString(x+60, y-10, title)
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",16); pdf.drawString(x+10, y-36, val[:20])
+        pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",7); pdf.drawString(x+10, y-52, sub[:42])
+    y -= 80
+    # Graficos
+    if img_cattle:
+        pdf.drawImage(img_cattle, 5, y-200, width=PAGE_W-10, height=195, preserveAspectRatio=True, mask="auto")
+        y -= 210
+    # Arbitragem Boi BR vs Chicago
+    if le and le_br and le_br.get("price") and fx:
+        chi_brl = chicago_to_brl("LE", le, fx)
+        if chi_brl:
+            br_val = float(le_br["price"])
+            spread_brl = br_val - chi_brl
+            spread_pct = (spread_brl / chi_brl) * 100
+            comp_w = (PAGE_W - 2*M - 15) / 2
+            panel(pdf, M, y-55, comp_w, 57, bc=GREEN)
+            pdf.setFillColor(HexColor(GREEN)); pdf.setFont("Helvetica-Bold",10)
+            pdf.drawString(M+10, y-14, "ARBITRAGEM: BOI GORDO BRASIL vs CHICAGO")
+            pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica",8.5)
+            pdf.drawString(M+10, y-28, f"Brasil (CEPEA): R$ {br_val:.2f}/@ | Chicago convertido: R$ {chi_brl:.2f}/@")
+            sc = GREEN if spread_pct > 0 else RED
+            pdf.setFillColor(HexColor(sc)); pdf.setFont("Helvetica-Bold",12)
+            direction = "PREMIO BR" if spread_pct > 0 else "DESCONTO BR"
+            pdf.drawString(M+10, y-44, f"{direction}: {spread_pct:+.1f}% (R$ {spread_brl:+.2f}/@)")
+            # Explicacao lado direito
+            panel(pdf, M+comp_w+15, y-55, comp_w, 57, bc=AMBER)
+            pdf.setFillColor(HexColor(AMBER)); pdf.setFont("Helvetica-Bold",9)
+            pdf.drawString(M+comp_w+25, y-14, "SPREAD DE REPOSICAO (Gordo - Magro)")
+            if le and gf:
+                spread_rep = le - gf
+                sc2 = GREEN if spread_rep > 0 else RED
+                pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica",8.5)
+                pdf.drawString(M+comp_w+25, y-28, f"Gordo: {le:.2f} c/lb | Engorda: {gf:.2f} c/lb")
+                pdf.setFillColor(HexColor(sc2)); pdf.setFont("Helvetica-Bold",12)
+                pdf.drawString(M+comp_w+25, y-44, f"Spread: {spread_rep:+.2f} c/lb")
+            y -= 65
+    # Explicacoes praticas
+    if y > 80:
+        pdf.setFillColor(HexColor(PURPLE)); pdf.setFont("Helvetica-Bold",11)
+        pdf.drawString(M, y, "O QUE ISSO SIGNIFICA PRA VOCE"); y -= 16
+        exp_w = (PAGE_W - 2*M - 20) / 3
+        exps = [
+            (GREEN, "PECUARISTA DE CRIA", "Boi magro (engorda) caro = boa hora pra vender bezerro. Se o spread gordo-magro apertou, confinamento ta sofrendo."),
+            (AMBER, "CONFINADOR", "Lucro = boi gordo - boi magro - milho - ração. Se gordo nao acompanha o magro, margem aperta. Fique de olho no milho tambem."),
+            (CYAN, "EXPORTADOR", "Se boi BR tem premio sobre Chicago, mercado interno paga mais. Se tem desconto, exportacao fica atrativa (carne processada)."),
+        ]
+        for i, (clr, title, desc) in enumerate(exps):
+            cx = M + i * (exp_w + 10)
+            panel(pdf, cx, y-58, exp_w, 60, bc=clr)
+            pdf.setFillColor(HexColor(clr)); pdf.setFont("Helvetica-Bold",8); pdf.drawString(cx+10, y-12, title)
+            tblock(pdf, cx+10, y-26, desc, sz=7, clr=TEXT_MUT, mw=exp_w-22, ld=9)
+    pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6.5)
+    pdf.drawString(M, 22, "Fontes: CEPEA/ESALQ, CME Group, BCB | Boi Gordo BR = indicador B3/ESALQ, Chicago = Live Cattle CME")
+
 
 # ── PAGE 14: MERCADO FISICO (sem dados vazios) ──
 def pg_physical(pdf, phys, img_phbr):
@@ -1588,6 +2369,98 @@ def pg_glossary(pdf):
 #  BUILD
 # ═══════════════════════════════════════════
 
+
+
+# ── PÁGINA: AVISO LEGAL (DISCLOSURE) ──────────────────────────────────
+def pg_disclosure(pdf):
+    """Renderiza página de Aviso Legal completa."""
+    if not HAS_DISCLOSURE:
+        return
+
+    W, H = landscape(A4)
+    disc = get_disclosure_page()
+
+    # Background dark
+    pdf.setFillColor(HexColor("#1a1a2e"))
+    pdf.rect(0, 0, W, H, fill=1, stroke=0)
+
+    # Título
+    pdf.setFillColor(HexColor("#e94560"))
+    pdf.setFont("Helvetica-Bold", 22)
+    pdf.drawString(50, H - 55, disc["title"])
+
+    # Subtítulo
+    pdf.setFillColor(HexColor("#aaaaaa"))
+    pdf.setFont("Helvetica-Oblique", 11)
+    pdf.drawString(50, H - 75, disc["subtitle"])
+
+    # Linha separadora
+    pdf.setStrokeColor(HexColor("#e94560"))
+    pdf.setLineWidth(1)
+    pdf.line(50, H - 85, W - 50, H - 85)
+
+    # Seções — 2 colunas
+    sections = disc["sections"]
+    mid = (len(sections) + 1) // 2  # Dividir em 2 colunas
+    col_width = (W - 120) / 2
+
+    for col_idx, col_sections in enumerate([sections[:mid], sections[mid:]]):
+        x_start = 50 + col_idx * (col_width + 20)
+        y = H - 110
+
+        for section in col_sections:
+            # Heading
+            pdf.setFillColor(HexColor("#e94560"))
+            pdf.setFont("Helvetica-Bold", 10)
+            pdf.drawString(x_start, y, section["heading"])
+            y -= 14
+
+            # Content — wrap text
+            pdf.setFillColor(HexColor("#cccccc"))
+            pdf.setFont("Helvetica", 7.5)
+
+            text = section["content"]
+            max_chars = int(col_width / 3.8)  # Approx chars per line at 7.5pt
+            words = text.split()
+            line = ""
+            for word in words:
+                test = line + " " + word if line else word
+                if len(test) > max_chars:
+                    pdf.drawString(x_start, y, line)
+                    y -= 10
+                    line = word
+                    if y < 50:
+                        break
+                else:
+                    line = test
+            if line and y >= 50:
+                pdf.drawString(x_start, y, line)
+                y -= 10
+
+            y -= 8  # Espaço entre seções
+
+    # Footer
+    pdf.setFillColor(HexColor("#666666"))
+    pdf.setFont("Helvetica-Oblique", 6.5)
+    footer = disc.get("footer", "")
+    max_footer = int((W - 100) / 3.2)
+    if len(footer) > max_footer:
+        # Quebrar em 2 linhas
+        mid_pt = footer.rfind(" ", 0, max_footer)
+        if mid_pt > 0:
+            pdf.drawString(50, 30, footer[:mid_pt])
+            pdf.drawString(50, 20, footer[mid_pt+1:])
+        else:
+            pdf.drawString(50, 25, footer[:max_footer])
+    else:
+        pdf.drawString(50, 25, footer)
+
+    # Versão
+    pdf.setFillColor(HexColor("#444444"))
+    pdf.setFont("Helvetica", 6)
+    pdf.drawRightString(W - 50, 15, f"Disclosure v{disc.get('version', '1.0')} | {disc.get('last_updated', '')}")
+
+
 def build_pdf():
     print(f"  Data: {TODAY_BR} ({WDAY})")
     print("  Carregando dados...")
@@ -1603,6 +2476,7 @@ def build_pdf():
     rd   = sload(DATA_PROC, "report_daily.json")
     wt   = sload(DATA_PROC, "weather_agro.json")
     nw   = sload(DATA_PROC, "news.json")
+    sabr = sload(DATA_PROC, "sugar_alcohol_br.json")  # Acucar & Alcool BR
     if not pr: print("  [ERRO] price_history.json nao encontrado!"); sys.exit(1)
     sk=list(pr.keys())[0]; sv=pr[sk]
     print(f"  [OK] prices: {len(pr)} symbols, {len(sv)} records" if isinstance(sv,list) else f"  [WARN] tipo: {type(sv)}")
@@ -1635,16 +2509,45 @@ def build_pdf():
     img_phbr = chart_physical_br(phys)
     print("  Graficos: acucar & alcool...")
     img_sugar = chart_sugar_alcohol(pr, ed)
+    print("  Graficos: energia x sucroalcooleiro cruzado...")
+    img_cross = chart_energy_sugar_cross(pr, ed)
+    print("  Graficos: arbitragem BR vs Chicago...")
+    arbs = calc_arbitrages(pr, phys, bcb)
+    fx = get_brl_usd(bcb)
+    img_arb = chart_arbitrage_bars(arbs, fx) if arbs else None
+    print("  Graficos: pecuaria comparativa...")
+    img_cattle = chart_cattle_compare(pr)
+    print("  Graficos: spreads extras...")
+    extra_sp = calc_extra_spreads(pr)
+    img_sp_grid = chart_spreads_grid(sd, extra_sp)
 
     os.makedirs(REPORT_DIR, exist_ok=True)
-    T = 18
+    T = 21  # 18 originais + arbitragem + pecuaria
     print(f"  Montando PDF ({T} paginas)...")
     pdf = canvas.Canvas(OUTPUT_PDF, pagesize=landscape(A4))
     pdf.setTitle(f"AgriMacro Diario - {TODAY_STR}"); pdf.setAuthor("AgriMacro v3.2")
 
     pn = 1
     # 1. Capa
-    pg_cover(pdf,rd,dr,bcb);                    ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    pg_cover(pdf,rd,dr,bcb,pr)
+    # Disclaimer compacto no rodape da capa
+    if HAS_DISCLOSURE:
+        from reportlab.lib.pagesizes import A4, landscape as _ls
+        _dw = _ls(A4)[0]
+        pdf.setFillColor(HexColor('#666666'))
+        pdf.setFont('Helvetica', 5.5)
+        _dt = get_cover_disclaimer()
+        _mc = int((_dw - 100) / 2.8)
+        if len(_dt) > _mc:
+            _sp = _dt.rfind(' ', 0, _mc)
+            if _sp > 0:
+                pdf.drawString(50, 18, _dt[:_sp])
+                pdf.drawString(50, 10, _dt[_sp+1:])
+            else:
+                pdf.drawString(50, 14, _dt[:_mc])
+        else:
+            pdf.drawString(50, 14, _dt)
+    ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 2. Macro
     pg_macro(pdf,bcb,img_brl);                  ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 3-6. Commodity pages
@@ -1657,26 +2560,35 @@ def build_pdf():
     pg_others(pdf, pr, img_others);             ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 8. Variations
     pg_variations_table(pdf, pr);               ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 9. Spreads
+    # 9. Spreads (redesenhado)
     pg_spreads(pdf, sd, img_sp);                ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    # 9B. Arbitragem BR vs Chicago (NOVA)
+    pg_arbitrage(pdf, pr, phys, bcb, img_arb);  ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 10. Stocks
     pg_stocks(pdf, sw, img_stocks);             ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 11. COT
     pg_cot(pdf, cd, img_cot);                   ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 12. Energy
     pg_energy(pdf, ed, img_eia);                ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 13. Acucar & Alcool (NOVA)
-    pg_sugar_alcohol(pdf, pr, ed, phys, bcb, img_sugar); ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 14. Physical
+    # 13. Acucar & Alcool
+    pg_sugar_alcohol(pdf, pr, ed, phys, bcb, img_sugar, sabr); ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    # 14. Sinergia Energia x Sucroalcooleiro (NOVA)
+    pg_energy_sugar_cross(pdf, pr, ed, phys, bcb, img_cross); ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    # 15. Pecuaria Comparativa
+    pg_cattle_compare(pdf, pr, phys, bcb, img_cattle); ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    # 15. Physical
     pg_physical(pdf, phys, img_phbr);           ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 15. Weather
+    # 16. Weather
     pg_weather(pdf, wt);                        ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 16. Calendar
+    # 17. Calendar
     pg_calendar(pdf, cal, rd, dr);              ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 17. News
+    # 18. News
     pg_news(pdf, nw);                           ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 18. Glossary
-    pg_glossary(pdf);                           ftr(pdf,pn,T); pdf.showPage()
+    # 19. Glossary
+    pg_glossary(pdf);                           ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    # 20. Aviso Legal (Disclosure)
+    if HAS_DISCLOSURE:
+        pg_disclosure(pdf);                       ftr(pdf,pn,T); pdf.showPage()
 
     pdf.save()
     sz=os.path.getsize(OUTPUT_PDF)/1024

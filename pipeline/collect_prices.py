@@ -25,6 +25,8 @@ COMMODITIES = {
     "GC": {"yahoo": "GC=F", "name": "Gold"},
     "SI": {"yahoo": "SI=F", "name": "Silver"},
     "DX": {"yahoo": "DX=F", "name": "Dollar Index"},
+    "RB": {"yahoo": "RB=F", "name": "Gasoline RBOB"},
+    "HO": {"yahoo": "HO=F", "name": "Heating Oil"},
 }
 
 def fetch_yahoo(symbol: str, days: int = 1500) -> list:

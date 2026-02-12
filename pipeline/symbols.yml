@@ -1,0 +1,506 @@
+# ═══════════════════════════════════════════════════════════════
+# AgriMacro AA+QA Engine — SYMBOLS.YML
+# Registro central de todos os símbolos do sistema
+# Nenhum dado entra no relatório se não estiver aqui
+# ═══════════════════════════════════════════════════════════════
+
+# ── CHICAGO (CME/CBOT/ICE via yfinance) ──────────────────────
+chicago:
+
+  ZS:
+    display_name: "Soja Chicago"
+    exchange: CBOT
+    contract: continuous
+    unit: "c/bu"
+    conversion: { bu_kg: 27.216, sc_kg: 60 }
+    source: yfinance
+    range: [700, 2200]
+    category: grains
+
+  ZC:
+    display_name: "Milho Chicago"
+    exchange: CBOT
+    contract: continuous
+    unit: "c/bu"
+    conversion: { bu_kg: 25.4, sc_kg: 60 }
+    source: yfinance
+    range: [200, 900]
+    category: grains
+
+  ZW:
+    display_name: "Trigo SRW"
+    exchange: CBOT
+    contract: continuous
+    unit: "c/bu"
+    conversion: { bu_kg: 27.216, sc_kg: 60 }
+    source: yfinance
+    range: [300, 1400]
+    category: grains
+
+  KE:
+    display_name: "Trigo HRW"
+    exchange: KCBT
+    contract: continuous
+    unit: "c/bu"
+    conversion: { bu_kg: 27.216, sc_kg: 60 }
+    source: yfinance
+    range: [300, 1400]
+    category: grains
+
+  ZM:
+    display_name: "Farelo de Soja"
+    exchange: CBOT
+    contract: continuous
+    unit: "USD/short_ton"
+    conversion: { short_ton_kg: 907.185 }
+    source: yfinance
+    range: [150, 700]
+    category: grains
+
+  ZL:
+    display_name: "Óleo de Soja"
+    exchange: CBOT
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536 }
+    source: yfinance
+    range: [15, 90]
+    category: grains
+
+  KC:
+    display_name: "Café Arábica"
+    exchange: ICE
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536, sc_kg: 60 }
+    source: yfinance
+    range: [80, 600]
+    category: softs
+
+  SB:
+    display_name: "Açúcar #11"
+    exchange: ICE
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536, sc_kg: 50 }
+    source: yfinance
+    range: [5, 40]
+    category: softs
+
+  CT:
+    display_name: "Algodão"
+    exchange: ICE
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536 }
+    source: yfinance
+    range: [40, 180]
+    category: softs
+
+  CC:
+    display_name: "Cacau"
+    exchange: ICE
+    contract: continuous
+    unit: "USD/mt"
+    conversion: { mt_kg: 1000 }
+    source: yfinance
+    range: [1500, 15000]
+    category: softs
+
+  OJ:
+    display_name: "Suco de Laranja"
+    exchange: ICE
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536 }
+    source: yfinance
+    range: [50, 600]
+    category: softs
+
+  LE:
+    display_name: "Boi Gordo (Live Cattle)"
+    exchange: CME
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536, arroba_kg: 15 }
+    source: yfinance
+    range: [80, 220]
+    category: livestock
+
+  GF:
+    display_name: "Boi Engorda (Feeder Cattle)"
+    exchange: CME
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536 }
+    source: yfinance
+    range: [100, 320]
+    category: livestock
+
+  HE:
+    display_name: "Porco (Lean Hogs)"
+    exchange: CME
+    contract: continuous
+    unit: "c/lb"
+    conversion: { lb_kg: 0.4536 }
+    source: yfinance
+    range: [30, 130]
+    category: livestock
+
+  CL:
+    display_name: "Petróleo WTI"
+    exchange: NYMEX
+    contract: continuous
+    unit: "USD/bbl"
+    conversion: { bbl_liters: 158.987 }
+    source: yfinance
+    range: [20, 200]
+    category: energy
+
+  NG:
+    display_name: "Gás Natural"
+    exchange: NYMEX
+    contract: continuous
+    unit: "USD/MMBtu"
+    conversion: {}
+    source: yfinance
+    range: [1.0, 15.0]
+    category: energy
+
+  RB:
+    display_name: "Gasolina RBOB"
+    exchange: NYMEX
+    contract: continuous
+    unit: "USD/gal"
+    conversion: { gal_liters: 3.78541 }
+    source: yfinance
+    range: [0.5, 5.0]
+    category: energy
+
+  HO:
+    display_name: "Heating Oil"
+    exchange: NYMEX
+    contract: continuous
+    unit: "USD/gal"
+    conversion: { gal_liters: 3.78541 }
+    source: yfinance
+    range: [0.5, 6.0]
+    category: energy
+
+  GC:
+    display_name: "Ouro"
+    exchange: COMEX
+    contract: continuous
+    unit: "USD/troy_oz"
+    conversion: { troy_oz_g: 31.1035 }
+    source: yfinance
+    range: [1000, 4000]
+    category: metals
+
+  SI:
+    display_name: "Prata"
+    exchange: COMEX
+    contract: continuous
+    unit: "USD/troy_oz"
+    conversion: { troy_oz_g: 31.1035 }
+    source: yfinance
+    range: [10, 60]
+    category: metals
+
+  DX:
+    display_name: "Dollar Index"
+    exchange: ICE
+    contract: continuous
+    unit: "index"
+    conversion: {}
+    source: yfinance
+    range: [80, 130]
+    category: macro
+
+# ── BRASIL (CEPEA/ESALQ via Notícias Agrícolas) ─────────────
+brasil:
+
+  ZS_BR:
+    display_name: "Soja Brasil (Paranaguá)"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/sc60kg"
+    conversion: { sc_kg: 60 }
+    source: cepea_esalq
+    range: [70, 250]
+    category: grains
+
+  ZC_BR:
+    display_name: "Milho Brasil (Campinas)"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/sc60kg"
+    conversion: { sc_kg: 60 }
+    source: cepea_esalq
+    range: [20, 130]
+    category: grains
+
+  KC_BR:
+    display_name: "Café Brasil (Arábica)"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/sc60kg"
+    conversion: { sc_kg: 60 }
+    source: cepea_esalq
+    range: [400, 3500]
+    category: softs
+
+  LE_BR:
+    display_name: "Boi Gordo Brasil (Indicador CEPEA)"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/@"
+    conversion: { arroba_kg: 15 }
+    source: cepea_esalq
+    range: [150, 400]
+    category: livestock
+
+  CT_BR:
+    display_name: "Algodão Brasil"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/@"
+    conversion: { arroba_kg: 15 }
+    source: cepea_esalq
+    range: [60, 250]
+    category: softs
+
+  ZW_BR:
+    display_name: "Trigo Brasil (Paraná)"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/sc60kg"
+    conversion: { sc_kg: 60 }
+    source: cepea_esalq
+    range: [30, 150]
+    category: grains
+
+  SB_BR:
+    display_name: "Açúcar Cristal Brasil"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/sc50kg"
+    conversion: { sc_kg: 50 }
+    source: cepea_esalq
+    range: [60, 250]
+    category: softs
+
+  ETH_BR:
+    display_name: "Etanol Hidratado Brasil"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/L"
+    conversion: {}
+    source: cepea_esalq
+    range: [1.5, 5.0]
+    category: energy
+
+  ETN_BR:
+    display_name: "Etanol Anidro Brasil"
+    exchange: CEPEA
+    contract: spot
+    unit: "R$/L"
+    conversion: {}
+    source: cepea_esalq
+    range: [1.5, 6.0]
+    category: energy
+
+# ── EIA (Energy Information Administration) ──────────────────
+eia:
+
+  wti_spot:
+    display_name: "WTI Spot"
+    unit: "USD/bbl"
+    source: eia_api
+    range: [20, 200]
+    category: energy
+
+  brent_spot:
+    display_name: "Brent Spot"
+    unit: "USD/bbl"
+    source: eia_api
+    range: [20, 200]
+    category: energy
+
+  henry_hub:
+    display_name: "Henry Hub"
+    unit: "USD/MMBtu"
+    source: eia_api
+    range: [1.0, 15.0]
+    category: energy
+
+  diesel_spot:
+    display_name: "Diesel Spot"
+    unit: "USD/gal"
+    source: eia_api
+    range: [0.5, 6.0]
+    category: energy
+
+  diesel_retail:
+    display_name: "Diesel Retail"
+    unit: "USD/gal"
+    source: eia_api
+    range: [1.5, 8.0]
+    category: energy
+
+  crude_stocks:
+    display_name: "Estoques Petróleo Bruto"
+    unit: "thousand_bbl"
+    source: eia_api
+    range: [300000, 600000]
+    category: energy_stocks
+
+  gasoline_stocks:
+    display_name: "Estoques Gasolina"
+    unit: "thousand_bbl"
+    source: eia_api
+    range: [180000, 280000]
+    category: energy_stocks
+
+  distillate_stocks:
+    display_name: "Estoques Destilados"
+    unit: "thousand_bbl"
+    source: eia_api
+    range: [90000, 180000]
+    category: energy_stocks
+
+  crude_production:
+    display_name: "Produção Petróleo"
+    unit: "thousand_bbl_day"
+    source: eia_api
+    range: [8000, 15000]
+    category: energy
+
+  refinery_utilization:
+    display_name: "Utilização Refinarias"
+    unit: "percent"
+    source: eia_api
+    range: [60, 100]
+    category: energy
+
+  ethanol_production:
+    display_name: "Produção Etanol EUA"
+    unit: "thousand_bbl_day"
+    source: eia_api
+    range: [500, 1200]
+    category: energy
+
+  ethanol_stocks:
+    display_name: "Estoques Etanol EUA"
+    unit: "thousand_bbl"
+    source: eia_api
+    range: [15000, 30000]
+    category: energy_stocks
+
+# ── SPREADS (calculados) ─────────────────────────────────────
+spreads:
+
+  soy_crush:
+    display_name: "Esmagamento da Soja"
+    formula: "(ZM×0.022) + (ZL×0.11) - ZS"
+    unit: "c/bu"
+    range: [-100, 400]
+    components: [ZM, ZL, ZS]
+
+  ke_zw:
+    display_name: "Trigo Duro vs Mole"
+    formula: "KE - ZW"
+    unit: "c/bu"
+    range: [-200, 300]
+    components: [KE, ZW]
+
+  zl_cl:
+    display_name: "Óleo Soja / Petróleo"
+    formula: "ZL / CL"
+    unit: "ratio"
+    range: [0.1, 3.0]
+    components: [ZL, CL]
+
+  feedlot:
+    display_name: "Margem do Confinamento"
+    formula: "LE - GF - ZC"
+    unit: "USD"
+    range: [-500, 200]
+    components: [LE, GF, ZC]
+
+  zc_zm:
+    display_name: "Milho / Farelo"
+    formula: "ZC / ZM"
+    unit: "ratio"
+    range: [0.3, 3.0]
+    components: [ZC, ZM]
+
+  zc_zs:
+    display_name: "Relação Milho/Soja"
+    formula: "ZC / ZS"
+    unit: "ratio"
+    range: [0.15, 0.60]
+    components: [ZC, ZS]
+
+  le_gf:
+    display_name: "Boi Gordo vs Engorda"
+    formula: "LE - GF"
+    unit: "c/lb"
+    range: [-150, 50]
+    components: [LE, GF]
+
+  crack:
+    display_name: "Crack Spread"
+    formula: "(RB×42) - CL"
+    unit: "USD/bbl"
+    range: [-10, 80]
+    components: [RB, CL]
+
+  gc_cl:
+    display_name: "Ouro / Petróleo"
+    formula: "GC / CL"
+    unit: "ratio"
+    range: [5, 100]
+    components: [GC, CL]
+
+# ── MACRO BRASIL ─────────────────────────────────────────────
+macro_br:
+
+  BRL_USD:
+    display_name: "Dólar/Real"
+    unit: "BRL"
+    source: bcb
+    range: [3.0, 8.0]
+    category: fx
+
+  SELIC:
+    display_name: "Taxa Selic"
+    unit: "percent"
+    source: bcb
+    range: [2.0, 20.0]
+    category: rates
+
+  IPCA:
+    display_name: "IPCA (12 meses)"
+    unit: "percent"
+    source: ibge
+    range: [-2.0, 20.0]
+    category: inflation
+
+# ── LINGUAGEM (auditoria semântica) ─────────────────────────
+language_audit:
+  extreme_words:
+    - { word: "disparou", min_change_pct: 2.0 }
+    - { word: "despencou", min_change_pct: 2.0 }
+    - { word: "colapso", min_change_pct: 3.0 }
+    - { word: "derreteu", min_change_pct: 3.0 }
+    - { word: "explodiu", min_change_pct: 3.0 }
+    - { word: "desabou", min_change_pct: 2.5 }
+    - { word: "disparada", min_change_pct: 2.0 }
+    - { word: "derrocada", min_change_pct: 3.0 }
+    - { word: "decolou", min_change_pct: 2.0 }
+    - { word: "afundou", min_change_pct: 2.5 }
+    - { word: "catapultou", min_change_pct: 3.0 }
+    - { word: "evaporou", min_change_pct: 3.0 }
+    - { word: "esmagou", min_change_pct: 2.5 }
+    - { word: "foguete", min_change_pct: 3.0 }

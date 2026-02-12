@@ -43,6 +43,12 @@ BRAZIL_SOURCES = {
               "label": "🇧🇷 Brasil — Algodão CEPEA", "unit": "R$/@"},
     "ZW_BR": {"path": "/cotacoes/trigo/preco-medio-do-trigo-cepea-esalq",
               "label": "🇧🇷 Brasil (PR) — Trigo CEPEA", "unit": "R$/t"},
+    "SB_BR": {"path": "/cotacoes/sucroenergetico/acucar-cristal-cepea",
+              "label": "Brasil (SP) \u2014 Acucar Cristal CEPEA", "unit": "R$/sc 50kg"},
+    "ETH_BR": {"path": "/cotacoes/sucroenergetico/indicador-semanal-etanol-hidratado-cepea-esalq",
+              "label": "Brasil (SP) \u2014 Etanol Hidratado CEPEA", "unit": "R$/litro"},
+    "ETN_BR": {"path": "/cotacoes/sucroenergetico/indicador-semanal-etanol-anidro-cepea-esalq",
+              "label": "Brasil (SP) \u2014 Etanol Anidro CEPEA", "unit": "R$/litro"},
 }
 
 

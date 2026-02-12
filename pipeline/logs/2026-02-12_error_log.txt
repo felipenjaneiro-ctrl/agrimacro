@@ -1,0 +1,24 @@
+[BLOCK] RANGE_CRITICAL
+  Boi Gordo (Live Cattle): 242.60000610351562 FORA da faixa [80-220] — desvio 62%
+  Details: {"symbol": "LE", "price": 242.60000610351562, "range": [80, 220], "deviation_pct": 61.7}
+
+[BLOCK] RANGE_CRITICAL
+  Boi Engorda (Feeder Cattle): 345.1499938964844 FORA da faixa [100-320] — desvio 64%
+  Details: {"symbol": "GF", "price": 345.1499938964844, "range": [100, 320], "deviation_pct": 64.4}
+
+[BLOCK] RANGE_CRITICAL
+  Ouro: 5086.2001953125 FORA da faixa [1000-4000] — desvio 103%
+  Details: {"symbol": "GC", "price": 5086.2001953125, "range": [1000, 4000], "deviation_pct": 103.4}
+
+[BLOCK] RANGE_CRITICAL
+  Prata: 82.8499984741211 FORA da faixa [10-60] — desvio 137%
+  Details: {"symbol": "SI", "price": 82.8499984741211, "range": [10, 60], "deviation_pct": 136.7}
+
+[FLAG] SPREAD_RANGE
+  Esmagamento da Soja: -1124.1094 fora de [-100, 400]
+  Details: {"spread": "soy_crush", "value": -1124.1094, "range": [-100, 400]}
+
+[FLAG] SPREAD_RANGE
+  Margem do Confinamento: -531.5500 fora de [-500, 200]
+  Details: {"spread": "feedlot", "value": -531.55, "range": [-500, 200]}
+

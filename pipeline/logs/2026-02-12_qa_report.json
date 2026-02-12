@@ -1,0 +1,112 @@
+{
+  "engine": "AgriMacro AA+QA Engine v1.0",
+  "date": "2026-02-12",
+  "timestamp": "2026-02-12T19:42:26.946430+00:00",
+  "status": "BLOCK",
+  "summary": {
+    "total_checks": 7,
+    "blocks": 4,
+    "flags": 2,
+    "warnings": 1,
+    "info": 0
+  },
+  "can_publish": false,
+  "findings": [
+    {
+      "severity": "BLOCK",
+      "code": "RANGE_CRITICAL",
+      "message": "Boi Gordo (Live Cattle): 242.60000610351562 FORA da faixa [80-220] — desvio 62%",
+      "details": {
+        "symbol": "LE",
+        "price": 242.60000610351562,
+        "range": [
+          80,
+          220
+        ],
+        "deviation_pct": 61.7
+      },
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    },
+    {
+      "severity": "BLOCK",
+      "code": "RANGE_CRITICAL",
+      "message": "Boi Engorda (Feeder Cattle): 345.1499938964844 FORA da faixa [100-320] — desvio 64%",
+      "details": {
+        "symbol": "GF",
+        "price": 345.1499938964844,
+        "range": [
+          100,
+          320
+        ],
+        "deviation_pct": 64.4
+      },
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    },
+    {
+      "severity": "BLOCK",
+      "code": "RANGE_CRITICAL",
+      "message": "Ouro: 5086.2001953125 FORA da faixa [1000-4000] — desvio 103%",
+      "details": {
+        "symbol": "GC",
+        "price": 5086.2001953125,
+        "range": [
+          1000,
+          4000
+        ],
+        "deviation_pct": 103.4
+      },
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    },
+    {
+      "severity": "BLOCK",
+      "code": "RANGE_CRITICAL",
+      "message": "Prata: 82.8499984741211 FORA da faixa [10-60] — desvio 137%",
+      "details": {
+        "symbol": "SI",
+        "price": 82.8499984741211,
+        "range": [
+          10,
+          60
+        ],
+        "deviation_pct": 136.7
+      },
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    },
+    {
+      "severity": "FLAG",
+      "code": "SPREAD_RANGE",
+      "message": "Esmagamento da Soja: -1124.1094 fora de [-100, 400]",
+      "details": {
+        "spread": "soy_crush",
+        "value": -1124.1094,
+        "range": [
+          -100,
+          400
+        ]
+      },
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    },
+    {
+      "severity": "FLAG",
+      "code": "SPREAD_RANGE",
+      "message": "Margem do Confinamento: -531.5500 fora de [-500, 200]",
+      "details": {
+        "spread": "feedlot",
+        "value": -531.55,
+        "range": [
+          -500,
+          200
+        ]
+      },
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    },
+    {
+      "severity": "WARN",
+      "code": "NO_META",
+      "message": "price_history.json não contém _meta (sem rastreabilidade)",
+      "details": {},
+      "timestamp": "2026-02-12T19:42:26.946430+00:00"
+    }
+  ],
+  "confidence": 0
+}

@@ -72,12 +72,13 @@ SERIES = [
     # ── Estoques ──────────────────────────────────────────────
     {
         "id": "crude_stocks",
-        "name": "Crude Oil Stocks - US Total (Weekly)",
+        "name": "Crude Oil Commercial Stocks excl SPR (Weekly)",
         "route": "/petroleum/stoc/wstk/data/",
         "params": {
             "frequency": "weekly",
             "data[0]": "value",
             "facets[product][]": "EPC0",
+            "facets[process][]": "SAX",
             "facets[duoarea][]": "NUS",
             "sort[0][column]": "period",
             "sort[0][direction]": "desc",
