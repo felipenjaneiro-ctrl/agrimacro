@@ -84,41 +84,46 @@ def run_lcs(data_dir: Path) -> dict:
     # Extract PTAX
     ptax = 5.50  # default
     if bcb:
-        brl_data = bcb.get("brl_usd", {})
-        if isinstance(brl_data, dict) and "data" in brl_data:
+        brl_data = bcb.get("brl_usd", [])
+        if isinstance(brl_data, list) and brl_data:
+            ptax = float(brl_data[-1].get("value", brl_data[-1].get("valor", 5.50)))
+        elif isinstance(brl_data, dict) and "data" in brl_data:
             series = brl_data["data"]
-            if series:
-                last = series[-1] if isinstance(series, list) else series
-                ptax = float(last.get("valor", last.get("value", 5.50)))
-        elif isinstance(brl_data, list) and brl_data:
-            ptax = float(brl_data[-1].get("valor", brl_data[-1].get("value", 5.50)))
+            if isinstance(series, list) and series:
+                ptax = float(series[-1].get("value", series[-1].get("valor", 5.50)))
     print(f"  PTAX: R$ {ptax:.2f}")
     
     # Extract CBOT soybeans
-    cbot = 1000.0  # default ¢/bu
+    # futures_contracts.json: { commodities: { ZS: { contracts: [{close: 1106.75}] } } }
+    cbot = 1000.0  # default cents/bu
     if futures:
-        contracts = futures if isinstance(futures, list) else futures.get("contracts", [])
-        for c in contracts:
-            sym = c.get("symbol", c.get("ticker", ""))
-            if sym.startswith("ZS") and c.get("settlement"):
-                cbot = float(c["settlement"]) * 100  # $/bu → ¢/bu
-                break
-    print(f"  CBOT: {cbot:.1f}¢/bu")
+        comms = futures.get('commodities', {})
+        zs = comms.get('ZS', {})
+        zs_conts = zs.get('contracts', [])
+        if zs_conts:
+            cl = float(zs_conts[0].get('close', 0))
+            if cl > 0:
+                cbot = cl
+    print(f'  CBOT: {cbot:.1f} cents/bu')
     
     # Extract CEPEA soy price
+    # physical_intl.json: { international: { ZS_BR: { price: 127.27 } } }
     cepea_soja = 0.0
     if physical_intl:
-        br_data = physical_intl.get("brazil", physical_intl.get("br", {}))
-        if isinstance(br_data, dict):
-            for key in ["soja_paranagua", "soja", "soybean"]:
-                if key in br_data:
-                    val = br_data[key]
-                    if isinstance(val, dict):
-                        cepea_soja = float(val.get("price", val.get("value", 0)))
-                    else:
-                        cepea_soja = float(val)
-                    break
-    print(f"  CEPEA Soja: R$ {cepea_soja:.2f}/sc")
+        intl = physical_intl.get('international', {})
+        if isinstance(intl, dict) and 'ZS_BR' in intl:
+            cepea_soja = float(intl['ZS_BR'].get('price', 0))
+        if cepea_soja == 0:
+            prods = physical_intl.get('products', {})
+            if isinstance(prods, dict) and 'ZS_BR' in prods:
+                cepea_soja = float(prods['ZS_BR'].get('price', 0))
+    if cepea_soja == 0:
+        pbr = load_json(data_dir / 'physical_br.json')
+        if pbr:
+            prods = pbr.get('products', {})
+            if 'ZS_BR' in prods:
+                cepea_soja = float(prods['ZS_BR'].get('price', 0))
+    print(f'  CEPEA Soja: R$ {cepea_soja:.2f}/sc')
     
     # Load IMEA data if available
     imea = load_json(data_dir / "imea_soja.json")
@@ -344,24 +349,21 @@ def run_bci(data_dir: Path, lcs_result: dict = None) -> dict:
     # PTAX
     ptax = 5.50
     if bcb:
-        brl_data = bcb.get("brl_usd", {})
-        if isinstance(brl_data, dict) and "data" in brl_data:
-            series = brl_data["data"]
-            if series and isinstance(series, list):
-                ptax = float(series[-1].get("valor", series[-1].get("value", 5.50)))
-        elif isinstance(brl_data, list) and brl_data:
-            ptax = float(brl_data[-1].get("valor", brl_data[-1].get("value", 5.50)))
+        brl_data = bcb.get('brl_usd', [])
+        if isinstance(brl_data, list) and brl_data:
+            ptax = float(brl_data[-1].get('value', brl_data[-1].get('valor', 5.50)))
     
     # CBOT
     cbot = 1000.0
     if futures:
-        contracts = futures if isinstance(futures, list) else futures.get("contracts", [])
-        for c in contracts:
-            sym = c.get("symbol", c.get("ticker", ""))
-            if sym.startswith("ZS") and c.get("settlement"):
-                cbot = float(c["settlement"]) * 100
-                break
-    
+        comms = futures.get('commodities', {})
+        zs = comms.get('ZS', {})
+        zs_conts = zs.get('contracts', [])
+        if zs_conts:
+            cl = float(zs_conts[0].get('close', 0))
+            if cl > 0:
+                cbot = cl
+
     # Reuse LCS results if available
     santos_premium = -40.0
     gulf_basis = 50.0
