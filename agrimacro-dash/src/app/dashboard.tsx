@@ -1,11 +1,12 @@
-﻿import { useState, useEffect, useRef } from "react";
+import BilateralPanel from "./BilateralPanel";
+import { useState, useEffect, useRef } from "react";
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   AgriMacro v3.2 — Dashboard Profissional de Commodities Agrícolas
-   ZERO MOCK — Somente dados reais via pipeline JSON
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* ---------------------------------------------------------------------------
+   AgriMacro v3.2 � Dashboard Profissional de Commodities Agr�colas
+   ZERO MOCK � Somente dados reais via pipeline JSON
+   --------------------------------------------------------------------------- */
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// -- Types ------------------------------------------------------------------
 interface OHLCV { date:string; open:number; high:number; low:number; close:number; volume:number; }
 type PriceData = Record<string, OHLCV[]>;
 
@@ -95,9 +96,9 @@ interface FuturesData {
   commodities:Record<string,FuturesCommodity>;
 }
 
-type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio";
+type Tab = "Gr�fico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produ��o"|"F�sico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral";
 
-// ── Color Theme ────────────────────────────────────────────────────────────
+// -- Color Theme ------------------------------------------------------------
 const C = {
   bg:"#0d1117", panel:"#161b22", panelAlt:"#1c2128", border:"rgba(148,163,184,.12)",
   text:"#e2e8f0", textDim:"#94a3b8", textMuted:"#64748b",
@@ -109,22 +110,22 @@ const C = {
   rsiLine:"#f59e0b", rsiOverbought:"rgba(239,68,68,.3)", rsiOversold:"rgba(34,197,94,.3)",
 };
 
-// ── Commodities ────────────────────────────────────────────────────────────
+// -- Commodities ------------------------------------------------------------
 const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
-  {sym:"ZC",name:"Corn",group:"Grãos",unit:"¢/bu"},
-  {sym:"ZS",name:"Soybeans",group:"Grãos",unit:"¢/bu"},
-  {sym:"ZW",name:"Wheat CBOT",group:"Grãos",unit:"¢/bu"},
-  {sym:"KE",name:"Wheat KC",group:"Grãos",unit:"¢/bu"},
-  {sym:"ZM",name:"Soybean Meal",group:"Grãos",unit:"$/st"},
-  {sym:"ZL",name:"Soybean Oil",group:"Grãos",unit:"¢/lb"},
-  {sym:"SB",name:"Sugar #11",group:"Softs",unit:"¢/lb"},
-  {sym:"KC",name:"Coffee C",group:"Softs",unit:"¢/lb"},
-  {sym:"CT",name:"Cotton #2",group:"Softs",unit:"¢/lb"},
+  {sym:"ZC",name:"Corn",group:"Gr�os",unit:"�/bu"},
+  {sym:"ZS",name:"Soybeans",group:"Gr�os",unit:"�/bu"},
+  {sym:"ZW",name:"Wheat CBOT",group:"Gr�os",unit:"�/bu"},
+  {sym:"KE",name:"Wheat KC",group:"Gr�os",unit:"�/bu"},
+  {sym:"ZM",name:"Soybean Meal",group:"Gr�os",unit:"$/st"},
+  {sym:"ZL",name:"Soybean Oil",group:"Gr�os",unit:"�/lb"},
+  {sym:"SB",name:"Sugar #11",group:"Softs",unit:"�/lb"},
+  {sym:"KC",name:"Coffee C",group:"Softs",unit:"�/lb"},
+  {sym:"CT",name:"Cotton #2",group:"Softs",unit:"�/lb"},
   {sym:"CC",name:"Cocoa",group:"Softs",unit:"$/mt"},
-  {sym:"OJ",name:"Orange Juice",group:"Softs",unit:"¢/lb"},
-  {sym:"LE",name:"Live Cattle",group:"Pecuária",unit:"¢/lb"},
-  {sym:"GF",name:"Feeder Cattle",group:"Pecuária",unit:"¢/lb"},
-  {sym:"HE",name:"Lean Hogs",group:"Pecuária",unit:"¢/lb"},
+  {sym:"OJ",name:"Orange Juice",group:"Softs",unit:"�/lb"},
+  {sym:"LE",name:"Live Cattle",group:"Pecu�ria",unit:"�/lb"},
+  {sym:"GF",name:"Feeder Cattle",group:"Pecu�ria",unit:"�/lb"},
+  {sym:"HE",name:"Lean Hogs",group:"Pecu�ria",unit:"�/lb"},
   {sym:"CL",name:"Crude Oil",group:"Energia",unit:"$/bbl"},
   {sym:"NG",name:"Natural Gas",group:"Energia",unit:"$/MMBtu"},
   {sym:"GC",name:"Gold",group:"Metais",unit:"$/oz"},
@@ -132,7 +133,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio"];
+const TABS:Tab[] = ["Gr�fico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produ��o","F�sico Intl","Leitura do Dia","Energia","Portfolio","Bilateral"];
 
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
@@ -140,44 +141,44 @@ const SEASON_COLORS:Record<string,string> = {
 };
 
 const SPREAD_NAMES:Record<string,string> = {
-  soy_crush:"Soy Crush Margin",ke_zw:"KC−CBOT Wheat",zl_cl:"Soy Oil / Crude",
+  soy_crush:"Soy Crush Margin",ke_zw:"KC-CBOT Wheat",zl_cl:"Soy Oil / Crude",
   feedlot:"Feedlot Margin",zc_zm:"Corn / Meal",zc_zs:"Corn / Soy Ratio",
 };
 
 const SPREAD_DETAILS:Record<string,{whatIsIt:string;whyMatters:string}> = {
   soy_crush:{
-    whatIsIt:"Lucro das esmagadoras ao transformar soja em farelo + óleo. Quando a margem está alta, esmagadoras compram mais soja.",
-    whyMatters:"Margem alta = mais demanda por soja = preço da soja tende a subir.",
+    whatIsIt:"Lucro das esmagadoras ao transformar soja em farelo + �leo. Quando a margem est� alta, esmagadoras compram mais soja.",
+    whyMatters:"Margem alta = mais demanda por soja = pre�o da soja tende a subir.",
   },
   ke_zw:{
-    whatIsIt:"Diferença de preço entre trigo de alta proteína (KC) e trigo comum (CBOT). Normalmente o trigo duro vale mais.",
-    whyMatters:"Prêmio sumindo = excesso de trigo duro ou falta de trigo mole. Sinal de mudança no mercado.",
+    whatIsIt:"Diferen�a de pre�o entre trigo de alta prote�na (KC) e trigo comum (CBOT). Normalmente o trigo duro vale mais.",
+    whyMatters:"Pr�mio sumindo = excesso de trigo duro ou falta de trigo mole. Sinal de mudan�a no mercado.",
   },
   zl_cl:{
-    whatIsIt:"Compara o preço do óleo de soja com o petróleo. Quando o óleo está muito caro em relação ao petróleo, biodiesel fica menos competitivo.",
-    whyMatters:"Ratio muito alto = óleo de soja caro demais → pode perder demanda do biodiesel → pressão de baixa no óleo.",
+    whatIsIt:"Compara o pre�o do �leo de soja com o petr�leo. Quando o �leo est� muito caro em rela��o ao petr�leo, biodiesel fica menos competitivo.",
+    whyMatters:"Ratio muito alto = �leo de soja caro demais ? pode perder demanda do biodiesel ? press�o de baixa no �leo.",
   },
   feedlot:{
-    whatIsIt:"Lucro do confinador: preço de venda do boi gordo menos o custo do boi magro e da ração.",
+    whatIsIt:"Lucro do confinador: pre�o de venda do boi gordo menos o custo do boi magro e da ra��o.",
     whyMatters:"Margem positiva = confinadores entram, mais boi no mercado no futuro. Margem negativa = confinadores saem, oferta cai.",
   },
   zc_zm:{
-    whatIsIt:"Compara o custo do milho com o farelo de soja na formulação de ração. Quem está mais barato ganha espaço na mistura.",
-    whyMatters:"Ratio baixo = milho mais competitivo na ração → mais demanda por milho. Ratio alto = farelo ganha espaço.",
+    whatIsIt:"Compara o custo do milho com o farelo de soja na formula��o de ra��o. Quem est� mais barato ganha espa�o na mistura.",
+    whyMatters:"Ratio baixo = milho mais competitivo na ra��o ? mais demanda por milho. Ratio alto = farelo ganha espa�o.",
   },
   zc_zs:{
     whatIsIt:"Quantos bushels de milho uma de soja compra. Acima de 2.4 = mais vantajoso plantar soja. Abaixo de 2.2 = milho ganha.",
-    whyMatters:"Esse número influencia o que o produtor americano vai plantar na próxima safra — e isso afeta os preços futuros.",
+    whyMatters:"Esse n�mero influencia o que o produtor americano vai plantar na pr�xima safra � e isso afeta os pre�os futuros.",
   },
 };
 
 const SPREAD_FRIENDLY_NAMES:Record<string,string> = {
   soy_crush:"Margem de Esmagamento (Soja)",
-  ke_zw:"Prêmio Trigo Duro vs Mole (KC–CBOT)",
-  zl_cl:"Óleo de Soja vs Petróleo",
+  ke_zw:"Pr�mio Trigo Duro vs Mole (KC�CBOT)",
+  zl_cl:"�leo de Soja vs Petr�leo",
   feedlot:"Margem de Confinamento (Feedlot)",
-  zc_zm:"Milho vs Farelo (Ração Animal)",
-  zc_zs:"Soja vs Milho (Decisão de Plantio)",
+  zc_zm:"Milho vs Farelo (Ra��o Animal)",
+  zc_zs:"Soja vs Milho (Decis�o de Plantio)",
 };
 
 function getAlertLevel(sp:{regime:string;zscore_1y:number;percentile:number}):"ok"|"atencao"|"alerta" {
@@ -187,112 +188,112 @@ function getAlertLevel(sp:{regime:string;zscore_1y:number;percentile:number}):"o
 }
 
 function getVerdict(sp:{key?:string;regime:string;zscore_1y:number;percentile:number;current:number;trend?:string;trend_pct?:number;name:string}):string {
-  const pctLabel = sp.percentile>=90?"no nível mais caro":sp.percentile>=75?"acima da média":sp.percentile<=10?"no nível mais barato":sp.percentile<=25?"abaixo da média":"dentro do normal";
-  const trendLabel = sp.trend==="SUBINDO"?"e subindo":sp.trend==="CAINDO"?"e caindo":"e estável";
+  const pctLabel = sp.percentile>=90?"no n�vel mais caro":sp.percentile>=75?"acima da m�dia":sp.percentile<=10?"no n�vel mais barato":sp.percentile<=25?"abaixo da m�dia":"dentro do normal";
+  const trendLabel = sp.trend==="SUBINDO"?"e subindo":sp.trend==="CAINDO"?"e caindo":"e est�vel";
   const alert = getAlertLevel(sp);
-  const prefix = alert==="alerta"?"🔴 ":alert==="atencao"?"⚠️ ":"";
-  return prefix + (SPREAD_FRIENDLY_NAMES[sp.key||""]||sp.name) + " está " + pctLabel + " no último ano " + trendLabel + (sp.trend_pct?` (${sp.trend_pct>0?"+":""}${sp.trend_pct?.toFixed(1)}%).`:".");
+  const prefix = alert==="alerta"?"?? ":alert==="atencao"?"?? ":"";
+  return prefix + (SPREAD_FRIENDLY_NAMES[sp.key||""]||sp.name) + " est� " + pctLabel + " no �ltimo ano " + trendLabel + (sp.trend_pct?` (${sp.trend_pct>0?"+":""}${sp.trend_pct?.toFixed(1)}%).`:".");
 }
 
 function getThermometerZone(pct:number):{text:string;color:string} {
   if(pct<=10) return {text:"Muito Barato",color:"#22c55e"};
   if(pct<=25) return {text:"Barato",color:"#4ade80"};
-  if(pct<=40) return {text:"Abaixo da Média",color:"#60a5fa"};
-  if(pct<=60) return {text:"Na Média",color:"#94a3b8"};
-  if(pct<=75) return {text:"Acima da Média",color:"#fbbf24"};
+  if(pct<=40) return {text:"Abaixo da M�dia",color:"#60a5fa"};
+  if(pct<=60) return {text:"Na M�dia",color:"#94a3b8"};
+  if(pct<=75) return {text:"Acima da M�dia",color:"#fbbf24"};
   if(pct<=90) return {text:"Caro",color:"#f97316"};
   return {text:"Muito Caro",color:"#ef4444"};
 }
-// ── Cost of Production Data ────────────────────────────────────────────────
+// -- Cost of Production Data ------------------------------------------------
 const COST_DATA:{sym:string;commodity:string;futuresUnit:string;regions:{region:string;cost:number;unit:string;source:string}[]}[] = [
-  {sym:"ZC",commodity:"Corn",futuresUnit:"¢/bu",regions:[
-    {region:"🇺🇸 EUA (Heartland)",cost:475,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"🇺🇸 EUA (High Prod.)",cost:430,unit:"¢/bu",source:"Purdue 2025"},
-    {region:"🇧🇷 Brasil (MT)",cost:350,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"🇧🇷 Brasil (PR)",cost:380,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"🇦🇷 Argentina",cost:310,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
+  {sym:"ZC",commodity:"Corn",futuresUnit:"�/bu",regions:[
+    {region:"???? EUA (Heartland)",cost:475,unit:"�/bu",source:"USDA ERS 2025f"},
+    {region:"???? EUA (High Prod.)",cost:430,unit:"�/bu",source:"Purdue 2025"},
+    {region:"???? Brasil (MT)",cost:350,unit:"�/bu",source:"CONAB 24/25"},
+    {region:"???? Brasil (PR)",cost:380,unit:"�/bu",source:"CONAB 24/25"},
+    {region:"???? Argentina",cost:310,unit:"�/bu",source:"Bolsa Cereales 24/25"},
   ]},
-  {sym:"ZS",commodity:"Soybeans",futuresUnit:"¢/bu",regions:[
-    {region:"🇺🇸 EUA (Heartland)",cost:1103,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"🇺🇸 EUA (High Prod.)",cost:1050,unit:"¢/bu",source:"Purdue 2025"},
-    {region:"🇧🇷 Brasil (MT)",cost:870,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"🇧🇷 Brasil (MATOPIBA)",cost:830,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"🇦🇷 Argentina",cost:800,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
+  {sym:"ZS",commodity:"Soybeans",futuresUnit:"�/bu",regions:[
+    {region:"???? EUA (Heartland)",cost:1103,unit:"�/bu",source:"USDA ERS 2025f"},
+    {region:"???? EUA (High Prod.)",cost:1050,unit:"�/bu",source:"Purdue 2025"},
+    {region:"???? Brasil (MT)",cost:870,unit:"�/bu",source:"CONAB 24/25"},
+    {region:"???? Brasil (MATOPIBA)",cost:830,unit:"�/bu",source:"CONAB 24/25"},
+    {region:"???? Argentina",cost:800,unit:"�/bu",source:"Bolsa Cereales 24/25"},
   ]},
-  {sym:"ZW",commodity:"Wheat",futuresUnit:"¢/bu",regions:[
-    {region:"🇺🇸 EUA (Kansas)",cost:560,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"🇺🇸 EUA (N.Dakota)",cost:530,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"🇷🇺 Rússia",cost:350,unit:"¢/bu",source:"IKAR est. 2025"},
-    {region:"🇦🇷 Argentina",cost:400,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
-    {region:"🇦🇺 Austrália",cost:440,unit:"¢/bu",source:"ABARES est. 2025"},
+  {sym:"ZW",commodity:"Wheat",futuresUnit:"�/bu",regions:[
+    {region:"???? EUA (Kansas)",cost:560,unit:"�/bu",source:"USDA ERS 2025f"},
+    {region:"???? EUA (N.Dakota)",cost:530,unit:"�/bu",source:"USDA ERS 2025f"},
+    {region:"???? R�ssia",cost:350,unit:"�/bu",source:"IKAR est. 2025"},
+    {region:"???? Argentina",cost:400,unit:"�/bu",source:"Bolsa Cereales 24/25"},
+    {region:"???? Austr�lia",cost:440,unit:"�/bu",source:"ABARES est. 2025"},
   ]},
-  {sym:"KC",commodity:"Coffee Arabica",futuresUnit:"¢/lb",regions:[
-    {region:"🇧🇷 Brasil (Cerrado)",cost:155,unit:"¢/lb",source:"CONAB 24/25"},
-    {region:"🇧🇷 Brasil (Sul MG)",cost:175,unit:"¢/lb",source:"CONAB 24/25"},
-    {region:"🇨🇴 Colômbia",cost:220,unit:"¢/lb",source:"FNC est. 2025"},
-    {region:"🇻🇳 Vietnã (Robusta eq.)",cost:105,unit:"¢/lb",source:"VICOFA est. 2025"},
-    {region:"🇪🇹 Etiópia",cost:130,unit:"¢/lb",source:"ECX est. 2025"},
+  {sym:"KC",commodity:"Coffee Arabica",futuresUnit:"�/lb",regions:[
+    {region:"???? Brasil (Cerrado)",cost:155,unit:"�/lb",source:"CONAB 24/25"},
+    {region:"???? Brasil (Sul MG)",cost:175,unit:"�/lb",source:"CONAB 24/25"},
+    {region:"???? Col�mbia",cost:220,unit:"�/lb",source:"FNC est. 2025"},
+    {region:"???? Vietn� (Robusta eq.)",cost:105,unit:"�/lb",source:"VICOFA est. 2025"},
+    {region:"???? Eti�pia",cost:130,unit:"�/lb",source:"ECX est. 2025"},
   ]},
-  {sym:"SB",commodity:"Sugar #11",futuresUnit:"¢/lb",regions:[
-    {region:"🇧🇷 Brasil (SP)",cost:13.5,unit:"¢/lb",source:"UNICA 24/25"},
-    {region:"🇮🇳 Índia",cost:17.5,unit:"¢/lb",source:"ISMA est. 2025"},
-    {region:"🇹🇭 Tailândia",cost:15.0,unit:"¢/lb",source:"OCSB est. 2025"},
+  {sym:"SB",commodity:"Sugar #11",futuresUnit:"�/lb",regions:[
+    {region:"???? Brasil (SP)",cost:13.5,unit:"�/lb",source:"UNICA 24/25"},
+    {region:"???? �ndia",cost:17.5,unit:"�/lb",source:"ISMA est. 2025"},
+    {region:"???? Tail�ndia",cost:15.0,unit:"�/lb",source:"OCSB est. 2025"},
   ]},
-  {sym:"LE",commodity:"Live Cattle",futuresUnit:"¢/lb",regions:[
-    {region:"🇺🇸 EUA (Feedlot)",cost:195,unit:"¢/lb",source:"USDA ERS 2025f"},
-    {region:"🇧🇷 Brasil (Confin.)",cost:145,unit:"¢/lb",source:"CEPEA 2025"},
-    {region:"🇦🇺 Austrália",cost:165,unit:"¢/lb",source:"MLA est. 2025"},
-    {region:"🇦🇷 Argentina",cost:115,unit:"¢/lb",source:"IPCVA est. 2025"},
+  {sym:"LE",commodity:"Live Cattle",futuresUnit:"�/lb",regions:[
+    {region:"???? EUA (Feedlot)",cost:195,unit:"�/lb",source:"USDA ERS 2025f"},
+    {region:"???? Brasil (Confin.)",cost:145,unit:"�/lb",source:"CEPEA 2025"},
+    {region:"???? Austr�lia",cost:165,unit:"�/lb",source:"MLA est. 2025"},
+    {region:"???? Argentina",cost:115,unit:"�/lb",source:"IPCVA est. 2025"},
   ]},
   {sym:"CC",commodity:"Cocoa",futuresUnit:"$/mt",regions:[
-    {region:"🇨🇮 Costa do Marfim",cost:3200,unit:"$/mt",source:"CCC est. 2025"},
-    {region:"🇬🇭 Gana",cost:3600,unit:"$/mt",source:"COCOBOD est. 2025"},
-    {region:"🇮🇩 Indonésia",cost:2800,unit:"$/mt",source:"ASKINDO est. 2025"},
-    {region:"🇧🇷 Brasil (Bahia)",cost:3800,unit:"$/mt",source:"CEPLAC est. 2025"},
+    {region:"???? Costa do Marfim",cost:3200,unit:"$/mt",source:"CCC est. 2025"},
+    {region:"???? Gana",cost:3600,unit:"$/mt",source:"COCOBOD est. 2025"},
+    {region:"???? Indon�sia",cost:2800,unit:"$/mt",source:"ASKINDO est. 2025"},
+    {region:"???? Brasil (Bahia)",cost:3800,unit:"$/mt",source:"CEPLAC est. 2025"},
   ]},
-  {sym:"CT",commodity:"Cotton #2",futuresUnit:"¢/lb",regions:[
-    {region:"🇺🇸 EUA (Texas)",cost:78,unit:"¢/lb",source:"USDA ERS 2025f"},
-    {region:"🇧🇷 Brasil (MT)",cost:58,unit:"¢/lb",source:"CONAB 24/25"},
-    {region:"🇮🇳 Índia",cost:62,unit:"¢/lb",source:"CAI est. 2025"},
-    {region:"🇦🇺 Austrália",cost:60,unit:"¢/lb",source:"Cotton AU est. 2025"},
+  {sym:"CT",commodity:"Cotton #2",futuresUnit:"�/lb",regions:[
+    {region:"???? EUA (Texas)",cost:78,unit:"�/lb",source:"USDA ERS 2025f"},
+    {region:"???? Brasil (MT)",cost:58,unit:"�/lb",source:"CONAB 24/25"},
+    {region:"???? �ndia",cost:62,unit:"�/lb",source:"CAI est. 2025"},
+    {region:"???? Austr�lia",cost:60,unit:"�/lb",source:"Cotton AU est. 2025"},
   ]},
 ];
 
-// ── Physical Markets Data (International - placeholder) ─────────────────────
+// -- Physical Markets Data (International - placeholder) ---------------------
 const PHYS_INTL:{cat:string;items:{origin:string;price:string;basis:string;trend:string;source:string}[]}[] = [
-  {cat:"☕ Coffee",items:[
-    {origin:"🇧🇷 Brasil (Santos) — Arabica NY 2/3",price:"—",basis:"—",trend:"Colheita 25/26 iniciando",source:"Cecafé"},
-    {origin:"🇧🇷 Brasil (Cerrado) — Fine Cup",price:"—",basis:"—",trend:"Prêmio qualidade",source:"Cecafé"},
-    {origin:"🇨🇴 Colômbia — Excelso EP",price:"—",basis:"—",trend:"Prêmio qualidade alto",source:"FNC"},
-    {origin:"🇻🇳 Vietnã — Robusta G2",price:"—",basis:"—",trend:"Safra acima esperado",source:"VICOFA"},
+  {cat:"? Coffee",items:[
+    {origin:"???? Brasil (Santos) � Arabica NY 2/3",price:"�",basis:"�",trend:"Colheita 25/26 iniciando",source:"Cecaf�"},
+    {origin:"???? Brasil (Cerrado) � Fine Cup",price:"�",basis:"�",trend:"Pr�mio qualidade",source:"Cecaf�"},
+    {origin:"???? Col�mbia � Excelso EP",price:"�",basis:"�",trend:"Pr�mio qualidade alto",source:"FNC"},
+    {origin:"???? Vietn� � Robusta G2",price:"�",basis:"�",trend:"Safra acima esperado",source:"VICOFA"},
   ]},
-  {cat:"🌾 Soybeans",items:[
-    {origin:"🇧🇷 Brasil (Paranaguá) — GMO",price:"—",basis:"—",trend:"Colheita recorde",source:"CEPEA"},
-    {origin:"🇦🇷 Argentina — GMO",price:"—",basis:"—",trend:"Safra recuperando",source:"B.Cereales"},
+  {cat:"?? Soybeans",items:[
+    {origin:"???? Brasil (Paranagu�) � GMO",price:"�",basis:"�",trend:"Colheita recorde",source:"CEPEA"},
+    {origin:"???? Argentina � GMO",price:"�",basis:"�",trend:"Safra recuperando",source:"B.Cereales"},
   ]},
-  {cat:"🌽 Corn",items:[
-    {origin:"🇧🇷 Brasil (Paranaguá) — GMO",price:"—",basis:"—",trend:"Safrinha nos portos",source:"CEPEA"},
-    {origin:"🇦🇷 Argentina — GMO",price:"—",basis:"—",trend:"Safra volumosa",source:"B.Cereales"},
+  {cat:"?? Corn",items:[
+    {origin:"???? Brasil (Paranagu�) � GMO",price:"�",basis:"�",trend:"Safrinha nos portos",source:"CEPEA"},
+    {origin:"???? Argentina � GMO",price:"�",basis:"�",trend:"Safra volumosa",source:"B.Cereales"},
   ]},
-  {cat:"🐄 Live Cattle",items:[
-    {origin:"🇧🇷 Brasil (SP) — Boi Gordo @",price:"—",basis:"—",trend:"Alta sazonal",source:"CEPEA"},
-    {origin:"🇦🇷 Argentina (Liniers)",price:"—",basis:"—",trend:"Câmbio favorece export",source:"IPCVA"},
+  {cat:"?? Live Cattle",items:[
+    {origin:"???? Brasil (SP) � Boi Gordo @",price:"�",basis:"�",trend:"Alta sazonal",source:"CEPEA"},
+    {origin:"???? Argentina (Liniers)",price:"�",basis:"�",trend:"C�mbio favorece export",source:"IPCVA"},
   ]},
-  {cat:"🌾 Wheat",items:[
-    {origin:"🇷🇺 Rússia (FOB BS) — 12.5%",price:"—",basis:"—",trend:"Safra grande",source:"IKAR"},
-    {origin:"🇦🇷 Argentina — Trigo Pan",price:"—",basis:"—",trend:"Normalizado",source:"B.Cereales"},
+  {cat:"?? Wheat",items:[
+    {origin:"???? R�ssia (FOB BS) � 12.5%",price:"�",basis:"�",trend:"Safra grande",source:"IKAR"},
+    {origin:"???? Argentina � Trigo Pan",price:"�",basis:"�",trend:"Normalizado",source:"B.Cereales"},
   ]},
-  {cat:"🍫 Cocoa",items:[
-    {origin:"🇨🇮 Costa do Marfim — Grade I",price:"—",basis:"—",trend:"Menor safra 10 anos",source:"CCC"},
-    {origin:"🇬🇭 Gana — Grade I",price:"—",basis:"—",trend:"Produção -50%",source:"COCOBOD"},
+  {cat:"?? Cocoa",items:[
+    {origin:"???? Costa do Marfim � Grade I",price:"�",basis:"�",trend:"Menor safra 10 anos",source:"CCC"},
+    {origin:"???? Gana � Grade I",price:"�",basis:"�",trend:"Produ��o -50%",source:"COCOBOD"},
   ]},
-  {cat:"🇨🇳 China Demand",items:[
-    {origin:"🇨🇳 Soja Import (DCE)",price:"—",basis:"—",trend:"Importação desacelerando",source:"GACC"},
-    {origin:"🇨🇳 Milho Import (DCE)",price:"—",basis:"—",trend:"Estoques altos",source:"GACC"},
-    {origin:"🇨🇳 Suínos (Zhengzhou)",price:"—",basis:"—",trend:"Demanda estável",source:"MARA"},
+  {cat:"???? China Demand",items:[
+    {origin:"???? Soja Import (DCE)",price:"�",basis:"�",trend:"Importa��o desacelerando",source:"GACC"},
+    {origin:"???? Milho Import (DCE)",price:"�",basis:"�",trend:"Estoques altos",source:"GACC"},
+    {origin:"???? Su�nos (Zhengzhou)",price:"�",basis:"�",trend:"Demanda est�vel",source:"MARA"},
   ]},
 ];
-// ── Helper Components ──────────────────────────────────────────────────────
+// -- Helper Components ------------------------------------------------------
 
 function Badge({label,color}:{label:string;color:string}) {
   const bg = color===C.green?C.greenBg:color===C.red?C.redBg:color===C.amber?C.amberBg:C.blueBg;
@@ -338,8 +339,8 @@ function MarginBar({price,cost}:{price:number;cost:number}) {
   const margin = ((price-cost)/cost)*100;
   const color = margin>20?"#10b981":margin>10?"#22c55e":margin>0?"#fbbf24":"#ef4444";
   const bgColor = margin>20?"rgba(16,185,129,0.08)":margin>10?"rgba(34,197,94,0.06)":margin>0?"rgba(251,191,36,0.06)":"rgba(239,68,68,0.08)";
-  const label = margin>20?"Lucrando bem":margin>10?"Lucro moderado":margin>0?"Margem apertada":"No prejuízo";
-  const icon = margin>20?"💰":margin>10?"✅":margin>0?"⚠️":"🔴";
+  const label = margin>20?"Lucrando bem":margin>10?"Lucro moderado":margin>0?"Margem apertada":"No preju�zo";
+  const icon = margin>20?"??":margin>10?"?":margin>0?"??":"??";
   const barWidth = Math.min(Math.abs(margin), 60);
   const barDirection = margin >= 0 ? "right" : "left";
   return (
@@ -399,7 +400,7 @@ function LoadingSpinner() {
     </div>
   );
 }
-// ── Technical Indicators ───────────────────────────────────────────────────
+// -- Technical Indicators ---------------------------------------------------
 
 function emaCalc(data:number[],period:number):number[] {
   const k=2/(period+1);
@@ -468,7 +469,7 @@ function rsiCalc(data:number[],period:number=14):number[] {
   }
   return rsi;
 }
-// ── Price Chart with RSI ───────────────────────────────────────────────────
+// -- Price Chart with RSI ---------------------------------------------------
 
 function PriceChart({candles,symbol}:{candles:OHLCV[];symbol:string}) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -693,7 +694,7 @@ function PriceChart({candles,symbol}:{candles:OHLCV[];symbol:string}) {
     </div>
   );
 }
-// ── Season Chart ───────────────────────────────────────────────────────────
+// -- Season Chart -----------------------------------------------------------
 
 function SeasonChart({entry}:{entry:SeasonEntry}) {
   const ref=useRef<HTMLCanvasElement>(null);
@@ -783,7 +784,7 @@ function SeasonChart({entry}:{entry:SeasonEntry}) {
   );
 }
 
-// ── Spread Chart (mini) ────────────────────────────────────────────────────
+// -- Spread Chart (mini) ----------------------------------------------------
 
 function SpreadChart({history,regime}:{history:{date:string;value:number}[];regime:string}) {
   const ref=useRef<HTMLCanvasElement>(null);
@@ -817,12 +818,12 @@ function SpreadChart({history,regime}:{history:{date:string;value:number}[];regi
     // Arrow
     const isUp=vals[vals.length-1]>vals[0];
     ctx.fillStyle=isUp?"#10b981":"#ef4444";ctx.font="bold 14px sans-serif";
-    ctx.textAlign="right";ctx.fillText(isUp?"↑":"↓",W-2,14);
+    ctx.textAlign="right";ctx.fillText(isUp?"?":"?",W-2,14);
   },[history,regime]);
   return <canvas ref={ref} style={{borderRadius:6,display:"block"}}/>;
 }
 
-// ── Compare Chart ──────────────────────────────────────────────────────────
+// -- Compare Chart ----------------------------------------------------------
 
 function CompareChart({symbols,prices}:{symbols:string[];prices:PriceData}) {
   const ref=useRef<HTMLCanvasElement>(null);
@@ -908,7 +909,7 @@ function CompareChart({symbols,prices}:{symbols:string[];prices:PriceData}) {
     </div>
   );
 }
-// ── COT Chart (Barchart-style: multi-line like barchart.com) ──────────────
+// -- COT Chart (Barchart-style: multi-line like barchart.com) --------------
 
 function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|"disaggregated";width?:number}) {
   const ref=useRef<HTMLCanvasElement>(null);
@@ -1091,7 +1092,7 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
     </div>
   );
 }
-// ── Main Dashboard ─────────────────────────────────────────────────────────
+// -- Main Dashboard ---------------------------------------------------------
 
 export default function Dashboard() {
   // State
@@ -1108,7 +1109,7 @@ export default function Dashboard() {
   const [physIntl,setPhysIntl] = useState<any>(null);
   const [selected,setSelected] = useState("ZC");
   const [stockSelected,setStockSelected] = useState<string>("ZC");
-  const [tab,setTab] = useState<Tab>("Gráfico + COT");
+  const [tab,setTab] = useState<Tab>("Gr�fico + COT");
   const [loading,setLoading] = useState(true);
   const [errors,setErrors] = useState<string[]>([]);
   const [cmp1,setCmp1] = useState<string>("ZCH26");
@@ -1119,6 +1120,8 @@ export default function Dashboard() {
   const [portfolio,setPortfolio] = useState<any>(null);
   const [lastIbkrRefresh,setLastIbkrRefresh] = useState<string|null>(null);
   const [ibkrRefreshing,setIbkrRefreshing] = useState(false);
+  const [pipeRefresh,setPipeRefresh] = useState(false);
+  const [pipeMsg,setPipeMsg] = useState("");
   const [calendar,setCalendar] = useState<any>(null);
   const [news,setNews] = useState<any>(null);
   const [portfolioMsgs,setPortfolioMsgs] = useState<{role:string;content:string}[]>([]);
@@ -1142,7 +1145,7 @@ export default function Dashboard() {
       fetch("/data/processed/contract_history.json").then(r=>r.json()).then(d=>setContractHist(d)).catch(()=>console.warn("No contract history")),
           fetch("/data/processed/calendar.json").then(r=>r.json()).then(setCalendar).catch(()=>console.warn("No calendar")),
       fetch("/data/processed/news.json").then(r=>r.json()).then(setNews).catch(()=>console.warn("No news")),
-      fetch("/data/processed/ibkr_portfolio.json").then(r=>r.json()).then(d=>{setPortfolio(d);setLastIbkrRefresh(d.timestamp||new Date().toISOString());}).catch(()=>console.warn("No IBKR portfolio")),
+      fetch("/data/processed/ibkr_export.json").then(r=>r.json()).then(d=>{setPortfolio(d);setLastIbkrRefresh(d.export_timestamp||new Date().toISOString());}).catch(()=>console.warn("No IBKR data")),
     ]).finally(()=>{setErrors(errs);setLoading(false);});
   },[]);
 
@@ -1154,13 +1157,25 @@ export default function Dashboard() {
       const res = await fetch("/api/refresh-ibkr", {method:"POST"});
       const data = await res.json();
       if(data.status === "ok") {
-        const p = await fetch("/data/processed/ibkr_portfolio.json?t="+Date.now());
+        const p = await fetch("/data/processed/ibkr_export.json?t="+Date.now());
         if(p.ok){ const d = await p.json(); setPortfolio(d); setLastIbkrRefresh(new Date().toISOString()); }
         const pr = await fetch("/data/raw/price_history.json?t="+Date.now());
         if(pr.ok){ const d = await pr.json(); setPrices(d); }
       }
     } catch(e){ console.warn("IBKR refresh failed",e); }
     setIbkrRefreshing(false);
+  };
+  const refreshPipeline = async () => {
+    if(pipeRefresh) return;
+    setPipeRefresh(true); setPipeMsg("Rodando...");
+    try {
+      const res = await fetch("/api/refresh-pipeline", {method:"POST"});
+      const d = await res.json();
+      if(d.status==="ok"){ setPipeMsg(d.summary); setTimeout(()=>window.location.reload(), 2000); }
+      else if(d.status==="skipped"){ setPipeMsg("Aguarde 2min"); }
+      else { setPipeMsg("Erro"); }
+    } catch(e){ setPipeMsg("Falha"); }
+    setPipeRefresh(false);
   };
 
   useEffect(()=>{
@@ -1169,7 +1184,7 @@ export default function Dashboard() {
   },[]);
 
   // Helpers
-  const lastDate = prices&&prices[selected]?.length ? prices[selected][prices[selected].length-1].date : "—";
+  const lastDate = prices&&prices[selected]?.length ? prices[selected][prices[selected].length-1].date : "�";
   const pipelineOk = !loading && errors.length === 0;
 
   const ibkrTime = lastIbkrRefresh ? new Date(lastIbkrRefresh).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "--:--";
@@ -1202,7 +1217,7 @@ export default function Dashboard() {
   const stocksList = stocks ? Object.values(stocks.commodities) : [];
   const spreadList = spreads ? Object.entries(spreads.spreads).map(([k,v])=>({key:k,...v})) : [];
   const hasCOT = (sym:string) => cot?.commodities?.[sym]?.legacy?.history?.length || cot?.commodities?.[sym]?.disaggregated?.history?.length;
-  // ── Tab: Gráfico + COT ──────────────────────────────────────────────────
+  // -- Tab: Gr�fico + COT --------------------------------------------------
   const cotComm = cot?.commodities?.[selected];
   const cotLegacy = cotComm?.legacy;
   const cotDisagg = cotComm?.disaggregated;
@@ -1212,19 +1227,19 @@ export default function Dashboard() {
       {prices && prices[selected] ? (
         <PriceChart candles={prices[selected]} symbol={selected} />
       ) : (
-        <DataPlaceholder title="Sem dados de preço" detail={`${selected} não encontrado em price_history.json`} />
+        <DataPlaceholder title="Sem dados de pre�o" detail={`${selected} n�o encontrado em price_history.json`} />
       )}
       <div style={{marginTop:12}}>
         {hasCOT(selected) ? (
           <>
             <div style={{fontSize:11,fontWeight:700,color:C.textDim,padding:"8px 0 4px",borderTop:`1px solid ${C.border}`}}>
-              COT — LEGACY (Commercial vs Non-Commercial)
+              COT � LEGACY (Commercial vs Non-Commercial)
             </div>
             {cotLegacy?.history?.length ? (
               <COTChart history={cotLegacy.history} type="legacy" />
             ) : null}
             <div style={{fontSize:11,fontWeight:700,color:C.textDim,padding:"8px 0 4px",borderTop:`1px solid ${C.border}`,marginTop:4}}>
-              COT — DISAGGREGATED (Managed Money / Producer / Swap)
+              COT � DISAGGREGATED (Managed Money / Producer / Swap)
             </div>
             {cotDisagg?.history?.length ? (
               <COTChart history={cotDisagg.history} type="disaggregated" />
@@ -1264,21 +1279,21 @@ export default function Dashboard() {
               })()}
             </div>
             <div style={{marginTop:6,fontSize:8,color:C.textMuted}}>
-              CFTC Commitments of Traders | {cotLegacy?.weeks||0}w history | Last: {cotLegacy?.latest?.date||"—"}
+              CFTC Commitments of Traders | {cotLegacy?.weeks||0}w history | Last: {cotLegacy?.latest?.date||"�"}
             </div>
           </>
         ) : (
-          <DataPlaceholder title="COT — Dados Pendentes" detail="Execute collect_cot.py para coletar dados CFTC." />
+          <DataPlaceholder title="COT � Dados Pendentes" detail="Execute collect_cot.py para coletar dados CFTC." />
         )}
       </div>
     </div>
   );
 
-  // ── Tab: Comparativo ───────────────────────────────────────────────────
+  // -- Tab: Comparativo ---------------------------------------------------
   const getSymFromContract = (contract: string) => { const m = contract.match(/^([A-Z]{2})/); return m ? m[1] : contract; };
   const renderComparativo = () => (
     <div>
-      <SectionTitle>📈 Comparativo Normalizado (Base 100)</SectionTitle>
+      <SectionTitle>?? Comparativo Normalizado (Base 100)</SectionTitle>
       <div style={{marginBottom:16,display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{display:"flex",flexDirection:"column",gap:4}}>
           <label style={{fontSize:9,color:C.textMuted,textTransform:"uppercase",letterSpacing:0.5}}>Commodity 1</label>
@@ -1321,7 +1336,7 @@ export default function Dashboard() {
       {prices && (
         <div style={{marginTop:20,overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-            <thead><TableHeader cols={["Contrato","Último","1D","1M","3M","YTD","Min 52w","Max 52w"]} /></thead>
+            <thead><TableHeader cols={["Contrato","�ltimo","1D","1M","3M","YTD","Min 52w","Max 52w"]} /></thead>
             <tbody>
               {compareSyms.map(contract=>{
                 const sym=getSymFromContract(contract);const d=contractHist?.contracts?.[contract]?.bars?.length ? contractHist.contracts[contract].bars : prices?.[sym];if(!d?.length)return null;
@@ -1354,12 +1369,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Contratos Futuros ── */}
+      {/* -- Contratos Futuros -- */}
       {/* Curva Forward */}
       {futures && (
         <div style={{marginTop:28}}>
           <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:18}}>📊</span> Curva Forward — Contango vs Backwardation
+            <span style={{fontSize:18}}>??</span> Curva Forward � Contango vs Backwardation
           </div>
           <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap"}}>
             {Object.keys(futures.commodities||{}).map(sym=>{
@@ -1442,9 +1457,9 @@ export default function Dashboard() {
 
       {futures && (
         <div style={{marginTop:28}}>
-          <SectionTitle>📋 Contratos Futuros — Preços por Vencimento</SectionTitle>
+          <SectionTitle>?? Contratos Futuros � Pre�os por Vencimento</SectionTitle>
           <div style={{fontSize:10,color:C.textMuted,marginBottom:12}}>
-            Todos os vencimentos em negociação | Fonte: Yahoo Finance / Stooq | {Object.keys(futures.commodities||{}).length} commodities
+            Todos os vencimentos em negocia��o | Fonte: Yahoo Finance / Stooq | {Object.keys(futures.commodities||{}).length} commodities
           </div>
           {Object.entries(futures.commodities||{}).map(([sym,fc])=>{
             const nm=COMMODITIES.find(c=>c.sym===sym)?.name||sym;
@@ -1453,13 +1468,13 @@ export default function Dashboard() {
             return (
               <div key={sym} style={{marginBottom:16}}>
                 <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:6,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-                  {sym} — {nm} <span style={{color:C.textMuted,fontWeight:400}}>({fc.unit||""} | {fc.exchange||""})</span>
+                  {sym} � {nm} <span style={{color:C.textMuted,fontWeight:400}}>({fc.unit||""} | {fc.exchange||""})</span>
                 </div>
                 <div style={{overflowX:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
                     <thead>
                       <tr style={{borderBottom:`1px solid ${C.border}`}}>
-                        {["Contrato","Vencimento","Último","Open","High","Low","Volume","Spread","Estrutura"].map(h=>(
+                        {["Contrato","Vencimento","�ltimo","Open","High","Low","Volume","Spread","Estrutura"].map(h=>(
                           <th key={h} style={{padding:"6px 8px",textAlign:h==="Contrato"||h==="Vencimento"?"left":"right",
                             fontSize:9,fontWeight:600,color:C.textMuted,textTransform:"uppercase",letterSpacing:0.5}}>{h}</th>
                         ))}
@@ -1472,13 +1487,13 @@ export default function Dashboard() {
                           <tr key={ct.contract} style={{borderBottom:`1px solid ${C.border}`,background:ci===0?`rgba(59,130,246,.06)`:"transparent"}}>
                             <td style={{padding:"6px 8px",fontWeight:600,fontFamily:"monospace"}}>{ct.contract}</td>
                             <td style={{padding:"6px 8px",color:C.textDim}}>{ct.expiry_label}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{ct.close?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.open?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.high?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.low?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textMuted}}>{ct.volume?.toLocaleString()||"—"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{ct.close?.toFixed(2)||"�"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.open?.toFixed(2)||"�"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.high?.toFixed(2)||"�"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.low?.toFixed(2)||"�"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textMuted}}>{ct.volume?.toLocaleString()||"�"}</td>
                             <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:spr?(spr.spread>=0?C.amber:C.cyan):C.textMuted}}>
-                              {spr?(spr.spread>=0?"+":"")+spr.spread.toFixed(2):"—"}
+                              {spr?(spr.spread>=0?"+":"")+spr.spread.toFixed(2):"�"}
                             </td>
                             <td style={{padding:"6px 8px",textAlign:"right"}}>
                               {spr?<span style={{fontSize:9,padding:"2px 6px",borderRadius:3,
@@ -1500,7 +1515,7 @@ export default function Dashboard() {
     </div>
   );
 
-  // ── Tab: Spreads ───────────────────────────────────────────────────────
+  // -- Tab: Spreads -------------------------------------------------------
       const renderSpreads = () => {
     const alertCounts = {alerta:0,atencao:0,ok:0};
     spreadList.forEach(sp=>{const al=getAlertLevel({...sp,key:sp.key});alertCounts[al]++;});
@@ -1511,11 +1526,11 @@ export default function Dashboard() {
 
     return (
     <div>
-      <SectionTitle>Relações de Preço — O que está caro ou barato?</SectionTitle>
+      <SectionTitle>Rela��es de Pre�o � O que est� caro ou barato?</SectionTitle>
       <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
-        Estas relações comparam preços entre commodities ligadas entre si.
-        Quando uma relação sai do normal, pode indicar oportunidade ou risco.
-        <strong style={{color:C.textDim}}> Vermelho = atenção. Verde = tranquilo.</strong>
+        Estas rela��es comparam pre�os entre commodities ligadas entre si.
+        Quando uma rela��o sai do normal, pode indicar oportunidade ou risco.
+        <strong style={{color:C.textDim}}> Vermelho = aten��o. Verde = tranquilo.</strong>
       </div>
 
       {/* Summary cards */}
@@ -1524,17 +1539,17 @@ export default function Dashboard() {
           border:`1px solid ${alertCounts.alerta>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:alertCounts.alerta>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{alertCounts.alerta}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>🔴 Pede atenção</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Pede aten��o</div>
         </div>
         <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{alertCounts.atencao}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>⚠️ Fique atento</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Fique atento</div>
         </div>
         <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:"#4ade80",fontFamily:"monospace"}}>{alertCounts.ok}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>✅ Sem preocupação</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>? Sem preocupa��o</div>
         </div>
       </div>
 
@@ -1550,13 +1565,13 @@ export default function Dashboard() {
             const zone=getThermometerZone(sp.percentile);
             const trendPct=sp.trend_pct||0;
             const trendColor=Math.abs(trendPct)<3?"#94a3b8":trendPct>0?"#10b981":"#ef4444";
-            const trendWord=Math.abs(trendPct)<3?"estável":trendPct>0?"subindo":"caindo";
-            const trendArrow=Math.abs(trendPct)<3?"→":trendPct>0?"↑":"↓";
+            const trendWord=Math.abs(trendPct)<3?"est�vel":trendPct>0?"subindo":"caindo";
+            const trendArrow=Math.abs(trendPct)<3?"?":trendPct>0?"?":"?";
             const alertBadge=alert==="alerta"
-              ?{icon:"🔴",label:"Atenção!",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
+              ?{icon:"??",label:"Aten��o!",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
               :alert==="atencao"
-              ?{icon:"⚠️",label:"Fique atento",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"}
-              :{icon:"✅",label:"Sem preocupação",bg:"rgba(34,197,94,0.08)",border:"rgba(34,197,94,0.25)",color:"#4ade80"};
+              ?{icon:"??",label:"Fique atento",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"}
+              :{icon:"?",label:"Sem preocupa��o",bg:"rgba(34,197,94,0.08)",border:"rgba(34,197,94,0.25)",color:"#4ade80"};
 
             const thermSegments=[
               {start:0,end:25,color:"#22c55e"},
@@ -1601,10 +1616,10 @@ export default function Dashboard() {
 
                   {/* Thermometer */}
                   <div>
-                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>COMPARADO AO ÚLTIMO ANO</div>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>COMPARADO AO �LTIMO ANO</div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:13,fontWeight:700,color:zone.color}}>{zone.text}</span>
-                      <span style={{fontSize:11,color:C.textMuted,fontFamily:"monospace"}}>posição: {sp.percentile}%</span>
+                      <span style={{fontSize:11,color:C.textMuted,fontFamily:"monospace"}}>posi��o: {sp.percentile}%</span>
                     </div>
                     <div style={{position:"relative",height:20,borderRadius:10,overflow:"hidden",display:"flex"}}>
                       {thermSegments.map((seg,i)=>(
@@ -1617,16 +1632,16 @@ export default function Dashboard() {
                         transition:"left 0.6s ease"}} />
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:10,color:"rgba(255,255,255,0.25)"}}>
-                      <span>Barato</span><span>Médio</span><span>Caro</span>
+                      <span>Barato</span><span>M�dio</span><span>Caro</span>
                     </div>
                   </div>
 
                   {/* Sparkline */}
                   <div>
-                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>TENDÊNCIA (20 DIAS)</div>
+                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>TEND�NCIA (20 DIAS)</div>
                     {sp.history && sp.history.length>0 ? (
                       <SpreadChart history={sp.history} regime={sp.regime} />
-                    ) : <div style={{color:C.textMuted,fontSize:11}}>Sem histórico</div>}
+                    ) : <div style={{color:C.textMuted,fontSize:11}}>Sem hist�rico</div>}
                   </div>
                 </div>
 
@@ -1634,7 +1649,7 @@ export default function Dashboard() {
                 <div style={{padding:"10px 14px",borderRadius:8,marginBottom:10,
                   background:alert==="alerta"?"rgba(239,68,68,0.06)":alert==="atencao"?"rgba(245,158,11,0.06)":"rgba(255,255,255,0.02)",
                   border:`1px solid ${alert==="alerta"?"rgba(239,68,68,0.15)":alert==="atencao"?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.05)"}`}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>📋 RESUMO</div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>?? RESUMO</div>
                   <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>{verdict}</div>
                 </div>
 
@@ -1642,16 +1657,16 @@ export default function Dashboard() {
                 {details.whatIsIt && (
                   <details style={{cursor:"pointer"}}>
                     <summary style={{fontSize:12,color:C.textMuted,padding:"4px 0",listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
-                      <span style={{fontSize:10}}>▶</span> O que é isso? Como me afeta?
+                      <span style={{fontSize:10}}>?</span> O que � isso? Como me afeta?
                     </summary>
                     <div style={{marginTop:8,padding:14,borderRadius:8,
                       background:"rgba(59,130,246,0.05)",border:"1px solid rgba(59,130,246,0.12)"}}>
                       <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#60a5fa",marginBottom:4,letterSpacing:0.5}}>📖 O QUE É</div>
+                        <div style={{fontSize:10,fontWeight:700,color:"#60a5fa",marginBottom:4,letterSpacing:0.5}}>?? O QUE �</div>
                         <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whatIsIt}</div>
                       </div>
                       <div>
-                        <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",marginBottom:4,letterSpacing:0.5}}>💰 POR QUE ME INTERESSA</div>
+                        <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",marginBottom:4,letterSpacing:0.5}}>?? POR QUE ME INTERESSA</div>
                         <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whyMatters}</div>
                       </div>
                     </div>
@@ -1668,38 +1683,38 @@ export default function Dashboard() {
       {/* Help footer */}
       <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
         background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>💡 Como ler esta página</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>?? Como ler esta p�gina</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
-          <div><strong style={{color:C.textDim}}>Barra "Caro/Barato"</strong><br/>Mostra onde o preço está comparado ao último ano. Bolinha na ponta vermelha = caro. Na verde = barato.</div>
-          <div><strong style={{color:C.textDim}}>Gráfico de tendência</strong><br/>Mostra pra onde o preço está indo nos últimos 20 dias. Seta ↑ = subindo, ↓ = caindo.</div>
-          <div><strong style={{color:C.textDim}}>Clique "O que é isso?"</strong><br/>Cada relação tem uma explicação simples do que significa e por que interessa ao produtor rural.</div>
+          <div><strong style={{color:C.textDim}}>Barra "Caro/Barato"</strong><br/>Mostra onde o pre�o est� comparado ao �ltimo ano. Bolinha na ponta vermelha = caro. Na verde = barato.</div>
+          <div><strong style={{color:C.textDim}}>Gr�fico de tend�ncia</strong><br/>Mostra pra onde o pre�o est� indo nos �ltimos 20 dias. Seta ? = subindo, ? = caindo.</div>
+          <div><strong style={{color:C.textDim}}>Clique "O que � isso?"</strong><br/>Cada rela��o tem uma explica��o simples do que significa e por que interessa ao produtor rural.</div>
         </div>
       </div>
     </div>
     );
   };
 
-  // ── Tab: Sazonalidade ───────────────────────────────────────────────────
+  // -- Tab: Sazonalidade ---------------------------------------------------
   const renderSazonalidade = () => (
     <div>
-      <SectionTitle>📅 Sazonalidade — {selected} ({COMMODITIES.find(c=>c.sym===selected)?.name})</SectionTitle>
+      <SectionTitle>?? Sazonalidade � {selected} ({COMMODITIES.find(c=>c.sym===selected)?.name})</SectionTitle>
       {season && season[selected] ? (
         <SeasonChart entry={season[selected]} />
       ) : (
-        <DataPlaceholder title="Sem dados" detail={`${selected} não encontrado em seasonality.json`} />
+        <DataPlaceholder title="Sem dados" detail={`${selected} n�o encontrado em seasonality.json`} />
       )}
       <div style={{marginTop:24}}>
-        <SectionTitle>📊 Preço Atual vs Média Histórica (5 Anos)</SectionTitle>
+        <SectionTitle>?? Pre�o Atual vs M�dia Hist�rica (5 Anos)</SectionTitle>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-            <thead><TableHeader cols={["Commodity","Atual","Média 5Y","Desvio %","Sinal"]} /></thead>
+            <thead><TableHeader cols={["Commodity","Atual","M�dia 5Y","Desvio %","Sinal"]} /></thead>
             <tbody>
               {COMMODITIES.map(c=>{
                 const sd=getSeasonDev(c.sym);
                 if(!sd) return (
                   <tr key={c.sym} style={{borderBottom:`1px solid ${C.border}`}}>
                     <td style={{padding:"8px 12px",fontWeight:600}}>{c.sym} <span style={{color:C.textMuted,fontWeight:400}}>({c.name})</span></td>
-                    <td colSpan={4} style={{padding:"8px 12px",color:C.textMuted,textAlign:"center"}}>—</td>
+                    <td colSpan={4} style={{padding:"8px 12px",color:C.textMuted,textAlign:"center"}}>�</td>
                   </tr>
                 );
                 const sigCol = Math.abs(sd.dev)>15?C.red:Math.abs(sd.dev)>5?C.amber:C.green;
@@ -1722,7 +1737,7 @@ export default function Dashboard() {
     </div>
   );
 
-  // ── Tab: Stocks Watch ──────────────────────────────────────────────────
+  // -- Tab: Stocks Watch --------------------------------------------------
   const renderStocksWatch = () => {
     const realStocks = stocksList.filter(s=>s.data_available?.stock_real);
     const aperto = stocksList.filter(s=>s.state.includes("APERTO")||s.state==="PRECO_ELEVADO"||s.state==="PRECO_DEPRIMIDO");
@@ -1733,9 +1748,9 @@ export default function Dashboard() {
 
     return (
       <div>
-        <SectionTitle>📦 Stocks Watch — Estoques Reais USDA + Análise de Preço</SectionTitle>
+        <SectionTitle>?? Stocks Watch � Estoques Reais USDA + An�lise de Pre�o</SectionTitle>
 
-        {/* ── GRAFICO PRINCIPAL - TOPO ── */}
+        {/* -- GRAFICO PRINCIPAL - TOPO -- */}
         {realStocks.length > 0 && (
           <div style={{marginBottom:24}}>
             {/* Commodity selector */}
@@ -1756,7 +1771,7 @@ export default function Dashboard() {
 
             {/* Stock chart */}
             {(()=>{
-              if(!selStock?.stock_history?.length) return <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:11}}>Sem histórico de estoque para {stockSelected}</div>;
+              if(!selStock?.stock_history?.length) return <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:11}}>Sem hist�rico de estoque para {stockSelected}</div>;
               const hist=selStock.stock_history;
               const avg=selStock.stock_avg||0;
 
@@ -1802,7 +1817,7 @@ export default function Dashboard() {
                   {/* Header with stats */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
                     <div>
-                      <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} — {selNm}</div>
+                      <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} � {selNm}</div>
                       <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Estoque Trimestral ({selStock.stock_unit||""}) | Fonte: USDA QuickStats</div>
                     </div>
                     <div style={{display:"flex",gap:16}}>
@@ -1811,7 +1826,7 @@ export default function Dashboard() {
                         <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.text}}>{selStock.stock_current?.toFixed(2)}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:C.textMuted}}>MÉDIA</div>
+                        <div style={{fontSize:9,color:C.textMuted}}>M�DIA</div>
                         <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.textDim}}>{selStock.stock_avg?.toFixed(2)}</div>
                       </div>
                       <div style={{textAlign:"right"}}>
@@ -1831,7 +1846,7 @@ export default function Dashboard() {
                     ))}
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                       <div style={{width:20,height:0,borderTop:"2px dashed "+C.amber}}/>
-                      <span style={{fontSize:10,color:C.amber,fontWeight:600}}>Média ({avg.toFixed(1)})</span>
+                      <span style={{fontSize:10,color:C.amber,fontWeight:600}}>M�dia ({avg.toFixed(1)})</span>
                     </div>
                   </div>
 
@@ -1903,13 +1918,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Tabela de Estoque Real USDA ── */}
+        {/* -- Tabela de Estoque Real USDA -- */}
         {realStocks.length > 0 && (
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>📊 Estoque Real — USDA QuickStats</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>?? Estoque Real � USDA QuickStats</div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><TableHeader cols={["Commodity","Estoque Atual","Média","Unidade","Desvio %","Estado","Tendência","Período"]} /></thead>
+                <thead><TableHeader cols={["Commodity","Estoque Atual","M�dia","Unidade","Desvio %","Estado","Tend�ncia","Per�odo"]} /></thead>
                 <tbody>
                   {realStocks.map(st=>{
                     const nm=COMMODITIES.find(c=>c.sym===st.symbol)?.name||st.symbol;
@@ -1919,13 +1934,13 @@ export default function Dashboard() {
                     return (
                       <tr key={st.symbol+"_real"} onClick={()=>setStockSelected(st.symbol)} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:isSel?"rgba(59,130,246,.06)":"transparent"}}>
                         <td style={{padding:"8px 12px",fontWeight:700}}>{st.symbol} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,fontSize:12}}>{st.stock_current?.toFixed(2)||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{st.stock_avg?.toFixed(2)||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:C.textMuted}}>{st.stock_unit||"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,fontSize:12}}>{st.stock_current?.toFixed(2)||"�"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{st.stock_avg?.toFixed(2)||"�"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:C.textMuted}}>{st.stock_unit||"�"}</td>
                         <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:devCol}}>{dev>=0?"+":""}{dev.toFixed(1)}%</td>
                         <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label={st.state.replace(/_/g," ")} color={st.state.includes("APERTO")?C.red:st.state.includes("EXCESSO")?C.green:C.amber} /></td>
-                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Tendencia"))?.replace("Tendencia: ","")||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Dado mais recente"))?.replace("Dado mais recente: ","")||"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Tendencia"))?.replace("Tendencia: ","")||"�"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Dado mais recente"))?.replace("Dado mais recente: ","")||"�"}</td>
                       </tr>
                     );
                   })}
@@ -1935,23 +1950,23 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Tabela de Proxy (Preço vs Média) ── */}
+        {/* -- Tabela de Proxy (Pre�o vs M�dia) -- */}
         <div>
-          <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>💰 Proxy de Preço — Sem Dados de Estoque Real</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>?? Proxy de Pre�o � Sem Dados de Estoque Real</div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-              <thead><TableHeader cols={["Commodity","Preço","Desvio vs Média 5Y","Fonte","Estado","Fatores"]} /></thead>
+              <thead><TableHeader cols={["Commodity","Pre�o","Desvio vs M�dia 5Y","Fonte","Estado","Fatores"]} /></thead>
               <tbody>
                 {stocksList.filter(s=>!s.data_available?.stock_real).map(st=>{
                   const nm=COMMODITIES.find(c=>c.sym===st.symbol)?.name||st.symbol;
                   return (
                     <tr key={st.symbol+"_proxy"} style={{borderBottom:`1px solid ${C.border}`}}>
                       <td style={{padding:"8px 12px",fontWeight:600}}>{st.symbol} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
-                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{st.price?.toFixed(2)||"—"}</td>
+                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{st.price?.toFixed(2)||"�"}</td>
                       <td style={{padding:"8px 12px",textAlign:"right"}}><DevBar val={st.price_vs_avg} /></td>
                       <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label="PROXY" color={C.textMuted} /></td>
                       <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label={st.state.replace(/_/g," ")} color={st.state.includes("ELEVADO")||st.state.includes("DEPRIMIDO")?C.red:st.state.includes("ACIMA")||st.state.includes("ABAIXO")?C.amber:C.green} /></td>
-                      <td style={{padding:"8px 12px",fontSize:9,color:C.textMuted}}>{st.factors?.join("; ")||"—"}</td>
+                      <td style={{padding:"8px 12px",fontSize:9,color:C.textMuted}}>{st.factors?.join("; ")||"�"}</td>
                     </tr>
                   );
                 })}
@@ -1962,7 +1977,7 @@ export default function Dashboard() {
       </div>
     );
   };
-  // ── Tab: Custo Produção ────────────────────────────────────────────────
+  // -- Tab: Custo Produ��o ------------------------------------------------
   const renderCustoProducao = () => {
     const allRegions:{sym:string;commodity:string;region:string;cost:number;unit:string;price:number|null;margin:number|null;source:string}[] = [];
     COST_DATA.forEach(cd=>{
@@ -1978,10 +1993,10 @@ export default function Dashboard() {
 
     return (
     <div>
-      <SectionTitle>Custo de Produção — Quem lucra e quem perde?</SectionTitle>
+      <SectionTitle>Custo de Produ��o � Quem lucra e quem perde?</SectionTitle>
       <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
-        Compara o preço atual de mercado com o custo de produção em cada região.
-        <strong style={{color:C.textDim}}> Barra verde = lucro. Amarela = apertado. Vermelha = prejuízo.</strong>
+        Compara o pre�o atual de mercado com o custo de produ��o em cada regi�o.
+        <strong style={{color:C.textDim}}> Barra verde = lucro. Amarela = apertado. Vermelha = preju�zo.</strong>
       </div>
 
       {/* Summary cards */}
@@ -1990,17 +2005,17 @@ export default function Dashboard() {
           border:`1px solid ${prejuizo>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:prejuizo>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{prejuizo}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>🔴 No prejuízo</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? No preju�zo</div>
         </div>
         <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{apertado}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>⚠️ Margem apertada</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Margem apertada</div>
         </div>
         <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:"#4ade80",fontFamily:"monospace"}}>{lucro}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>💰 Lucrando</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Lucrando</div>
         </div>
       </div>
 
@@ -2021,10 +2036,10 @@ export default function Dashboard() {
         const headerBorder = hasPrejuizo?"#ef4444":allLucro?"#10b981":"#f59e0b";
         const headerBg = hasPrejuizo?"rgba(239,68,68,0.03)":allLucro?"rgba(16,185,129,0.03)":"transparent";
         const alertBadge = hasPrejuizo
-          ?{icon:"🔴",label:"Regiões no prejuízo",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
+          ?{icon:"??",label:"Regi�es no preju�zo",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
           :allLucro
-          ?{icon:"💰",label:"Todas lucrando",bg:"rgba(16,185,129,0.1)",border:"rgba(16,185,129,0.3)",color:"#34d399"}
-          :{icon:"⚠️",label:"Margens apertadas",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"};
+          ?{icon:"??",label:"Todas lucrando",bg:"rgba(16,185,129,0.1)",border:"rgba(16,185,129,0.3)",color:"#34d399"}
+          :{icon:"??",label:"Margens apertadas",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"};
 
         return (
           <div key={cd.sym} style={{marginBottom:16,background:headerBg,borderRadius:"0 12px 12px 0",
@@ -2035,7 +2050,7 @@ export default function Dashboard() {
               <div>
                 <h3 style={{margin:0,fontSize:17,fontWeight:700,color:C.text,lineHeight:1.3}}>{cd.commodity}</h3>
                 {p && <div style={{fontSize:13,color:C.textMuted,marginTop:4}}>
-                  Preço de mercado: <strong style={{color:C.text,fontFamily:"monospace",fontSize:15}}>
+                  Pre�o de mercado: <strong style={{color:C.text,fontFamily:"monospace",fontSize:15}}>
                     {p.toLocaleString("en-US",{minimumFractionDigits:2})}
                   </strong> <span style={{fontSize:11}}>{cd.futuresUnit}</span>
                 </div>}
@@ -2075,7 +2090,7 @@ export default function Dashboard() {
                     </div>
 
                     {/* Margin bar */}
-                    {p ? <MarginBar price={p} cost={r.cost} /> : <span style={{color:C.textMuted,fontSize:12}}>Sem preço</span>}
+                    {p ? <MarginBar price={p} cost={r.cost} /> : <span style={{color:C.textMuted,fontSize:12}}>Sem pre�o</span>}
                   </div>
                 );
               })}
@@ -2085,15 +2100,15 @@ export default function Dashboard() {
             <div style={{marginTop:14,padding:"10px 14px",borderRadius:8,
               background:hasPrejuizo?"rgba(239,68,68,0.06)":allLucro?"rgba(16,185,129,0.05)":"rgba(245,158,11,0.05)",
               border:`1px solid ${hasPrejuizo?"rgba(239,68,68,0.15)":allLucro?"rgba(16,185,129,0.12)":"rgba(245,158,11,0.12)"}`}}>
-              <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>📋 RESUMO</div>
+              <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>?? RESUMO</div>
               <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>
                 {hasPrejuizo && worstRegion.margin!==null && bestRegion.margin!==null
-                  ? `🔴 ${worstRegion.region.replace(/^.{4}/,"")} está no prejuízo (${worstRegion.margin.toFixed(0)}%). O produtor mais competitivo é ${bestRegion.region.replace(/^.{4}/,"")} com margem de +${bestRegion.margin.toFixed(0)}%. Preço precisa subir para viabilizar todas as regiões.`
+                  ? `?? ${worstRegion.region.replace(/^.{4}/,"")} est� no preju�zo (${worstRegion.margin.toFixed(0)}%). O produtor mais competitivo � ${bestRegion.region.replace(/^.{4}/,"")} com margem de +${bestRegion.margin.toFixed(0)}%. Pre�o precisa subir para viabilizar todas as regi�es.`
                   : allLucro && bestRegion.margin!==null && worstRegion.margin!==null
-                  ? `💰 Todas as regiões lucrando. Melhor margem: ${bestRegion.region.replace(/^.{4}/,"")} (+${bestRegion.margin.toFixed(0)}%). Margem mais apertada: ${worstRegion.region.replace(/^.{4}/,"")} (+${(worstRegion.margin).toFixed(0)}%).`
+                  ? `?? Todas as regi�es lucrando. Melhor margem: ${bestRegion.region.replace(/^.{4}/,"")} (+${bestRegion.margin.toFixed(0)}%). Margem mais apertada: ${worstRegion.region.replace(/^.{4}/,"")} (+${(worstRegion.margin).toFixed(0)}%).`
                   : bestRegion.margin!==null && worstRegion.margin!==null
-                  ? `⚠️ Margens apertadas em algumas regiões. ${bestRegion.region.replace(/^.{4}/,"")} lidera com +${bestRegion.margin.toFixed(0)}%. Atenção para regiões com margem abaixo de 10%.`
-                  : "Dados de preço indisponíveis para cálculo."
+                  ? `?? Margens apertadas em algumas regi�es. ${bestRegion.region.replace(/^.{4}/,"")} lidera com +${bestRegion.margin.toFixed(0)}%. Aten��o para regi�es com margem abaixo de 10%.`
+                  : "Dados de pre�o indispon�veis para c�lculo."
                 }
               </div>
             </div>
@@ -2109,11 +2124,11 @@ export default function Dashboard() {
       {/* Help footer */}
       <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
         background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>💡 Como ler esta página</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>?? Como ler esta p�gina</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
-          <div><strong style={{color:C.textDim}}>Barra de margem</strong><br/>Verde = lucro bom (acima de 20%). Amarela = margem apertada. Vermelha = produtor está perdendo dinheiro.</div>
-          <div><strong style={{color:C.textDim}}>Custo por região</strong><br/>Quanto custa produzir em cada local. Regiões com custo mais baixo conseguem lucrar mesmo com preços em queda.</div>
-          <div><strong style={{color:C.textDim}}>Resumo</strong><br/>Mostra quem está na melhor e pior situação. Se muitas regiões estão no prejuízo, a oferta tende a cair — o que pode subir o preço.</div>
+          <div><strong style={{color:C.textDim}}>Barra de margem</strong><br/>Verde = lucro bom (acima de 20%). Amarela = margem apertada. Vermelha = produtor est� perdendo dinheiro.</div>
+          <div><strong style={{color:C.textDim}}>Custo por regi�o</strong><br/>Quanto custa produzir em cada local. Regi�es com custo mais baixo conseguem lucrar mesmo com pre�os em queda.</div>
+          <div><strong style={{color:C.textDim}}>Resumo</strong><br/>Mostra quem est� na melhor e pior situa��o. Se muitas regi�es est�o no preju�zo, a oferta tende a cair � o que pode subir o pre�o.</div>
         </div>
       </div>
     </div>
@@ -2121,14 +2136,14 @@ export default function Dashboard() {
   };
 
 
-  // ── Tab: Energia ─────────────────────────────────────────────────────────
+  // -- Tab: Energia ---------------------------------------------------------
   const renderEnergia = () => {
     const s = eiaData?.series || {};
     const get = (id:string) => s[id] || null;
 
     // Helper: spark SVG
     const Spark = ({data,color,w=180,h=50}:{data:{period:string;value:number}[];color:string;w?:number;h?:number}) => {
-      if(!data||data.length<2) return <span style={{color:C.textMuted,fontSize:11}}>—</span>;
+      if(!data||data.length<2) return <span style={{color:C.textMuted,fontSize:11}}>�</span>;
       const vals = [...data].reverse().map(d=>d.value);
       const mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;
       const pts=vals.map((v,i)=>`${(i/(vals.length-1))*w},${h-4-((v-mn)/rng)*(h-8)}`).join(" ");
@@ -2149,13 +2164,13 @@ export default function Dashboard() {
       if(!series||series.pct_range_52w===null||series.high_52w===null||series.low_52w===null) return null;
       const pct = series.pct_range_52w;
       const color = pct>=80?"#ef4444":pct>=60?"#f59e0b":pct>=40?"#94a3b8":pct>=20?"#60a5fa":"#22c55e";
-      const label = pct>=80?"Perto da máxima":pct>=60?"Acima da média":pct>=40?"Na média":pct>=20?"Abaixo da média":"Perto da mínima";
+      const label = pct>=80?"Perto da m�xima":pct>=60?"Acima da m�dia":pct>=40?"Na m�dia":pct>=20?"Abaixo da m�dia":"Perto da m�nima";
       return (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.textMuted,marginBottom:4}}>
-            <span>Mín: {series.low_52w.toLocaleString("en-US",{maximumFractionDigits:1})}</span>
+            <span>M�n: {series.low_52w.toLocaleString("en-US",{maximumFractionDigits:1})}</span>
             <span style={{color,fontWeight:700}}>{label}</span>
-            <span>Máx: {series.high_52w.toLocaleString("en-US",{maximumFractionDigits:1})}</span>
+            <span>M�x: {series.high_52w.toLocaleString("en-US",{maximumFractionDigits:1})}</span>
           </div>
           <div style={{position:"relative",height:10,borderRadius:5,overflow:"hidden",
             background:"linear-gradient(90deg, #22c55e20 0%, #60a5fa20 25%, #94a3b820 50%, #f59e0b20 75%, #ef444420 100%)"}}>
@@ -2168,47 +2183,47 @@ export default function Dashboard() {
 
     // Helper: change badge
     const ChgBadge = ({val,suffix="WoW"}:{val:number|null|undefined;suffix?:string}) => {
-      if(val===null||val===undefined) return <span style={{color:C.textMuted,fontSize:10}}>—</span>;
+      if(val===null||val===undefined) return <span style={{color:C.textMuted,fontSize:10}}>�</span>;
       const color = val>0?"#10b981":val<0?"#ef4444":"#94a3b8";
-      const arrow = val>0?"↑":val<0?"↓":"→";
+      const arrow = val>0?"?":val<0?"?":"?";
       return <span style={{fontSize:11,fontWeight:600,color}}>{arrow} {val>0?"+":""}{val.toFixed(1)}% {suffix}</span>;
     };
 
-    // ── Data cards config ──
+    // -- Data cards config --
     const priceCards = [
-      {id:"wti_spot",label:"Petróleo WTI",icon:"🛢️",color:"#f59e0b",
-        why:"Preço do petróleo afeta o custo do diesel, frete e insumos agrícolas. Petróleo em alta = custo do produtor sobe."},
-      {id:"natural_gas_spot",label:"Gás Natural (Henry Hub)",icon:"🔥",color:"#3b82f6",
-        why:"Gás natural é matéria-prima de fertilizantes nitrogenados (ureia). Gás caro = adubo caro."},
-      {id:"diesel_retail",label:"Diesel (Preço Bomba EUA)",icon:"⛽",color:"#ef4444",
-        why:"Diesel é o principal combustível do campo — colheitadeiras, caminhões, irrigação. Cada centavo afeta a margem do produtor."},
-      {id:"gasoline_retail",label:"Gasolina (Preço Bomba EUA)",icon:"🚗",color:"#a855f7",
-        why:"Gasolina alta incentiva etanol de milho, aumentando demanda por milho e puxando preços agrícolas."},
+      {id:"wti_spot",label:"Petr�leo WTI",icon:"???",color:"#f59e0b",
+        why:"Pre�o do petr�leo afeta o custo do diesel, frete e insumos agr�colas. Petr�leo em alta = custo do produtor sobe."},
+      {id:"natural_gas_spot",label:"G�s Natural (Henry Hub)",icon:"??",color:"#3b82f6",
+        why:"G�s natural � mat�ria-prima de fertilizantes nitrogenados (ureia). G�s caro = adubo caro."},
+      {id:"diesel_retail",label:"Diesel (Pre�o Bomba EUA)",icon:"?",color:"#ef4444",
+        why:"Diesel � o principal combust�vel do campo � colheitadeiras, caminh�es, irriga��o. Cada centavo afeta a margem do produtor."},
+      {id:"gasoline_retail",label:"Gasolina (Pre�o Bomba EUA)",icon:"??",color:"#a855f7",
+        why:"Gasolina alta incentiva etanol de milho, aumentando demanda por milho e puxando pre�os agr�colas."},
     ];
 
     const stockCards = [
-      {id:"crude_stocks",label:"Estoques Petróleo Cru",icon:"🛢️",color:"#f59e0b",unit:"MBbl",
-        why:"Estoques altos = petróleo tende a cair = diesel mais barato = custo agrícola menor. Estoques baixos = risco de alta."},
-      {id:"gasoline_stocks",label:"Estoques Gasolina",icon:"⛽",color:"#a855f7",unit:"MBbl",
+      {id:"crude_stocks",label:"Estoques Petr�leo Cru",icon:"???",color:"#f59e0b",unit:"MBbl",
+        why:"Estoques altos = petr�leo tende a cair = diesel mais barato = custo agr�cola menor. Estoques baixos = risco de alta."},
+      {id:"gasoline_stocks",label:"Estoques Gasolina",icon:"?",color:"#a855f7",unit:"MBbl",
         why:"Estoques baixos de gasolina = mais demanda por etanol = mais demanda por milho = milho sobe."},
-      {id:"distillate_stocks",label:"Estoques Diesel/Destilados",icon:"🏭",color:"#ef4444",unit:"MBbl",
+      {id:"distillate_stocks",label:"Estoques Diesel/Destilados",icon:"??",color:"#ef4444",unit:"MBbl",
         why:"Estoque de diesel apertado = risco de frete caro na colheita. Produtor deve monitorar antes de contratar transporte."},
-      {id:"ethanol_stocks",label:"Estoques Etanol",icon:"🌽",color:"#22c55e",unit:"MBbl",
+      {id:"ethanol_stocks",label:"Estoques Etanol",icon:"??",color:"#22c55e",unit:"MBbl",
         why:"Etanol consome ~40% do milho americano. Estoques baixos de etanol = usinas precisam comprar mais milho."},
     ];
 
     const prodCards = [
-      {id:"ethanol_production",label:"Produção Etanol",icon:"🌽",color:"#22c55e",unit:"MBbl/d",
-        why:"Produção alta de etanol = forte demanda por milho. Queda na produção = demanda enfraquecendo."},
-      {id:"refinery_utilization",label:"Utilização Refinarias",icon:"🏭",color:"#f59e0b",unit:"%",
-        why:"Refinarias a pleno = demanda forte por combustíveis. Se cair abaixo de 85%, sinal de desaceleração econômica."},
-      {id:"crude_production",label:"Produção Petróleo EUA",icon:"🇺🇸",color:"#3b82f6",unit:"MBbl/d",
-        why:"EUA é o maior produtor mundial. Produção recorde = petróleo tende a cair = diesel mais barato para o campo."},
+      {id:"ethanol_production",label:"Produ��o Etanol",icon:"??",color:"#22c55e",unit:"MBbl/d",
+        why:"Produ��o alta de etanol = forte demanda por milho. Queda na produ��o = demanda enfraquecendo."},
+      {id:"refinery_utilization",label:"Utiliza��o Refinarias",icon:"??",color:"#f59e0b",unit:"%",
+        why:"Refinarias a pleno = demanda forte por combust�veis. Se cair abaixo de 85%, sinal de desacelera��o econ�mica."},
+      {id:"crude_production",label:"Produ��o Petr�leo EUA",icon:"????",color:"#3b82f6",unit:"MBbl/d",
+        why:"EUA � o maior produtor mundial. Produ��o recorde = petr�leo tende a cair = diesel mais barato para o campo."},
     ];
 
     if(!eiaData) return (
       <div>
-        <SectionTitle>Energia — Petróleo, Gás e Combustíveis</SectionTitle>
+        <SectionTitle>Energia � Petr�leo, G�s e Combust�veis</SectionTitle>
         <DataPlaceholder title="Sem dados EIA" detail="Execute o pipeline para coletar dados da EIA (Energy Information Administration)" />
       </div>
     );
@@ -2218,15 +2233,15 @@ export default function Dashboard() {
 
     return (
     <div>
-      <SectionTitle>Energia — Petróleo, Gás e Combustíveis</SectionTitle>
+      <SectionTitle>Energia � Petr�leo, G�s e Combust�veis</SectionTitle>
       <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
         Dados semanais da EIA (Energy Information Administration). Energia afeta diretamente o custo do produtor rural
-        — diesel, frete, fertilizantes e demanda por etanol.
-        <strong style={{color:C.textDim}}> Atualizado: {eiaData.metadata.collected_at?.slice(0,10)||"—"}</strong>
+        � diesel, frete, fertilizantes e demanda por etanol.
+        <strong style={{color:C.textDim}}> Atualizado: {eiaData.metadata.collected_at?.slice(0,10)||"�"}</strong>
       </div>
 
-      {/* ── PREÇOS ── */}
-      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>💲 Preços — Quanto custa a energia?</div>
+      {/* -- PRE�OS -- */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>?? Pre�os � Quanto custa a energia?</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:28}}>
         {priceCards.map(pc=>{
           const d = get(pc.id);
@@ -2247,7 +2262,7 @@ export default function Dashboard() {
                   <div style={{fontSize:32,fontWeight:800,fontFamily:"monospace",color:C.text,letterSpacing:-1}}>
                     ${d.latest_value.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:3})}
                   </div>
-                  <div style={{fontSize:11,color:C.textMuted}}>{d.unit} • {d.latest_period}</div>
+                  <div style={{fontSize:11,color:C.textMuted}}>{d.unit} � {d.latest_period}</div>
                   <div style={{display:"flex",gap:12,marginTop:6}}>
                     <ChgBadge val={d.mom_change_pct} suffix="MoM"/>
                     {d.yoy_change_pct!==null && <ChgBadge val={d.yoy_change_pct} suffix="YoY"/>}
@@ -2258,11 +2273,11 @@ export default function Dashboard() {
               <div style={{marginTop:12}}><RangeBar series={d}/></div>
               <details style={{marginTop:10,cursor:"pointer"}}>
                 <summary style={{fontSize:11,color:C.textMuted,listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:9}}>▶</span> Por que me interessa?
+                  <span style={{fontSize:9}}>?</span> Por que me interessa?
                 </summary>
                 <div style={{marginTop:6,padding:"8px 12px",borderRadius:6,background:"rgba(59,130,246,0.05)",
                   border:"1px solid rgba(59,130,246,0.1)",fontSize:12,color:C.textDim,lineHeight:1.5}}>
-                  💰 {pc.why}
+                  ?? {pc.why}
                 </div>
               </details>
             </div>
@@ -2270,11 +2285,11 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* ── ESTOQUES ── */}
-      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>📦 Estoques — Quanto tem guardado?</div>
+      {/* -- ESTOQUES -- */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>?? Estoques � Quanto tem guardado?</div>
       <div style={{fontSize:12,color:C.textMuted,marginBottom:14,lineHeight:1.5}}>
-        Estoques baixos = risco de preço subir. Estoques altos = pressão de baixa.
-        A barra mostra onde o estoque está dentro do range do último ano.
+        Estoques baixos = risco de pre�o subir. Estoques altos = press�o de baixa.
+        A barra mostra onde o estoque est� dentro do range do �ltimo ano.
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:28}}>
         {stockCards.map(sc=>{
@@ -2294,16 +2309,16 @@ export default function Dashboard() {
                   <span style={{fontSize:14,fontWeight:700,color:C.text}}>{sc.label}</span>
                 </div>
                 {isLow && <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:12,
-                  background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",color:"#fbbf24"}}>⚠️ Baixo</span>}
+                  background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",color:"#fbbf24"}}>?? Baixo</span>}
                 {isHigh && <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:12,
-                  background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.3)",color:"#60a5fa"}}>📦 Alto</span>}
+                  background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.3)",color:"#60a5fa"}}>?? Alto</span>}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"center"}}>
                 <div>
                   <div style={{fontSize:26,fontWeight:800,fontFamily:"monospace",color:C.text}}>
                     {d.latest_value>=1000?`${(d.latest_value/1000).toFixed(1)}M`:d.latest_value.toLocaleString("en-US")}
                   </div>
-                  <div style={{fontSize:11,color:C.textMuted}}>{sc.unit} • {d.latest_period}</div>
+                  <div style={{fontSize:11,color:C.textMuted}}>{sc.unit} � {d.latest_period}</div>
                   <div style={{marginTop:4}}><ChgBadge val={d.wow_change_pct} /></div>
                 </div>
                 <Spark data={d.history.slice(0,26)} color={sc.color} />
@@ -2311,11 +2326,11 @@ export default function Dashboard() {
               <div style={{marginTop:12}}><RangeBar series={d}/></div>
               <details style={{marginTop:10,cursor:"pointer"}}>
                 <summary style={{fontSize:11,color:C.textMuted,listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:9}}>▶</span> Por que me interessa?
+                  <span style={{fontSize:9}}>?</span> Por que me interessa?
                 </summary>
                 <div style={{marginTop:6,padding:"8px 12px",borderRadius:6,background:"rgba(59,130,246,0.05)",
                   border:"1px solid rgba(59,130,246,0.1)",fontSize:12,color:C.textDim,lineHeight:1.5}}>
-                  💰 {sc.why}
+                  ?? {sc.why}
                 </div>
               </details>
             </div>
@@ -2323,8 +2338,8 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* ── PRODUÇÃO ── */}
-      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>⚙️ Produção e Refino</div>
+      {/* -- PRODU��O -- */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>?? Produ��o e Refino</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:28}}>
         {prodCards.map(pc=>{
           const d = get(pc.id);
@@ -2343,18 +2358,18 @@ export default function Dashboard() {
                   ? `${(d.latest_value/1000).toFixed(1)}M`
                   : d.latest_value.toLocaleString("en-US")}
               </div>
-              <div style={{fontSize:11,color:C.textMuted}}>{pc.unit} • {d.latest_period}</div>
+              <div style={{fontSize:11,color:C.textMuted}}>{pc.unit} � {d.latest_period}</div>
               <div style={{marginTop:4}}><ChgBadge val={d.wow_change_pct}/></div>
               <div style={{marginTop:10}}>
                 <Spark data={d.history.slice(0,26)} color={pc.color} w={160} h={40}/>
               </div>
               <details style={{marginTop:8,cursor:"pointer"}}>
                 <summary style={{fontSize:11,color:C.textMuted,listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:9}}>▶</span> Por que me interessa?
+                  <span style={{fontSize:9}}>?</span> Por que me interessa?
                 </summary>
                 <div style={{marginTop:6,padding:"8px 10px",borderRadius:6,background:"rgba(59,130,246,0.05)",
                   border:"1px solid rgba(59,130,246,0.1)",fontSize:11,color:C.textDim,lineHeight:1.5}}>
-                  💰 {pc.why}
+                  ?? {pc.why}
                 </div>
               </details>
             </div>
@@ -2365,18 +2380,18 @@ export default function Dashboard() {
       {/* Help footer */}
       <div style={{padding:"16px 20px",borderRadius:12,
         background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>💡 Como a energia afeta o agro</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>?? Como a energia afeta o agro</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
-          <div><strong style={{color:C.textDim}}>Diesel e frete</strong><br/>Petróleo sobe → diesel sobe → custo de produção e transporte agrícola aumenta. Produtor perde margem.</div>
-          <div><strong style={{color:C.textDim}}>Etanol e milho</strong><br/>~40% do milho dos EUA vira etanol. Mais demanda por etanol = mais demanda por milho = preço do milho sobe.</div>
-          <div><strong style={{color:C.textDim}}>Gás e fertilizantes</strong><br/>Gás natural é matéria-prima da ureia. Gás caro → adubo caro → custo da lavoura sobe, especialmente milho e trigo.</div>
+          <div><strong style={{color:C.textDim}}>Diesel e frete</strong><br/>Petr�leo sobe ? diesel sobe ? custo de produ��o e transporte agr�cola aumenta. Produtor perde margem.</div>
+          <div><strong style={{color:C.textDim}}>Etanol e milho</strong><br/>~40% do milho dos EUA vira etanol. Mais demanda por etanol = mais demanda por milho = pre�o do milho sobe.</div>
+          <div><strong style={{color:C.textDim}}>G�s e fertilizantes</strong><br/>G�s natural � mat�ria-prima da ureia. G�s caro ? adubo caro ? custo da lavoura sobe, especialmente milho e trigo.</div>
         </div>
       </div>
     </div>
     );
   };
 
-      // ── Tab: Físico Intl ────────────────────────────────────────────────────
+      // -- Tab: F�sico Intl ----------------------------------------------------
   const renderFisicoIntl = () => {
     const physData = physical;
     const usCash = physData?.us_cash || {};
@@ -2384,14 +2399,14 @@ export default function Dashboard() {
     const basisColor = (v:number) => v < -10 ? C.red : v < -5 ? C.amber : v < 0 ? C.textDim : C.green;
     return (
     <div>
-      {/* ── US CASH MARKETS (dados reais USDA) ── */}
-      <SectionTitle>🇺🇸 Mercado Físico EUA — Cash vs Futures</SectionTitle>
+      {/* -- US CASH MARKETS (dados reais USDA) -- */}
+      <SectionTitle>???? Mercado F�sico EUA � Cash vs Futures</SectionTitle>
       <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
-        Preços cash USDA (Prices Received) vs front-month futures. Atualizado: {physData?.timestamp?.slice(0,10) || "—"}
+        Pre�os cash USDA (Prices Received) vs front-month futures. Atualizado: {physData?.timestamp?.slice(0,10) || "�"}
       </div>
       {usList.length === 0 ? (
         <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12}}>
-          Dados físicos não carregados. Execute o pipeline para gerar physical.json
+          Dados f�sicos n�o carregados. Execute o pipeline para gerar physical.json
         </div>
       ) : (
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,marginBottom:32}}>
@@ -2451,10 +2466,10 @@ export default function Dashboard() {
         </table>
       )}
 
-      {/* ── INTERNATIONAL (dados reais) ── */}
-      <SectionTitle>🌍 Mercado Físico Internacional</SectionTitle>
+      {/* -- INTERNATIONAL (dados reais) -- */}
+      <SectionTitle>?? Mercado F�sico Internacional</SectionTitle>
       <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
-        {physIntl ? <>Fontes: CEPEA/ESALQ via Notícias Agrícolas + MAGyP FOB Argentina. Atualizado: {physIntl.timestamp?.slice(0,10) || "—"} | <span style={{color:C.green}}>{physIntl.markets_with_data} com dados</span> / {physIntl.total_markets} total</> : "Carregando dados internacionais..."}
+        {physIntl ? <>Fontes: CEPEA/ESALQ via Not�cias Agr�colas + MAGyP FOB Argentina. Atualizado: {physIntl.timestamp?.slice(0,10) || "�"} | <span style={{color:C.green}}>{physIntl.markets_with_data} com dados</span> / {physIntl.total_markets} total</> : "Carregando dados internacionais..."}
       </div>
       {(()=>{
         const intlData = physIntl?.international || {};
@@ -2472,7 +2487,7 @@ export default function Dashboard() {
           {/* With data */}
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,marginBottom:24}}>
             <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-              {["Mercado","Preço","Unidade","Data","Variação","Sparkline","Fonte"].map(h=>(
+              {["Mercado","Pre�o","Unidade","Data","Varia��o","Sparkline","Fonte"].map(h=>(
                 <th key={h} style={{padding:"8px 10px",textAlign:h==="Mercado"||h==="Fonte"||h==="Sparkline"?"left":"right",
                   fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5}}>{h}</th>
               ))}
@@ -2487,14 +2502,14 @@ export default function Dashboard() {
                   const mx=Math.max(...vals);const mn=Math.min(...vals);const rng=mx-mn||1;
                   points=vals.map((v:number,i:number)=>`${(i/(vals.length-1))*sparkW},${sparkH-((v-mn)/rng)*sparkH}`).join(" ");
                 }
-                const trendColor = d.trend?.startsWith("+")?C.green:d.trend?.startsWith("-")?C.red:d.trend==="—"?C.textMuted:C.textDim;
+                const trendColor = d.trend?.startsWith("+")?C.green:d.trend?.startsWith("-")?C.red:d.trend==="�"?C.textMuted:C.textDim;
                 return (
                 <tr key={sym} style={{borderBottom:`1px solid ${C.border}`}}>
                   <td style={{padding:"8px 10px",fontWeight:600}}>
                     <span style={{color:C.text}}>{d.label}</span>
                   </td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:C.text,fontSize:13}}>
-                    {typeof d.price==="number"?d.price.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):"—"}
+                    {typeof d.price==="number"?d.price.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):"�"}
                   </td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontSize:9,color:C.textMuted}}>{d.price_unit}</td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontSize:10,color:C.textDim}}>{d.period}</td>
@@ -2504,7 +2519,7 @@ export default function Dashboard() {
                   <td style={{padding:"8px 10px"}}>
                     {points ? <svg width={sparkW} height={sparkH} style={{display:"block"}}>
                       <polyline points={points} fill="none" stroke={C.cyan} strokeWidth={1.5}/>
-                    </svg> : <span style={{fontSize:9,color:C.textMuted}}>{"—"}</span>}
+                    </svg> : <span style={{fontSize:9,color:C.textMuted}}>{"�"}</span>}
                   </td>
                   <td style={{padding:"8px 10px"}}>{srcBadge(d.source)}</td>
                 </tr>);
@@ -2659,7 +2674,7 @@ export default function Dashboard() {
     </div>
     );
   };
-  // ── Tab Switch ─────────────────────────────────────────────────────────
+  // -- Tab Switch ---------------------------------------------------------
   // Tab: Portfolio + AI Trading Assistant
   const sendPortfolioChat = async () => {
     if(!portfolioInput.trim()||portfolioLoading) return;
@@ -2679,23 +2694,18 @@ export default function Dashboard() {
   };
 
   const renderPortfolio = () => {
-    const s = portfolio?.summary || {};
-    const positions = portfolio?.positions || [];
-    const netLiq = parseFloat(s.NetLiquidation||"0");
-    const cash = parseFloat(s.TotalCashValue||"0");
-    const unrealPnl = parseFloat(s.UnrealizedPnL||"0");
-    const realPnl = parseFloat(s.RealizedPnL||"0");
-    const buyPow = parseFloat(s.BuyingPower||"0");
-    const grossPos = parseFloat(s.GrossPositionValue||"0");
-
-    // Group positions by symbol
-    const grouped:Record<string,any[]> = {};
-    positions.forEach((p:any)=>{
-      const sym = p.symbol||"OTHER";
-      if(!grouped[sym]) grouped[sym]=[];
-      grouped[sym].push(p);
-    });
-    const sortedSymbols = Object.keys(grouped).sort();
+    const acct = portfolio?.account || {};
+    const byUnderlying = portfolio?.positions_by_underlying || {};
+    const equities = portfolio?.equity_positions || {};
+    const fixedInc = portfolio?.fixed_income || {};
+    const summary = portfolio?.portfolio_summary || {};
+    const netLiq = acct.net_liquidation || 0;
+    const cash = acct.total_cash || 0;
+    const unrealPnl = acct.unrealized_pnl || 0;
+    const buyPow = acct.buying_power || 0;
+    const grossPos = acct.gross_position_value || 0;
+    const marginUtil = acct.margin_utilization_pct || 0;
+    const symbols = Object.keys(byUnderlying).sort();
 
     const suggestions = [
       "Analise meu portfolio e sugira hedges",
@@ -2707,9 +2717,7 @@ export default function Dashboard() {
 
     return (
     <div style={{display:"flex",gap:0,height:"100%"}}>
-      {/* LEFT: Portfolio Data */}
       <div style={{flex:1,overflow:"auto",padding:24}}>
-        {/* Account Summary Cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:24}}>
           {[
             {label:"Net Liquidation",value:netLiq,fmt:"$",color:C.text},
@@ -2717,69 +2725,104 @@ export default function Dashboard() {
             {label:"Cash",value:cash,fmt:"$",color:C.cyan},
             {label:"Gross Position",value:grossPos,fmt:"$",color:C.text},
             {label:"Unrealized P&L",value:unrealPnl,fmt:"$",color:unrealPnl>=0?C.green:C.red},
-            {label:"Realized P&L",value:realPnl,fmt:"$",color:realPnl>=0?C.green:C.red},
+            {label:"Margin Util",value:marginUtil,fmt:"",color:marginUtil>50?C.red:C.green},
           ].map((card,i)=>(
             <div key={i} style={{padding:16,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`}}>
               <div style={{fontSize:9,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>{card.label}</div>
-              <div style={{fontSize:20,fontWeight:700,color:card.color,fontFamily:"monospace"}}>{card.fmt}{card.value.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+              <div style={{fontSize:20,fontWeight:700,color:card.color,fontFamily:"monospace"}}>{card.fmt}{typeof card.value==="number"?card.value.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0}):card.value}{card.label==="Margin Util"?"%":""}</div>
             </div>
           ))}
         </div>
 
-        {/* Refresh button */}
+        {summary.dominant_strategy && (
+          <div style={{padding:"12px 16px",background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:20,display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
+            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Estrategia</span><div style={{fontSize:12,fontWeight:600,color:C.amber,marginTop:2}}>{summary.dominant_strategy}</div></div>
+            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Bias</span><div style={{fontSize:12,fontWeight:600,color:C.text,marginTop:2}}>{summary.directional_bias}</div></div>
+            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Risco</span><div style={{fontSize:12,fontWeight:600,color:C.text,marginTop:2}}>{summary.risk_profile}</div></div>
+            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Vencimentos</span><div style={{fontSize:12,fontWeight:600,color:C.red,marginTop:2}}>{summary.nearest_expirations}</div></div>
+          </div>
+        )}
+
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
           <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"6px 16px",fontSize:11,fontWeight:600,background:ibkrRefreshing?"#555":C.blue,color:"#fff",border:"none",borderRadius:6,cursor:ibkrRefreshing?"wait":"pointer"}}>
             {ibkrRefreshing?"Atualizando...":"Atualizar IBKR"}
           </button>
           <span style={{fontSize:10,color:C.textMuted}}>Ultima atualizacao: {ibkrTime}</span>
+          <span style={{fontSize:10,color:C.textMuted}}>| {summary.total_option_legs||0} legs, {summary.total_option_contracts_gross||0} contratos</span>
         </div>
 
-        {/* Positions Table grouped */}
-        <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Posicoes ({positions.length})</div>
-        {sortedSymbols.map(sym=>{
-          const group = grouped[sym];
-          const totalMV = group.reduce((s:number,p:any)=>s+(p.market_value||0),0);
+        <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Estrategias por Commodity ({symbols.length})</div>
+        {symbols.map(sym=>{
+          const data = byUnderlying[sym];
+          const legs = data.legs || [];
+          const structures = data.structures || [];
           return (
-            <div key={sym} style={{marginBottom:16}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-                <span style={{fontSize:12,fontWeight:700,color:C.amber}}>{sym}</span>
-                <span style={{fontSize:10,color:C.textMuted}}>{group.length} posicoes</span>
-                <span style={{fontSize:10,fontWeight:600,color:totalMV>=0?C.green:C.red,fontFamily:"monospace"}}>MV: ${totalMV.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+            <div key={sym} style={{marginBottom:20}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <span style={{fontSize:14,fontWeight:700,color:C.amber}}>{data.name || sym}</span>
+                <span style={{fontSize:10,color:C.textMuted,background:C.panel,padding:"2px 8px",borderRadius:4}}>{sym}</span>
+                <span style={{fontSize:10,color:C.cyan,fontWeight:600}}>{data.strategy_summary}</span>
               </div>
+              {structures.length > 0 && (
+                <div style={{display:"flex",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+                  {structures.map((st:any,si:number)=>(
+                    <div key={si} style={{padding:"8px 14px",background:C.panelAlt,borderRadius:6,border:`1px solid ${C.border}`,fontSize:10}}>
+                      <div style={{color:C.gold,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>{(st.type||"").replace(/_/g," ")}</div>
+                      <div style={{color:C.text}}>{st.long_strike && st.short_strike ? st.long_strike+"/"+st.short_strike : st.lower && st.upper ? st.lower+"/"+st.middle+"/"+st.upper : ""}{st.expiry ? " "+st.expiry : ""}{st.qty ? " x"+st.qty : ""}</div>
+                      {st.max_risk_per_lot && <div style={{color:C.red,marginTop:2}}>{"Max risk/lot: $"+st.max_risk_per_lot}</div>}
+                      {st.credit_received_per_lot && <div style={{color:C.green,marginTop:2}}>{"Credit/lot: $"+st.credit_received_per_lot.toFixed(2)}</div>}
+                      {st.note && <div style={{color:C.textMuted,marginTop:2,fontStyle:"italic"}}>{st.note}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={{background:C.panelAlt,borderRadius:6,border:`1px solid ${C.border}`,overflow:"hidden"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
                   <thead>
                     <tr style={{borderBottom:`1px solid ${C.border}`}}>
-                      {["Contrato","Tipo","Qtd","Custo Med","Valor Mercado"].map(h=>(
+                      {["Contrato","Tipo","Strike","Venc","Qtd","Side","Custo Med"].map(h=>(
                         <th key={h} style={{padding:"8px 10px",textAlign:"left",color:C.textMuted,fontWeight:600,fontSize:9,textTransform:"uppercase"}}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {group.map((p:any,j:number)=>{
-                      const mv = p.market_value||0;
-                      const cost = p.avg_cost * Math.abs(p.position);
-                      const pnl = mv - (p.position>0?cost:-cost);
-                      return (
-                        <tr key={j} style={{borderBottom:`1px solid ${C.border}22`}}>
-                          <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace",fontWeight:500}}>{p.local_symbol}</td>
-                          <td style={{padding:"6px 10px",color:C.textMuted}}>{p.sec_type}</td>
-                          <td style={{padding:"6px 10px",color:p.position>0?C.green:C.red,fontWeight:600,fontFamily:"monospace"}}>{p.position>0?"+":""}{p.position}</td>
-                          <td style={{padding:"6px 10px",color:C.textMuted,fontFamily:"monospace"}}>${p.avg_cost.toFixed(2)}</td>
-                          <td style={{padding:"6px 10px",color:mv>=0?C.green:C.red,fontWeight:600,fontFamily:"monospace"}}>${mv.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</td>
-                        </tr>
-                      );
-                    })}
+                    {legs.map((leg:any,j:number)=>(
+                      <tr key={j} style={{borderBottom:`1px solid ${C.border}22`}}>
+                        <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace",fontWeight:500}}>{leg.local_symbol}</td>
+                        <td style={{padding:"6px 10px",color:leg.type==="PUT"?C.red:C.green,fontWeight:600}}>{leg.type}</td>
+                        <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace"}}>{leg.strike}</td>
+                        <td style={{padding:"6px 10px",color:C.textMuted}}>{leg.expiry}</td>
+                        <td style={{padding:"6px 10px",color:leg.position>0?C.green:C.red,fontWeight:600,fontFamily:"monospace"}}>{leg.position>0?"+":""}{leg.position}</td>
+                        <td style={{padding:"6px 10px",color:leg.side==="LONG"?C.green:C.red,fontWeight:600}}>{leg.side}</td>
+                        <td style={{padding:"6px 10px",color:C.textMuted,fontFamily:"monospace"}}>{"$"+leg.avg_cost.toFixed(2)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
           );
         })}
-        {positions.length===0 && <DataPlaceholder title="Sem posicoes" detail="Execute o pipeline com IBKR conectado" />}
+
+        {Object.keys(equities).length > 0 && (
+          <div style={{marginTop:20}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Equity & Renda Fixa</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+              {Object.entries({...equities,...fixedInc}).map(([k,v]:any)=>(
+                <div key={k} style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:12,fontWeight:700,color:C.amber}}>{v.name}</div>
+                  <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>{v.sec_type} | {v.position.toLocaleString()}{v.sec_type==="STK"?" shares":""}</div>
+                  <div style={{fontSize:14,fontWeight:700,color:C.text,fontFamily:"monospace",marginTop:6}}>{"$"+v.notional_at_cost.toLocaleString("en-US",{minimumFractionDigits:0})}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {symbols.length===0 && Object.keys(equities).length===0 && <DataPlaceholder title="Sem posicoes" detail="Faca export do IBKR via Claude chat" />}
       </div>
 
-      {/* RIGHT: AI Chat */}
+            {/* RIGHT: AI Chat */}
       <div style={{width:400,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",background:C.panel}}>
         <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,fontSize:13,fontWeight:700,color:C.amber}}>AI Trading Assistant</div>
 
@@ -2815,20 +2858,21 @@ export default function Dashboard() {
 
   const renderTab = () => {
     switch(tab) {
-      case "Gráfico + COT": return renderGraficoCOT();
+      case "Gr�fico + COT": return renderGraficoCOT();
       case "Comparativo": return renderComparativo();
       case "Spreads": return renderSpreads();
       case "Sazonalidade": return renderSazonalidade();
       case "Stocks Watch": return renderStocksWatch();
       case "Energia": return renderEnergia();
-      case "Custo Produção": return renderCustoProducao();
-      case "Físico Intl": return renderFisicoIntl();
+      case "Custo Produ��o": return renderCustoProducao();
+      case "F�sico Intl": return renderFisicoIntl();
       case "Leitura do Dia": return renderLeituraDoDia();
       case "Portfolio": return renderPortfolio();
+      case "Bilateral": return <BilateralPanel />;
       default: return null;
     }
   };
-  // ── Main Return ────────────────────────────────────────────────────────
+  // -- Main Return --------------------------------------------------------
   return (
     <div style={{display:"flex",minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI','Helvetica Neue',sans-serif"}}>
       {/* Sidebar */}
@@ -2840,7 +2884,7 @@ export default function Dashboard() {
         
         {/* Commodities list */}
         <div style={{flex:1,overflowY:"auto",padding:"10px 0"}}>
-          {["Grãos","Softs","Pecuária","Energia","Metais","Macro"].map(grp=>(
+          {["Gr�os","Softs","Pecu�ria","Energia","Metais","Macro"].map(grp=>(
             <div key={grp}>
               <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
               {COMMODITIES.filter(c=>c.group===grp).map(c=>{
@@ -2856,7 +2900,7 @@ export default function Dashboard() {
                       <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"—"}</div>
+                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"�"}</div>
                       {ch && <div style={{fontSize:9,fontFamily:"monospace",color:ch.pct>=0?C.green:C.red}}>{ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>}
                     </div>
                   </div>
@@ -2872,7 +2916,7 @@ export default function Dashboard() {
             <div style={{width:6,height:6,borderRadius:"50%",background:pipelineOk?C.green:C.red}}/>
             <span style={{color:C.textMuted}}>{pipelineOk?"Pipeline Online":"Dados Parciais"}</span>
           </div>
-          <div style={{color:C.textMuted}}>Última atualização: {lastDate}</div>
+          <div style={{color:C.textMuted}}>�ltima atualiza��o: {lastDate}</div>
         </div>
       </div>
 
@@ -2886,9 +2930,13 @@ export default function Dashboard() {
             {pipelineOk && <Badge label="PIPELINE ONLINE" color={C.blue} />}
             <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:12}}>
               <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:ibkrRefreshing?"#555":C.blue,color:"#fff",border:"none",borderRadius:4,cursor:ibkrRefreshing?"wait":"pointer",letterSpacing:0.5}}>
-                {ibkrRefreshing?"↻ Atualizando...":"IBKR Refresh"}
+                {ibkrRefreshing?"? Atualizando...":"IBKR Refresh"}
               </button>
               <span style={{fontSize:10,color:C.textMuted}}>IBKR: {ibkrTime}</span>
+              <button onClick={refreshPipeline} disabled={pipeRefresh} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:pipeRefresh?"#555":"#e94560",color:"#fff",border:"none",borderRadius:4,cursor:pipeRefresh?"wait":"pointer",letterSpacing:0.5,marginLeft:8}}>
+                {pipeRefresh?"? Rodando...":"Atualizar Pipeline"}
+              </button>
+              {pipeMsg && <span style={{fontSize:9,color:C.textMuted,marginLeft:4}}>{pipeMsg}</span>}
               <a href="/api/latest-pdf" target="_blank" rel="noopener noreferrer" style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#a855f7",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",letterSpacing:0.5,textDecoration:"none",marginLeft:8}}>PDF Report</a>
             </div>
           </div>
