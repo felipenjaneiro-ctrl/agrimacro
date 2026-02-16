@@ -2461,6 +2461,192 @@ def pg_disclosure(pdf):
     pdf.drawRightString(W - 50, 15, f"Disclosure v{disc.get('version', '1.0')} | {disc.get('last_updated', '')}")
 
 
+
+# == BILATERAL INTELLIGENCE PAGE ============================================
+def pg_bilateral(pdf, bilateral):
+    dbg(pdf)
+    hdr(pdf, 'Inteligencia Bilateral', 'US vs Brasil: competitividade, exportacoes e custo desembarcado',
+        'Indicadores proprietarios AgriMacro que nenhum terminal Bloomberg ou DTN oferece.')
+    y = PAGE_H - 75
+
+    summary = bilateral.get('summary', {})
+    lcs = bilateral.get('lcs', {})
+    ert = bilateral.get('ert', {})
+    bci = bilateral.get('bci', {})
+
+    # === TOP STRIP: 3 headline numbers ===
+    cw = (PAGE_W - 2*M - 20) / 3
+    cards_data = []
+
+    if summary.get('lcs_spread') is not None:
+        sp = summary['lcs_spread']
+        origin = summary.get('lcs_origin', '?')
+        clr = GREEN if origin == 'BR' else RED
+        cards_data.append(('Landed Cost Shanghai', f'${sp:+.0f}/mt', f'{origin} mais competitivo', clr))
+
+    if summary.get('ert_leader') is not None:
+        leader = summary['ert_leader']
+        share = summary.get('ert_br_share', 0)
+        clr = GREEN if leader == 'BR' else AMBER
+        cards_data.append(('Corrida de Exportacao', f'{leader} lidera', f'BR {share:.0f}% do total BR+US', clr))
+
+    if summary.get('bci_score') is not None:
+        score = summary['bci_score']
+        signal = summary.get('bci_signal', '?')
+        clr = GREEN if score >= 60 else (AMBER if score >= 40 else RED)
+        cards_data.append(('Indice Competitividade BR', f'{score:.0f}/100', signal, clr))
+
+    for i, (title, val, sub, clr) in enumerate(cards_data):
+        x = M + i * (cw + 10)
+        panel(pdf, x, y - 60, cw, 62, bc=clr)
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 7.5); pdf.drawString(x + 10, y - 12, title)
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont('Helvetica-Bold', 18); pdf.drawString(x + 10, y - 36, val)
+        pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont('Helvetica', 7); pdf.drawString(x + 10, y - 52, sub[:42])
+
+    y -= 82
+
+    # === LEFT COLUMN: LCS Detail ===
+    lx = M
+    col_w = (PAGE_W - 2*M - 20) / 2
+
+    if lcs.get('status') == 'OK':
+        panel(pdf, lx, y - 180, col_w, 178)
+        py = y - 14
+        pdf.setFillColor(HexColor(AMBER)); pdf.setFont('Helvetica-Bold', 10)
+        pdf.drawString(lx + 10, py, 'CUSTO DESEMBARCADO SHANGHAI (LCS)')
+        py -= 18
+
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 8)
+        pdf.drawString(lx + 10, py, 'Rota EUA (Gulf > Shanghai):')
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont('Helvetica-Bold', 9)
+        pdf.drawString(lx + 180, py, f'${lcs.get("us_landed", 0):.0f}/mt')
+        py -= 14
+
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 8)
+        pdf.drawString(lx + 10, py, 'Rota Brasil (Santos > Shanghai):')
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont('Helvetica-Bold', 9)
+        pdf.drawString(lx + 180, py, f'${lcs.get("br_landed", 0):.0f}/mt')
+        py -= 18
+
+        spread = lcs.get('spread_usd_mt', 0)
+        sp_clr = GREEN if spread > 0 else RED
+        pdf.setFillColor(HexColor(sp_clr)); pdf.setFont('Helvetica-Bold', 14)
+        pdf.drawString(lx + 10, py, f'Spread: ${spread:+.2f}/mt')
+        py -= 14
+        pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont('Helvetica', 7)
+        pdf.drawString(lx + 10, py, f'Origem mais competitiva: {lcs.get("competitive_origin", "?")}')
+        py -= 18
+
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 7.5)
+        fob_sp = lcs.get('fob_spread', 0)
+        ocean_adv = lcs.get('ocean_advantage', 0)
+        pdf.drawString(lx + 10, py, f'FOB Spread: ${fob_sp:+.0f}/mt  |  Vantagem Frete Maritimo: ${ocean_adv:+.0f}/mt')
+        py -= 12
+        ptax_v = lcs.get('ptax', 0)
+        cbot_v = lcs.get('cbot_cents_bu', 0)
+        pdf.drawString(lx + 10, py, f'CBOT: {cbot_v:.0f} cents/bu  |  PTAX: R$ {ptax_v:.2f}')
+
+    # === RIGHT COLUMN: BCI Components ===
+    rx = M + col_w + 20
+
+    if bci.get('status') == 'OK':
+        panel(pdf, rx, y - 180, col_w, 178)
+        py = y - 14
+        pdf.setFillColor(HexColor(AMBER)); pdf.setFont('Helvetica-Bold', 10)
+        pdf.drawString(rx + 10, py, 'COMPONENTES BCI (0-100)')
+        py -= 20
+
+        comps = bci.get('components', [])
+        for comp in sorted(comps, key=lambda c: c.get('score', 0) * c.get('weight_pct', 0) / 100, reverse=True):
+            name = comp.get('name', '?')
+            score = comp.get('score', 0)
+            weight = comp.get('weight_pct', 0)
+            signal = comp.get('signal', 'NEUTRAL')
+
+            s_clr = GREEN if signal == 'BULLISH' else (RED if signal == 'BEARISH' else AMBER)
+
+            pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 7.5)
+            pdf.drawString(rx + 10, py, name[:22])
+
+            bar_x = rx + 130
+            bar_w = col_w - 200
+            pdf.setFillColor(HexColor(BORDER)); pdf.rect(bar_x, py - 2, bar_w, 8, fill=1, stroke=0)
+            fill_w = bar_w * score / 100
+            pdf.setFillColor(HexColor(s_clr)); pdf.rect(bar_x, py - 2, fill_w, 8, fill=1, stroke=0)
+
+            pdf.setFillColor(HexColor(s_clr)); pdf.setFont('Helvetica-Bold', 7.5)
+            pdf.drawString(bar_x + bar_w + 5, py, f'{score:.0f}')
+
+            pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont('Helvetica', 6.5)
+            pdf.drawString(bar_x + bar_w + 25, py, f'{weight}%')
+
+            py -= 16
+
+        py -= 5
+        pdf.setFillColor(HexColor(GREEN)); pdf.setFont('Helvetica-Bold', 7.5)
+        pdf.drawString(rx + 10, py, f'Mais forte: {bci.get("strongest", "?")}')
+        pdf.setFillColor(HexColor(RED))
+        pdf.drawString(rx + col_w/2, py, f'Mais fraco: {bci.get("weakest", "?")}')
+
+    # === BOTTOM: Export Race ===
+    y -= 200
+
+    if ert.get('status') == 'OK':
+        panel(pdf, M, y - 120, PAGE_W - 2*M, 118)
+        py = y - 14
+        pdf.setFillColor(HexColor(AMBER)); pdf.setFont('Helvetica-Bold', 10)
+        pdf.drawString(M + 10, py, 'CORRIDA DE EXPORTACAO SOJA (MARKETING YEAR)')
+        py -= 22
+
+        us_ytd = ert.get('us_ytd_mmt', 0)
+        us_pace = ert.get('us_pace_pct', 0)
+        br_ytd = ert.get('br_ytd_mmt', 0)
+        br_pace = ert.get('br_pace_pct', 0)
+
+        bar_full = PAGE_W - 2*M - 120
+
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 8)
+        pdf.drawString(M + 10, py, f'EUA:  {us_ytd:.1f} MMT ({us_pace:.1f}%)')
+        us_w = bar_full * min(us_pace, 100) / 100
+        pdf.setFillColor(HexColor(AMBER)); pdf.rect(M + 110, py - 3, us_w, 12, fill=1, stroke=0)
+        pdf.setFillColor(HexColor(BORDER)); pdf.rect(M + 110 + us_w, py - 3, bar_full - us_w, 12, fill=1, stroke=0)
+        py -= 22
+
+        pdf.setFillColor(HexColor(TEXT_MUT)); pdf.setFont('Helvetica', 8)
+        pdf.drawString(M + 10, py, f'Brasil: {br_ytd:.1f} MMT ({br_pace:.1f}%)')
+        br_w = bar_full * min(br_pace, 100) / 100
+        pdf.setFillColor(HexColor(GREEN)); pdf.rect(M + 110, py - 3, br_w, 12, fill=1, stroke=0)
+        pdf.setFillColor(HexColor(BORDER)); pdf.rect(M + 110 + br_w, py - 3, bar_full - br_w, 12, fill=1, stroke=0)
+        py -= 22
+
+        br_share = ert.get('br_market_share_pct', 0)
+        us_share = ert.get('us_market_share_pct', 0)
+        shift = ert.get('share_shift_pp', 0)
+
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont('Helvetica-Bold', 8.5)
+        pdf.drawString(M + 10, py, 'Market Share:')
+
+        ms_x = M + 110
+        us_ms_w = bar_full * us_share / 100
+        br_ms_w = bar_full * br_share / 100
+        pdf.setFillColor(HexColor(AMBER)); pdf.rect(ms_x, py - 3, us_ms_w, 14, fill=1, stroke=0)
+        pdf.setFillColor(HexColor(GREEN)); pdf.rect(ms_x + us_ms_w, py - 3, br_ms_w, 14, fill=1, stroke=0)
+
+        pdf.setFillColor(HexColor('#000')); pdf.setFont('Helvetica-Bold', 7)
+        if us_share > 15:
+            pdf.drawString(ms_x + 5, py, f'US {us_share:.0f}%')
+        if br_share > 15:
+            pdf.drawString(ms_x + us_ms_w + 5, py, f'BR {br_share:.0f}%')
+
+        shift_clr = GREEN if shift > 0 else RED
+        pdf.setFillColor(HexColor(shift_clr)); pdf.setFont('Helvetica', 7)
+        pdf.drawRightString(PAGE_W - M - 10, py, f'vs 5yr: {shift:+.1f}pp')
+
+    # Source
+    pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont('Helvetica', 5.5)
+    pdf.drawString(M, 22, 'Fontes: CEPEA/ESALQ, CBOT/CME, BCB/PTAX, USDA AMS GTR, Comex Stat/MDIC, IMEA | AgriMacro Intelligence (c) 2026')
+
+
 def build_pdf():
     print(f"  Data: {TODAY_BR} ({WDAY})")
     print("  Carregando dados...")
@@ -2477,6 +2663,7 @@ def build_pdf():
     wt   = sload(DATA_PROC, "weather_agro.json")
     nw   = sload(DATA_PROC, "news.json")
     sabr = sload(DATA_PROC, "sugar_alcohol_br.json")  # Acucar & Alcool BR
+    bilateral = sload(DATA_PROC, "bilateral_indicators.json")  # Bilateral Intelligence
     if not pr: print("  [ERRO] price_history.json nao encontrado!"); sys.exit(1)
     sk=list(pr.keys())[0]; sv=pr[sk]
     print(f"  [OK] prices: {len(pr)} symbols, {len(sv)} records" if isinstance(sv,list) else f"  [WARN] tipo: {type(sv)}")
@@ -2522,7 +2709,7 @@ def build_pdf():
     img_sp_grid = chart_spreads_grid(sd, extra_sp)
 
     os.makedirs(REPORT_DIR, exist_ok=True)
-    T = 21  # 18 originais + arbitragem + pecuaria
+    T = 22  # 18 originais + bilateral + arbitragem + pecuaria
     print(f"  Montando PDF ({T} paginas)...")
     pdf = canvas.Canvas(OUTPUT_PDF, pagesize=landscape(A4))
     pdf.setTitle(f"AgriMacro Diario - {TODAY_STR}"); pdf.setAuthor("AgriMacro v3.2")
@@ -2532,8 +2719,8 @@ def build_pdf():
     pg_cover(pdf,rd,dr,bcb,pr)
     # Disclaimer compacto no rodape da capa
     if HAS_DISCLOSURE:
-        from reportlab.lib.pagesizes import A4, landscape as _ls
-        _dw = _ls(A4)[0]
+        _dw = landscape(A4)[0]
+        _dw = landscape(A4)[0]
         pdf.setFillColor(HexColor('#666666'))
         pdf.setFont('Helvetica', 5.5)
         _dt = get_cover_disclaimer()
@@ -2576,7 +2763,10 @@ def build_pdf():
     pg_energy_sugar_cross(pdf, pr, ed, phys, bcb, img_cross); ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 15. Pecuaria Comparativa
     pg_cattle_compare(pdf, pr, phys, bcb, img_cattle); ftr(pdf,pn,T); pdf.showPage(); pn+=1
-    # 15. Physical
+    # 15B. Bilateral Intelligence
+    if bilateral and bilateral.get("summary", {}).get("bci_score") is not None:
+        pg_bilateral(pdf, bilateral);             ftr(pdf,pn,T); pdf.showPage(); pn+=1
+    # 16. Physical
     pg_physical(pdf, phys, img_phbr);           ftr(pdf,pn,T); pdf.showPage(); pn+=1
     # 16. Weather
     pg_weather(pdf, wt);                        ftr(pdf,pn,T); pdf.showPage(); pn+=1
