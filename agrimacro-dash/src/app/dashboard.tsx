@@ -178,7 +178,7 @@ interface FuturesData {
   commodities:Record<string,FuturesCommodity>;
 }
 
-type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk";
+type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk"|"Paridades";
 
 // -- Color Theme ------------------------------------------------------------
 const C = {
@@ -1284,6 +1284,7 @@ export default function Dashboard() {
   const [strategyCollapsed, setStrategyCollapsed] = useState<Record<string,boolean>>({});
   const [strategyRefineMode, setStrategyRefineMode] = useState(false);
   const [strategyConvoHistory, setStrategyConvoHistory] = useState<{role:string;content:string}[]>([]);
+  const [paritiesData, setParitiesData] = useState<any>(null);
 
   // Load data
   useEffect(()=>{
@@ -1325,6 +1326,7 @@ export default function Dashboard() {
     fetch("/data/processed/psd_ending_stocks.json").then(r=>r.json()).then(setPsdData).catch(()=>{});
     fetch("/data/processed/physical_br.json").then(r=>r.json()).then(setPhysicalBrData).catch(()=>{});
     fetch("/data/processed/imea_soja.json").then(r=>r.json()).then(setImeaData).catch(()=>{});
+    fetch("/data/processed/parities.json").then(r=>r.json()).then(setParitiesData).catch(()=>{});
   }, []);
 
   // IBKR Auto-Refresh
@@ -4005,6 +4007,18 @@ export default function Dashboard() {
         if(imLines.length) { sections.push("\n=== CUSTO DE PRODUÇÃO / MARGEM PRODUTOR (IMEA) ==="); sections.push(imLines.join("\n")); }
       }
 
+      // Paridades e correlações
+      if (paritiesData?.parities) {
+        const p = paritiesData.parities;
+        sections.push("\n=== PARIDADES E CORRELAÇÕES ===");
+        Object.values(p).forEach((par: any) => {
+          let line = `${par.name}: ${par.value} ${par.unit}`;
+          line += ` | z=${par.z_score ?? 'n/a'}`;
+          line += ` | ${par.signal}`;
+          sections.push(line);
+        });
+      }
+
       // Analysis request
       sections.push("\n=== ANÁLISE SOLICITADA ===");
       sections.push("Com base em todos os dados acima:\n1. Quais são os maiores riscos para o portfólio atual dado o ambiente de mercado?\n2. Quais posições estão alinhadas com os sinais multifatoriais?\n3. Quais estão em conflito com os sinais (maior risco)?\n4. Recomendações de ajuste de exposição (apresentar como análise de risco, sem ser prescritivo)\n5. O que monitorar nas próximas 24-48 horas?\n\nResponda em português brasileiro, tom institucional e analítico.");
@@ -4853,6 +4867,170 @@ export default function Dashboard() {
     );
   };
 
+  const renderParitiesTab = () => {
+    const data = paritiesData;
+    if (!data?.parities) return <div style={{color:"#64748b",fontSize:11,fontStyle:"italic",padding:16}}>Carregando paridades...</div>;
+
+    const categories: Record<string, any[]> = {};
+    Object.values(data.parities).forEach((p: any) => {
+      const cat = p.category || 'outros';
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(p);
+    });
+
+    const catLabels: Record<string, string> = {
+      acreagem: '\u{1F33E} Acreagem & Plantio',
+      energia: '\u26A1 Energia & Biodiesel',
+      macro: '\u{1F30D} Macro & C\u00e2mbio',
+      crush: '\u{1F527} Crush & Processamento',
+      softs: '\u{1F36C} Softs Brasileiros',
+      insumos: '\u{1F9EA} Insumos & Fertilizantes',
+    };
+
+    return (
+      <div style={{padding:16}}>
+        <div style={{
+          fontSize:11, color:'#64748b', marginBottom:16,
+          borderLeft:'3px solid #DCB432', paddingLeft:8
+        }}>
+          Paridades e correla\u00e7\u00f5es que definem decis\u00f5es de
+          plantio, produ\u00e7\u00e3o e exporta\u00e7\u00e3o. Atualizado diariamente.
+        </div>
+
+        {Object.entries(categories).map(([cat, items]) => (
+          <div key={cat} style={{marginBottom:24}}>
+            <div style={{
+              fontSize:11, fontWeight:700, color:'#94a3b8',
+              letterSpacing:'0.1em', marginBottom:12,
+              textTransform:'uppercase'
+            }}>
+              {catLabels[cat] || cat}
+            </div>
+
+            <div style={{
+              display:'grid',
+              gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))',
+              gap:12
+            }}>
+              {items.map((par: any) => {
+                const z = par.z_score;
+                const zColor = z == null ? '#64748b'
+                  : Math.abs(z) > 2 ? '#DC3C3C'
+                  : Math.abs(z) > 1 ? '#DCB432'
+                  : '#64748b';
+
+                return (
+                  <div key={par.name} style={{
+                    background:'#0E1A24',
+                    border:'1px solid #1e3a4a',
+                    borderLeft:`3px solid ${par.signal_color || '#64748b'}`,
+                    borderRadius:8, padding:14
+                  }}>
+                    <div style={{
+                      fontSize:11, fontWeight:700,
+                      color:'#e2e8f0', marginBottom:4
+                    }}>
+                      {par.name}
+                    </div>
+                    <div style={{
+                      fontSize:9, color:'#64748b', marginBottom:10
+                    }}>
+                      {par.description}
+                    </div>
+
+                    <div style={{
+                      display:'flex', alignItems:'baseline',
+                      gap:8, marginBottom:8
+                    }}>
+                      <span style={{
+                        fontSize:22, fontWeight:700,
+                        fontFamily:'monospace',
+                        color: par.signal_color || '#e2e8f0'
+                      }}>
+                        {typeof par.value === 'number'
+                          ? par.value.toFixed(
+                              par.unit === '%' ? 1
+                              : par.unit === 'ratio' ? 4
+                              : par.unit === 'correla\u00e7\u00e3o' ? 3
+                              : 2
+                            )
+                          : par.value}
+                      </span>
+                      <span style={{fontSize:10, color:'#64748b'}}>
+                        {par.unit}
+                      </span>
+                      {z != null && (
+                        <span style={{
+                          fontSize:10, color: zColor,
+                          fontFamily:'monospace'
+                        }}>
+                          z={z > 0 ? '+' : ''}{z}
+                        </span>
+                      )}
+                    </div>
+
+                    {z != null && (
+                      <div style={{
+                        height:3, background:'#1e3a4a',
+                        borderRadius:2, marginBottom:8
+                      }}>
+                        <div style={{
+                          height:'100%', borderRadius:2,
+                          background: zColor,
+                          width: `${Math.min(Math.abs(z)/3*100, 100)}%`,
+                          marginLeft: z < 0
+                            ? `${Math.max(50 - Math.abs(z)/3*50, 0)}%`
+                            : '50%'
+                        }} />
+                      </div>
+                    )}
+
+                    <div style={{
+                      fontSize:10, fontWeight:600,
+                      color: par.signal_color || '#64748b'
+                    }}>
+                      {par.signal}
+                    </div>
+
+                    {(par.trend_7d !== undefined) && (
+                      <div style={{
+                        fontSize:9, color:'#64748b', marginTop:6,
+                        display:'flex', gap:12
+                      }}>
+                        <span>7d: {par.trend_7d > 0 ? '\u2191' : '\u2193'}
+                          {Math.abs(par.trend_7d).toFixed(1)}%
+                        </span>
+                        {par.trend_30d !== undefined && (
+                          <span>30d: {par.trend_30d > 0 ? '\u2191' : '\u2193'}
+                            {Math.abs(par.trend_30d).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {par.impact_date && (
+                      <div style={{
+                        fontSize:9, color:'#DCB432', marginTop:6
+                      }}>
+                        \u23F1 Impacto estimado em: {par.impact_date}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        <div style={{fontSize:9, color:'#475569', marginTop:16}}>
+          Atualizado: {data.generated_at?.slice(0,19).replace('T',' ')}
+          {' | '}
+          {data.count} paridades ativas
+        </div>
+      </div>
+    );
+  };
+
   const renderTab = () => {
     switch(tab) {
       case "Gráfico + COT": return renderGraficoCOT();
@@ -4868,6 +5046,7 @@ export default function Dashboard() {
       case "Bilateral": return <BilateralPanel />;
       case "Grain Ratios": return <GrainRatiosTab />;
       case "Livestock Risk": return <LivestockRiskTab />;
+      case "Paridades": return renderParitiesTab();
       default: return null;
     }
   };
@@ -4967,6 +5146,7 @@ export default function Dashboard() {
             {label:"Grain Ratios",tab:"Grain Ratios",only:["ZC","ZS","ZW","KE","ZM","ZL"]},
             {label:"Livestock Risk",tab:"Livestock Risk",only:["LE","GF","HE"]},
             {label:"Bilateral",tab:"Bilateral"},
+            {label:"Paridades",tab:"Paridades"},
             {label:"Portfolio",tab:"Portfolio"},{label:"Calendario",tab:"Leitura do Dia"},
           ] as {label:string;tab:Tab;only?:string[]}[]).filter(t=>!t.only||t.only.includes(selected)).map(t=>{
             const isActive = viewMode==="global" && tab===t.tab;
