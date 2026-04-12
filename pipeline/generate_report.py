@@ -38,7 +38,7 @@ def build_market_context():
     if prices:
         ctx.append("=== PRECOS ATUAIS (fechamento mais recente) ===")
         for sym, bars in prices.items():
-            if not bars:
+            if not isinstance(bars, list) or not bars:
                 continue
             last = bars[-1]
             prev = bars[-2] if len(bars) > 1 else None

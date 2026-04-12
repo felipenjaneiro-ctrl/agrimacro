@@ -1,12 +1,38 @@
-﻿# Node
+# Node
 agrimacro-dash/node_modules/
 agrimacro-dash/.next/
 
-# Data files (mudam todo dia, nao versionar)
+# Data files (mudam todo dia, gerados pelo pipeline)
 agrimacro-dash/public/data/
 
-# Reports PDF (grandes, nao versionar)
+# Raw data (CSVs grandes da CFTC, USDA, etc)
+data/raw/
+
+# Reports (PDFs e videos grandes)
 reports/*.pdf
+reports/*.mp4
+reports/*.srt
+reports/*.wav
+reports/*.mp3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.conda/
+miniconda3/
+
+# Secrets / credentials
+.env
+credentials.json
+token.json
+*.key
+ibkr_export.json
+
+# Logs
+*.log
+pipeline/logs/
+agrimacro-dash/logs/
 
 # Temp fix/debug/diag scripts
 **/fix*.py
@@ -44,7 +70,14 @@ reports/*.pdf
 **/*.py.bak*
 **/collect_new_sources.py
 
+# Claude Code / AI tools
+.claude/
+.agents/
+.mcp.json
+.aidesigner/*
+!.aidesigner/.gitkeep
+
 # OS
-*.pyc
-__pycache__/
-.env
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -63,7 +63,28 @@ function buildContext(): string {
     ctx += JSON.stringify(spreads).slice(0, 1500) + "\n\n";
   }
 
-  ctx += "Respond in Portuguese (Brazilian). Be concise and direct. Focus on actionable market insights.\n";
+  const cotData = loadJSON("cot.json");
+  if (cotData?.commodities) {
+    const extremes: string[] = [];
+    for (const [sym, v] of Object.entries(cotData.commodities) as any[]) {
+      const leg = v?.legacy;
+      if (!leg?.latest || !leg?.history?.length) continue;
+      const nets = leg.history.map((h: any) => h.noncomm_net).filter((n: any) => n != null);
+      if (nets.length < 20) continue;
+      const mn = Math.min(...nets), mx = Math.max(...nets);
+      if (mx === mn) continue;
+      const cotIndex = ((leg.latest.noncomm_net - mn) / (mx - mn)) * 100;
+      if (cotIndex > 80 || cotIndex < 20) {
+        extremes.push(`${sym}: net=${leg.latest.noncomm_net} | cot_index=${cotIndex.toFixed(0)}/100 | ${cotIndex > 80 ? "CROWDED LONG" : "CROWDED SHORT"}`);
+      }
+    }
+    if (extremes.length) {
+      ctx += "=== COT EXTREMOS ===\n";
+      ctx += extremes.join("\n") + "\n\n";
+    }
+  }
+
+  ctx += "Responda em Português Brasileiro. Seja direto e acionável. Foque em implicações práticas para o portfólio atual. Máximo 800 palavras. Use marcadores quando listar itens.\n";
   return ctx;
 }
 
@@ -75,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: systemPrompt,
       messages: messages,
     });

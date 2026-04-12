@@ -64,7 +64,7 @@ def build_video_context():
         ctx.append(f"\n=== PRECOS (top movers) ===")
         movers = []
         for sym, bars in pr.items():
-            if not bars or len(bars) < 2:
+            if not isinstance(bars, list) or not bars or len(bars) < 2:
                 continue
             last = bars[-1]
             prev = bars[-2]

@@ -237,7 +237,7 @@ def get_audio_duration(audio_path):
         result = subprocess.run(
             ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30
         )
         return float(result.stdout.strip())
     except Exception:
@@ -259,7 +259,7 @@ def create_segment_video(image_path, audio_path, output_path, duration):
         "-t", str(duration + 0.5),  # small buffer
         output_path
     ]
-    subprocess.run(cmd, capture_output=True, timeout=120)
+    subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=120)
 
 
 def create_slideshow_segment(image_paths, audio_path, output_path, total_duration):
@@ -295,7 +295,7 @@ def create_slideshow_segment(image_paths, audio_path, output_path, total_duratio
         "-shortest",
         output_path
     ]
-    subprocess.run(cmd, capture_output=True, timeout=180)
+    subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=180)
 
     # Cleanup
     if os.path.exists(concat_file):
@@ -357,7 +357,7 @@ def burn_subtitles(input_video, srt_path, output_video):
         "-pix_fmt", "yuv420p",
         output_video
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
     if result.returncode != 0:
         # Fallback: try without subtitle escaping
         cmd2 = [
@@ -369,7 +369,7 @@ def burn_subtitles(input_video, srt_path, output_video):
             "-pix_fmt", "yuv420p",
             output_video
         ]
-        subprocess.run(cmd2, capture_output=True, text=True, timeout=600)
+        subprocess.run(cmd2, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
 
 
 def concatenate_videos(segment_paths, output_path):
@@ -389,7 +389,7 @@ def concatenate_videos(segment_paths, output_path):
         "-r", str(VIDEO_FPS),
         output_path
     ]
-    subprocess.run(cmd, capture_output=True, timeout=600)
+    subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=600)
 
     if os.path.exists(concat_file):
         os.remove(concat_file)

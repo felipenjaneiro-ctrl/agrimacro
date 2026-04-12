@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-AgriMacro Intelligence — Bilateral Indicators Pipeline
+AgriMacro Intelligence â€” Bilateral Indicators Pipeline
 Runs all 3 proprietary indicators and outputs combined JSON.
 
-Output: bilateral_indicators.json → consumed by dashboard, PDF report, and video generator.
+Output: bilateral_indicators.json â†’ consumed by dashboard, PDF report, and video generator.
 
 Usage:
   python generate_bilateral.py                    # uses default data dir
@@ -138,7 +138,7 @@ def run_lcs(data_dir: Path) -> dict:
         imea_comercializacao = float(imea.get("comercializacao_safra_atual_pct", 0))
     
     # Default freight estimates (will be replaced by GTR/Brazil Transport when available)
-    gulf_basis = 50.0       # ¢/bu
+    gulf_basis = 50.0       # Â¢/bu
     barge_freight = 25.0    # US$/mt
     ocean_gulf = 48.0       # US$/mt
     ocean_santos = 33.0     # US$/mt
@@ -173,8 +173,42 @@ def run_lcs(data_dir: Path) -> dict:
         card = lcs_card(lcs)
         report = lcs_report(lcs)
         
-        print(f"  ✓ LCS: ${lcs.spread:+.2f}/mt → {lcs.competitive_origin} competitive")
+        print(f"  âœ“ LCS: ${lcs.spread:+.2f}/mt â†’ {lcs.competitive_origin} competitive")
         
+        # AUDIT-1: documentar qualidade de cada componente do LCS
+        _gtr_real    = bool(gtr)
+        _brtrans_real = bool(br_transport)
+        _imea_real   = bool(imea)
+        _cepea_real  = cepea_soja > 0
+
+        _lcs_data_quality = {
+            "ptax":          {"source": "BCB_real",    "is_real": True},
+            "cbot":          {"source": "IBKR_CME",    "is_real": True},
+            "cepea_soja":    {"source": "CEPEA_real" if _cepea_real else "N/A", "is_real": _cepea_real},
+            "gulf_basis":    {"source": "USDA_GTR" if _gtr_real else "hardcoded_50", "is_real": _gtr_real,
+                              "value": gulf_basis, "warning": None if _gtr_real else "Valor padrao 50c/bu â€” GTR nao disponivel"},
+            "barge_freight": {"source": "USDA_GTR" if _gtr_real else "hardcoded_25", "is_real": _gtr_real,
+                              "value": barge_freight, "warning": None if _gtr_real else "Valor padrao $25/mt â€” GTR nao disponivel"},
+            "ocean_gulf":    {"source": "USDA_GTR" if _gtr_real else "hardcoded_48", "is_real": _gtr_real,
+                              "value": ocean_gulf, "warning": None if _gtr_real else "Valor padrao $48/mt â€” Baltic/Platts nao disponivel"},
+            "ocean_santos":  {"source": "BR_transport" if _brtrans_real else "hardcoded_33", "is_real": _brtrans_real,
+                              "value": ocean_santos, "warning": None if _brtrans_real else "Valor padrao $33/mt â€” BR transport nao disponivel"},
+        }
+        _real_components = sum(1 for v in _lcs_data_quality.values() if v["is_real"])
+        _total_components = len(_lcs_data_quality)
+        _lcs_data_quality["summary"] = {
+            "real_count":    _real_components,
+            "total_count":   _total_components,
+            "quality_pct":   round(_real_components / _total_components * 100),
+            "reliable":      _real_components >= 5,
+            "warning":       None if _real_components >= 5 else (
+                f"ATENCAO: {_total_components - _real_components} de {_total_components} componentes "
+                f"usam valores padrao â€” resultado indicativo apenas"
+            ),
+        }
+        if _lcs_data_quality["summary"]["warning"]:
+            print(f"  AVISO LCS qualidade: {_lcs_data_quality['summary']['warning']}")
+
         return {
             "status": "OK",
             "spread_usd_mt": round(lcs.spread, 2),
@@ -190,11 +224,12 @@ def run_lcs(data_dir: Path) -> dict:
             "ocean_advantage": round(lcs.ocean_advantage, 2),
             "ptax": ptax,
             "cbot_cents_bu": cbot,
+            "data_quality": _lcs_data_quality,
             "dashboard_card": card,
             "report_text": report,
         }
     except Exception as e:
-        print(f"  ✗ LCS Error: {e}")
+        print(f"  âœ— LCS Error: {e}")
         return {"status": "ERROR", "error": str(e)}
 
 
@@ -250,7 +285,7 @@ def run_ert(data_dir: Path) -> dict:
     
     # If no real data, use seasonal estimates based on WASDE
     if not br_monthly:
-        print("  [WARN] No Comex Stat data — using WASDE-based seasonal estimates")
+        print("  [WARN] No Comex Stat data â€” using WASDE-based seasonal estimates")
         # Build seasonal proxy from WASDE target
         wasde_br = 105.5  # MMT
         seasonal_pct = {2: 3, 3: 12, 4: 16, 5: 15, 6: 12, 7: 10, 8: 8, 9: 6, 10: 5, 11: 5, 12: 4, 1: 4}
@@ -272,7 +307,7 @@ def run_ert(data_dir: Path) -> dict:
                 yr += 1
     
     if not us_monthly:
-        print("  [WARN] No USDA FAS data — using WASDE-based seasonal estimates")
+        print("  [WARN] No USDA FAS data â€” using WASDE-based seasonal estimates")
         wasde_us = 49.67
         seasonal_pct = {9: 8, 10: 15, 11: 14, 12: 10, 1: 8, 2: 6, 3: 5, 4: 5, 5: 6, 6: 8, 7: 8, 8: 7}
         
@@ -304,8 +339,50 @@ def run_ert(data_dir: Path) -> dict:
         card = ert_card(race)
         report = ert_report(race)
         
-        print(f"  ✓ ERT: Leader={race.leader} | BR {race.br_market_share_pct:.1f}% vs US {race.us_market_share_pct:.1f}%")
+        print(f"  âœ“ ERT: Leader={race.leader} | BR {race.br_market_share_pct:.1f}% vs US {race.us_market_share_pct:.1f}%")
         
+        # AUDIT-2: documentar qualidade dos dados do ERT
+        # AUDIT: real = arquivo existia E gerou dados reais (nao WASDE)
+        _comex_real = bool(comex) and bool(br_monthly) and not any(
+            abs(m['volume_mt'] - int(105.5e6 * 0.03)) < 1000 or
+            abs(m['volume_mt'] - int(105.5e6 * 0.12)) < 1000
+            for m in br_monthly[:2]
+        )
+        _fas_real = bool(usda_fas) and bool(us_monthly) and not any(
+            abs(m['volume_mt'] - int(49.67e6 * 0.08)) < 1000 or
+            abs(m['volume_mt'] - int(49.67e6 * 0.15)) < 1000
+            for m in us_monthly[:2]
+        )
+        _ert_data_quality = {
+            "br_exports": {
+                "source":   "Comex_Stat_real" if _comex_real else "WASDE_seasonal_estimate",
+                "is_real":  _comex_real,
+                "warning":  None if _comex_real else (
+                    "ESTIMATIVA: comexstat_exports.json nao disponivel. "
+                    "Volumes brasileiros calculados de WASDE 105.5 MMT Ã— padrao sazonal. "
+                    "NAO reflete embarques reais."
+                ),
+            },
+            "us_exports": {
+                "source":   "USDA_FAS_real" if _fas_real else "WASDE_seasonal_estimate",
+                "is_real":  _fas_real,
+                "warning":  None if _fas_real else (
+                    "ESTIMATIVA: usda_fas.json nao disponivel. "
+                    "Volumes americanos calculados de WASDE 49.67 MMT Ã— padrao sazonal."
+                ),
+            },
+            "summary": {
+                "fully_estimated": (not _comex_real) and (not _fas_real),
+                "warning": (
+                    "DADOS 100% ESTIMADOS â€” Nenhuma fonte real disponivel (Comex Stat + USDA FAS ausentes). "
+                    "Market share e volumes sao projecoes sazonais WASDE, nao embarques confirmados. "
+                    "Tratar como referencia indicativa apenas."
+                ) if (not _comex_real and not _fas_real) else None,
+            },
+        }
+        if _ert_data_quality["summary"]["fully_estimated"]:
+            print(f"  AVISO ERT: DADOS 100% ESTIMADOS (WASDE seasonal)")
+
         return {
             "status": "OK",
             "commodity": "soybeans",
@@ -324,11 +401,12 @@ def run_ert(data_dir: Path) -> dict:
             "china_br_share_pct": race.br_china_share_pct,
             "china_us_share_pct": race.us_china_share_pct,
             "data_source": "real" if comex else "wasde_seasonal_estimate",
+            "data_quality": _ert_data_quality,
             "dashboard_card": card,
             "report_text": report,
         }
     except Exception as e:
-        print(f"  ✗ ERT Error: {e}")
+        print(f"  âœ— ERT Error: {e}")
         return {"status": "ERROR", "error": str(e)}
 
 
@@ -417,10 +495,53 @@ def run_bci(data_dir: Path, lcs_result: dict = None) -> dict:
         card = bci_card(bci)
         report = bci_report(bci)
         
-        print(f"  ✓ BCI: {bci.bci_score:.1f}/100 [{bci.bci_signal}]")
+        print(f"  âœ“ BCI: {bci.bci_score:.1f}/100 [{bci.bci_signal}]")
         print(f"    Strongest: {bci.strongest_component}")
         print(f"    Weakest:   {bci.weakest_component}")
         
+        # AUDIT-3+4: documentar qualidade de cada componente do BCI
+        _imea_real_bci = bool(imea)
+        _lcs_ok        = lcs_result and lcs_result.get("status") == "OK"
+        _lcs_quality   = lcs_result.get("data_quality", {}) if _lcs_ok else {}
+        _frete_real    = _lcs_quality.get("ocean_gulf", {}).get("is_real", False)
+
+        _bci_component_quality = {
+            "FX (BRL/USD)":       {"is_real": True,        "source": "BCB_real",              "weight_pct": 30},
+            "Basis Spread":       {"is_real": False,        "source": "gulf_basis_hardcoded",  "weight_pct": 20,
+                                   "warning": "gulf_basis=50c/bu e santos_premium=-40 sao valores padrao â€” GTR e IMEA ausentes"},
+            "Freight Advantage":  {"is_real": _frete_real, "source": "LCS_ocean" if _frete_real else "LCS_hardcoded",
+                                   "weight_pct": 15,
+                                   "warning": None if _frete_real else "Derivado de ocean_gulf=48 e ocean_santos=33 hardcoded"},
+            "Farmer Selling Pace":{"is_real": _imea_real_bci, "source": "IMEA_real" if _imea_real_bci else "deviation_calculada_sem_IMEA",
+                                   "weight_pct": 15,
+                                   "warning": None if _imea_real_bci else (
+                                       "IMEA ausente: imea_comercializacao=0, desvio=-15pp FABRICADO. "
+                                       "Sinal BEARISH nao reflete comercializacao real do agricultor."
+                                   )},
+            "FOB Spread":         {"is_real": True,         "source": "CEPEA+CBOT_real",       "weight_pct": 10},
+            "Crush Margin":       {"is_real": False,         "source": "hardcoded_45_40",        "weight_pct": 10,
+                                   "warning": "br_crush=45 e us_crush=40 sao valores padrao â€” dado real nao disponivel"},
+        }
+
+        # Calcular peso total com dados reais
+        _real_weight = sum(
+            v["weight_pct"] for v in _bci_component_quality.values()
+            if v["is_real"]
+        )
+        _bci_data_quality = {
+            "components": _bci_component_quality,
+            "real_weight_pct": _real_weight,
+            "estimated_weight_pct": 100 - _real_weight,
+            "reliable": _real_weight >= 60,
+            "warning": (
+                f"BCI baseado em apenas {_real_weight}% de peso com dados reais. "
+                f"{100 - _real_weight}% do peso usa valores padrao. "
+                "Resultado indicativo â€” nao usar para decisoes sem validar componentes ausentes."
+            ) if _real_weight < 60 else None,
+        }
+        if _bci_data_quality["warning"]:
+            print(f"  AVISO BCI qualidade: peso real={_real_weight}% â€” {_bci_data_quality['warning'][:80]}...")
+
         return {
             "status": "OK",
             "bci_score": bci.bci_score,
@@ -440,11 +561,12 @@ def run_bci(data_dir: Path, lcs_result: dict = None) -> dict:
             ],
             "ptax": ptax,
             "cbot_cents_bu": cbot,
+            "data_quality": _bci_data_quality,
             "dashboard_card": card,
             "report_text": report,
         }
     except Exception as e:
-        print(f"  ✗ BCI Error: {e}")
+        print(f"  âœ— BCI Error: {e}")
         return {"status": "ERROR", "error": str(e)}
 
 
@@ -563,16 +685,16 @@ def _narration_pt(lcs: dict, ert: dict, bci: dict) -> dict:
         origin = lcs["competitive_origin"]
         spread = abs(lcs["spread_usd_mt"])
         if origin == "BR":
-            text = (f"O custo de entrega de soja brasileira em Shanghai está {spread:.0f} dólares "
-                   f"por tonelada mais barato que a rota americana pelo Golfo do México. "
-                   f"O custo desembarcado americano é {lcs['us_landed']:.0f} dólares, "
+            text = (f"O custo de entrega de soja brasileira em Shanghai estÃ¡ {spread:.0f} dÃ³lares "
+                   f"por tonelada mais barato que a rota americana pelo Golfo do MÃ©xico. "
+                   f"O custo desembarcado americano Ã© {lcs['us_landed']:.0f} dÃ³lares, "
                    f"contra {lcs['br_landed']:.0f} pelo Santos. "
-                   f"A vantagem do frete marítimo pela rota mais curta de Santos economiza "
-                   f"{lcs['ocean_advantage']:.0f} dólares por tonelada.")
+                   f"A vantagem do frete marÃ­timo pela rota mais curta de Santos economiza "
+                   f"{lcs['ocean_advantage']:.0f} dÃ³lares por tonelada.")
         else:
-            text = (f"Atenção: os Estados Unidos estão {spread:.0f} dólares por tonelada "
+            text = (f"AtenÃ§Ã£o: os Estados Unidos estÃ£o {spread:.0f} dÃ³lares por tonelada "
                    f"mais baratos que o Brasil para entregar soja em Shanghai. "
-                   f"O custo pelo Golfo é {lcs['us_landed']:.0f} contra {lcs['br_landed']:.0f} pelo Santos.")
+                   f"O custo pelo Golfo Ã© {lcs['us_landed']:.0f} contra {lcs['br_landed']:.0f} pelo Santos.")
         
         scenes.append({
             "scene_type": "bilateral_lcs",
@@ -588,14 +710,14 @@ def _narration_pt(lcs: dict, ert: dict, bci: dict) -> dict:
     if ert.get("status") == "OK":
         scenes.append({
             "scene_type": "bilateral_ert",
-            "title": "Corrida de Exportação",
+            "title": "Corrida de ExportaÃ§Ã£o",
             "narration": (
-                f"Na corrida de exportação de soja, o Brasil detém {ert['br_market_share_pct']:.0f} "
+                f"Na corrida de exportaÃ§Ã£o de soja, o Brasil detÃ©m {ert['br_market_share_pct']:.0f} "
                 f"por cento do total exportado entre Brasil e Estados Unidos nesta safra. "
-                f"São {ert['br_ytd_mmt']:.1f} milhões de toneladas brasileiras "
+                f"SÃ£o {ert['br_ytd_mmt']:.1f} milhÃµes de toneladas brasileiras "
                 f"contra {ert['us_ytd_mmt']:.1f} dos americanos. "
-                f"O market share brasileiro está {abs(ert['share_shift_pp']):.1f} pontos "
-                f"{'acima' if ert['share_shift_pp'] > 0 else 'abaixo'} da média de cinco anos."
+                f"O market share brasileiro estÃ¡ {abs(ert['share_shift_pp']):.1f} pontos "
+                f"{'acima' if ert['share_shift_pp'] > 0 else 'abaixo'} da mÃ©dia de cinco anos."
             ),
             "data_points": {
                 "br_ytd": ert["br_ytd_mmt"],
@@ -610,16 +732,16 @@ def _narration_pt(lcs: dict, ert: dict, bci: dict) -> dict:
             "MODERATE": "competitivo",
             "NEUTRAL": "neutro",
             "WEAK": "perdendo competitividade",
-            "VERY_WEAK": "não competitivo",
+            "VERY_WEAK": "nÃ£o competitivo",
         }
         scenes.append({
             "scene_type": "bilateral_bci",
-            "title": "Índice de Competitividade Brasil",
+            "title": "Ãndice de Competitividade Brasil",
             "narration": (
-                f"Nosso índice proprietário de competitividade brasileira marca "
-                f"{bci['bci_score']:.0f} de 100, nível {signal_pt.get(bci['bci_signal'], 'misto')}. "
-                f"O fator mais forte é {bci['strongest']}, "
-                f"e o mais fraco é {bci['weakest']}."
+                f"Nosso Ã­ndice proprietÃ¡rio de competitividade brasileira marca "
+                f"{bci['bci_score']:.0f} de 100, nÃ­vel {signal_pt.get(bci['bci_signal'], 'misto')}. "
+                f"O fator mais forte Ã© {bci['strongest']}, "
+                f"e o mais fraco Ã© {bci['weakest']}."
             ),
             "data_points": {
                 "score": bci["bci_score"],
@@ -636,7 +758,7 @@ def _narration_pt(lcs: dict, ert: dict, bci: dict) -> dict:
 
 def main():
     print("=" * 60)
-    print("  AgriMacro — Bilateral Indicators Pipeline")
+    print("  AgriMacro â€” Bilateral Indicators Pipeline")
     print("=" * 60)
     
     data_dir = get_data_dir()
@@ -703,7 +825,7 @@ def main():
     print(f"{'=' * 60}")
     
     if lcs.get("status") == "OK":
-        print(f"  LCS: ${lcs['spread_usd_mt']:+.2f}/mt → {lcs['competitive_origin']}")
+        print(f"  LCS: ${lcs['spread_usd_mt']:+.2f}/mt â†’ {lcs['competitive_origin']}")
     if ert.get("status") == "OK":
         print(f"  ERT: {ert['leader']} leads | BR {ert['br_market_share_pct']:.1f}% share")
     if bci.get("status") == "OK":
@@ -717,3 +839,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

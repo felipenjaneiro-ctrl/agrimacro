@@ -6,12 +6,13 @@ import json
 from datetime import datetime
 from pathlib import Path
 import statistics
+from utils import calculate_crush_spread
 
 # Spread definitions
 SPREADS = {
     "soy_crush": {
         "name": "Soy Crush Margin",
-        "formula": "ZM*0.022 + ZL*0.11 - ZS/100",  # Approximate crush margin
+        "formula": "(ZM*44/2000) + (ZL*11/100) - ZS/100",  # CME Board Crush (44lb meal + 11lb oil yield per bushel)
         "components": ["ZM", "ZL", "ZS"],
         "unit": "USD/bu",
         "description": "Margem de esmagamento de soja. Z-score elevado = margem acima do normal."
@@ -79,8 +80,8 @@ def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
             
             # Calculate based on formula
             if spread_key == "soy_crush":
-                # Crush margin: meal value + oil value - soybean cost
-                val = values["ZM"] * 0.022 + values["ZL"] * 0.11 - values["ZS"] / 100
+                # CME Board Crush: 44 lbs meal + 11 lbs oil per bushel
+                val = calculate_crush_spread(values["ZM"], values["ZL"], values["ZS"])
             elif spread_key == "ke_zw":
                 val = values["KE"] - values["ZW"]
             elif spread_key == "zl_cl":

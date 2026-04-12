@@ -19,7 +19,7 @@ RAW_COT = BASE / "agrimacro-dash" / "public" / "data" / "raw" / "cot"
 RAW_COT.mkdir(parents=True, exist_ok=True)
 OUTPUT = DATA_DIR / "cot.json"
 YEAR = datetime.now().year
-YEARS = list(range(YEAR-2, YEAR+1))  # 3 anos de historico
+YEARS = list(range(YEAR-3, YEAR+1))  # 4 anos para garantir 156+ semanas
 
 CFTC = {
     "ZC": {"name":"Milho","code":"002602","match":"CORN"},
@@ -42,7 +42,7 @@ CFTC = {
     "GC": {"name":"Ouro","code":"088691","match":"GOLD"},
 }
 
-def download_zip(url, label):
+def download_zip(url, label, year=None):
     print(f"  Baixando {label}...")
     try:
         r = requests.get(url, timeout=120)
@@ -50,10 +50,14 @@ def download_zip(url, label):
         print(f"  OK ({len(r.content)/1024/1024:.1f} MB)")
         zf = zipfile.ZipFile(io.BytesIO(r.content))
         csv_name = zf.namelist()[0]
-        df = pd.read_csv(io.BytesIO(zf.read(csv_name)), low_memory=False)
-        with open(RAW_COT / csv_name, "wb") as f:
-            f.write(zf.read(csv_name))
-        print(f"  {len(df)} linhas | Salvo: {csv_name}")
+        raw_bytes = zf.read(csv_name)
+        df = pd.read_csv(io.BytesIO(raw_bytes), low_memory=False)
+        # Salva com sufixo do ano para nao sobrescrever
+        base, ext = csv_name.rsplit(".", 1) if "." in csv_name else (csv_name, "txt")
+        save_name = f"{base}_{year}.{ext}" if year else csv_name
+        with open(RAW_COT / save_name, "wb") as f:
+            f.write(raw_bytes)
+        print(f"  {len(df)} linhas | Salvo: {save_name}")
         return df
     except Exception as e:
         print(f"  [ERRO] {e}")
@@ -195,14 +199,14 @@ def main():
     print("[1/4] Legacy...")
     leg_parts = []
     for y in YEARS:
-        part = download_zip(f"https://www.cftc.gov/files/dea/history/deacot{y}.zip", f"Legacy {y}")
+        part = download_zip(f"https://www.cftc.gov/files/dea/history/deacot{y}.zip", f"Legacy {y}", year=y)
         if part is not None and len(part) > 0: leg_parts.append(part)
     leg_df = pd.concat(leg_parts, ignore_index=True) if leg_parts else None
     print()
     print("[2/4] Disaggregated...")
     dis_parts = []
     for y in YEARS:
-        part = download_zip(f"https://www.cftc.gov/files/dea/history/fut_disagg_txt_{y}.zip", f"Disagg {y}")
+        part = download_zip(f"https://www.cftc.gov/files/dea/history/fut_disagg_txt_{y}.zip", f"Disagg {y}", year=y)
         if part is not None and len(part) > 0: dis_parts.append(part)
     dis_df = pd.concat(dis_parts, ignore_index=True) if dis_parts else None
     print()
@@ -217,11 +221,25 @@ def main():
         out["commodities"][tk] = {"ticker":tk,"name":nm}
         if tk in leg: out["commodities"][tk]["legacy"] = leg[tk]
         if tk in dis: out["commodities"][tk]["disaggregated"] = dis[tk]
+    # Data quality metadata
+    all_weeks = [v.get("disaggregated",{}).get("weeks",0) or v.get("legacy",{}).get("weeks",0) for v in out["commodities"].values()]
+    max_weeks = max(all_weeks) if all_weeks else 0
+    target_weeks = 156
+    used_weeks = min(max_weeks, target_weeks)
+    out["data_quality"] = {
+        "weeks_available": max_weeks,
+        "weeks_used_for_index": used_weeks,
+        "coverage_pct": round(used_weeks / target_weeks * 100, 1) if target_weeks > 0 else 0,
+        "warning": "COT Index pode divergir de Barchart se < 156 semanas" if max_weeks < target_weeks else None
+    }
+    if max_weeks < target_weeks:
+        print(f"  [AVISO] Apenas {max_weeks} semanas disponiveis (ideal: {target_weeks}). COT Index usa janela reduzida.")
     with open(OUTPUT,"w",encoding="utf-8") as f:
         json.dump(out, f, indent=2, ensure_ascii=False, default=str)
     print(f"\n[OK] {OUTPUT}")
     print(f"     {len(out['commodities'])} commodities")
     print(f"     Legacy: {len(leg)} | Disagg: {len(dis)}")
+    print(f"     Semanas: {max_weeks} | Cobertura: {out['data_quality']['coverage_pct']}%")
 
 def collect_cot_data():
     print("="*60)
@@ -231,14 +249,14 @@ def collect_cot_data():
     print("[1/4] Legacy...")
     leg_parts = []
     for y in YEARS:
-        part = download_zip(f"https://www.cftc.gov/files/dea/history/deacot{y}.zip", f"Legacy {y}")
+        part = download_zip(f"https://www.cftc.gov/files/dea/history/deacot{y}.zip", f"Legacy {y}", year=y)
         if part is not None and len(part) > 0: leg_parts.append(part)
     leg_df = pd.concat(leg_parts, ignore_index=True) if leg_parts else None
     print()
     print("[2/4] Disaggregated...")
     dis_parts = []
     for y in YEARS:
-        part = download_zip(f"https://www.cftc.gov/files/dea/history/fut_disagg_txt_{y}.zip", f"Disagg {y}")
+        part = download_zip(f"https://www.cftc.gov/files/dea/history/fut_disagg_txt_{y}.zip", f"Disagg {y}", year=y)
         if part is not None and len(part) > 0: dis_parts.append(part)
     dis_df = pd.concat(dis_parts, ignore_index=True) if dis_parts else None
     print()
@@ -253,9 +271,22 @@ def collect_cot_data():
         out["commodities"][tk] = {"ticker":tk,"name":nm}
         if tk in leg: out["commodities"][tk]["legacy"] = leg[tk]
         if tk in dis: out["commodities"][tk]["disaggregated"] = dis[tk]
+    # Data quality metadata
+    all_weeks = [v.get("disaggregated",{}).get("weeks",0) or v.get("legacy",{}).get("weeks",0) for v in out["commodities"].values()]
+    max_weeks = max(all_weeks) if all_weeks else 0
+    target_weeks = 156
+    used_weeks = min(max_weeks, target_weeks)
+    out["data_quality"] = {
+        "weeks_available": max_weeks,
+        "weeks_used_for_index": used_weeks,
+        "coverage_pct": round(used_weeks / target_weeks * 100, 1) if target_weeks > 0 else 0,
+        "warning": "COT Index pode divergir de Barchart se < 156 semanas" if max_weeks < target_weeks else None
+    }
+    if max_weeks < target_weeks:
+        print(f"  [AVISO] Apenas {max_weeks} semanas disponiveis (ideal: {target_weeks}). COT Index usa janela reduzida.")
     with open(OUTPUT,"w",encoding="utf-8") as f:
         json.dump(out, f, indent=2, ensure_ascii=False, default=str)
-    print(f"[OK] {len(out['commodities'])} commodities")
+    print(f"[OK] {len(out['commodities'])} commodities | Semanas: {max_weeks} | Cobertura: {out['data_quality']['coverage_pct']}%")
     return out
 
 

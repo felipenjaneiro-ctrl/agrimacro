@@ -1,11 +1,11 @@
 """
-AgriMacro v3.2 - Pipeline Runner (18 Steps)
+AgriMacro v3.2 - Pipeline Runner (25 Steps)
 Orchestrates all data collection, processing, and content generation.
 
 Steps:
   CORE (1-8): Prices, COT, Seasonality, Spreads, Stocks, Physical US, Physical Intl, Daily Reading
-  OPTIONAL (9-13): BCB/IBGE, EIA, USDA FAS, News Agro, Weather/Clima
-  GENERATION (14-18): Calendar, Daily Report, PDF Report, Video Script, Video MP4
+  OPTIONAL (9-19): BCB/IBGE, EIA, USDA FAS, News Agro, Weather/Clima, Crop Progress, Macro Indicators, Google Trends, FedWatch, Correlations, Grok Email
+  GENERATION (20-25): Calendar, Daily Report, Intel Synthesis, PDF Report, Video Script, Video MP4
 """
 import os
 import sys
@@ -35,7 +35,7 @@ def main():
     reports_path.mkdir(parents=True, exist_ok=True)
 
     results = {}
-    total_steps = 18
+    total_steps = 25
 
     # =========================================================
     # CORE STEPS (1-8)
@@ -46,7 +46,14 @@ def main():
         from collect_prices import collect_all_prices
         from collect_ibkr import collect_ibkr_data
         ibkr_ok = collect_ibkr_data()
-        if not ibkr_ok:
+        if ibkr_ok:
+            try:
+                _gp = json.load(open(proc_path / "ibkr_greeks.json"))
+                _pg = _gp.get("portfolio_greeks", {})
+                log(f"Greeks: {_pg.get('positions_with_greeks',0)}/{_pg.get('positions_with_greeks',0)+_pg.get('positions_without_greeks',0)} posicoes | delta={_pg.get('total_delta',0)} theta={_pg.get('total_theta',0)} vega={_pg.get('total_vega',0)}", "OK")
+            except Exception:
+                pass
+        else:
             print("  IBKR unavailable, using Yahoo Finance...")
         prices = collect_all_prices()
         with open(raw_path / "price_history.json", "w") as f:
@@ -145,13 +152,19 @@ def main():
 
     log(f"Step 9/{total_steps}: Collecting BCB, IBGE, CONAB data...")
     try:
-        from collect_bcb_ibge import main as collect_bcb_ibge
-        collect_bcb_ibge()
+        from collect_new_sources import collect_bcb
+        collect_bcb()
+        log("BCB/SGS collected", "OK")
+    except BaseException as e:
+        log(f"BCB/SGS failed (non-blocking): {e}", "WARN")
+    try:
+        from collect_conab_ibge import main as collect_conab_auto
+        collect_conab_auto()
         results["bcb_ibge"] = {"status": "OK", "sources": "BCB, IBGE, CONAB"}
-        log("BCB + IBGE + CONAB collected", "OK")
+        log("IBGE + CONAB collected", "OK")
     except BaseException as e:
         results["bcb_ibge"] = {"status": "WARN", "error": str(e)}
-        log(f"BCB/IBGE/CONAB failed (non-blocking): {e}", "WARN")
+        log(f"IBGE/CONAB failed (non-blocking): {e}", "WARN")
 
     log(f"Step 10/{total_steps}: Collecting EIA energy data...")
     try:
@@ -165,7 +178,7 @@ def main():
 
     log(f"Step 11/{total_steps}: Collecting USDA FAS data...")
     try:
-        from collect_usda_fas import main as collect_fas
+        from collect_usda_psd_csv import main as collect_fas
         collect_fas()
         results["usda_fas"] = {"status": "OK"}
         log("USDA FAS collected", "OK")
@@ -193,11 +206,71 @@ def main():
         results["weather"] = {"status": "WARN", "error": str(e)}
         log(f"Weather failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 14/{total_steps}: Collecting USDA crop progress...")
+    try:
+        from collect_crop_progress import main as collect_crop_progress
+        collect_crop_progress()
+        results["crop_progress"] = {"status": "OK"}
+        log("Crop progress collected", "OK")
+    except BaseException as e:
+        results["crop_progress"] = {"status": "WARN", "error": str(e)}
+        log(f"Crop progress failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 15/{total_steps}: Collecting macro indicators (S&P500, VIX, 10Y)...")
+    try:
+        from collect_macro_indicators import main as collect_macro
+        collect_macro()
+        results["macro_indicators"] = {"status": "OK"}
+        log("Macro indicators collected", "OK")
+    except BaseException as e:
+        results["macro_indicators"] = {"status": "WARN", "error": str(e)}
+        log(f"Macro indicators failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 16/{total_steps}: Collecting Google Trends...")
+    try:
+        from collect_google_trends import main as collect_gtrends
+        collect_gtrends()
+        results["google_trends"] = {"status": "OK"}
+        log("Google Trends collected", "OK")
+    except BaseException as e:
+        results["google_trends"] = {"status": "WARN", "error": str(e)}
+        log(f"Google Trends failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 17/{total_steps}: Collecting FedWatch probabilities...")
+    try:
+        from collect_fedwatch import main as collect_fedwatch
+        collect_fedwatch()
+        results["fedwatch"] = {"status": "OK"}
+        log("FedWatch collected", "OK")
+    except BaseException as e:
+        results["fedwatch"] = {"status": "WARN", "error": str(e)}
+        log(f"FedWatch failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 18/{total_steps}: Computing correlation matrix & causal chains...")
+    try:
+        from collect_correlations import main as collect_correlations
+        collect_correlations()
+        results["correlations"] = {"status": "OK"}
+        log("Correlations computed", "OK")
+    except BaseException as e:
+        results["correlations"] = {"status": "WARN", "error": str(e)}
+        log(f"Correlations failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 19/{total_steps}: Collecting Grok emails...")
+    try:
+        from collect_grok_email import main as collect_grok
+        collect_grok()
+        results["grok_email"] = {"status": "OK"}
+        log("Grok email collected", "OK")
+    except BaseException as e:
+        results["grok_email"] = {"status": "WARN", "error": str(e)}
+        log(f"Grok email failed (non-blocking): {e}", "WARN")
+
     # =========================================================
-    # GENERATION STEPS (14-18)
+    # GENERATION STEPS (20-25)
     # =========================================================
 
-    log(f"Step 14/{total_steps}: Generating calendar...")
+    log(f"Step 20/{total_steps}: Generating calendar...")
     try:
         from collect_calendar import main as generate_calendar
         generate_calendar()
@@ -207,7 +280,7 @@ def main():
         results["calendar"] = {"status": "WARN", "error": str(e)}
         log(f"Calendar failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 15/{total_steps}: Generating daily report...")
+    log(f"Step 21/{total_steps}: Generating daily report...")
     try:
         from generate_report import main as generate_report
         generate_report()
@@ -217,7 +290,28 @@ def main():
         results["report"] = {"status": "ERROR", "error": str(e)}
         log(f"Report generation failed: {e}", "ERR")
 
-    log(f"Step 16/{total_steps}: Generating PDF report...")
+
+    # -- Grain Ratios (automatico) ---
+    try:
+        import subprocess as _sp
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _r1 = _sp.run([sys.executable, os.path.join(_root,"grain_ratio_engine.py")], cwd=_root)
+        _r2 = _sp.run([sys.executable, os.path.join(_root,"grain_ratios_enrich.py")], cwd=_root)
+        print("    grain_ratios OK" if _r1.returncode==0 and _r2.returncode==0 else "    grain_ratios WARN")
+    except Exception as _e: print(f"    grain_ratios ERR: {_e}")
+    # ------------------------------------
+
+    log(f"Step 22/{total_steps}: Generating intel synthesis...")
+    try:
+        from generate_intel_synthesis import main as generate_synthesis
+        generate_synthesis()
+        results["intel_synthesis"] = {"status": "OK"}
+        log("Intel synthesis generated", "OK")
+    except BaseException as e:
+        results["intel_synthesis"] = {"status": "WARN", "error": str(e)}
+        log(f"Intel synthesis failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 23/{total_steps}: Generating PDF report...")
     try:
         from generate_report_pdf import build_pdf
         build_pdf()
@@ -227,7 +321,7 @@ def main():
         results["pdf"] = {"status": "ERROR", "error": str(e)}
         log(f"PDF generation failed: {e}", "ERR")
 
-    log(f"Step 17/{total_steps}: Generating video script...")
+    log(f"Step 24/{total_steps}: Generating video script...")
     try:
         from generate_video_script import main as generate_video
         generate_video()
@@ -237,7 +331,7 @@ def main():
         results["video_script"] = {"status": "ERROR", "error": str(e)}
         log(f"Video script failed: {e}", "ERR")
 
-    log(f"Step 18/{total_steps}: Generating video MP4...")
+    log(f"Step 25/{total_steps}: Generating video MP4...")
     try:
         from step18_video_generator import main as generate_video_mp4
         generate_video_mp4()

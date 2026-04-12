@@ -1,10 +1,91 @@
-﻿import BilateralPanel from "./BilateralPanel";
+import BilateralPanel from "./BilateralPanel";
+import GrainRatiosTab from "./GrainRatiosTab";
+import LivestockRiskTab from "./LivestockRiskTab";
+import CostOfProductionTab from "./CostOfProductionTab";
+import SyncedChartPanel from "./SyncedChartPanel";
+import CorrelationMap from "./CorrelationMap";
 import { useState, useEffect, useRef } from "react";
 
 /* ---------------------------------------------------------------------------
-   AgriMacro v3.2 — Dashboard Profissional de Commodities Agrícolas
-   ZERO MOCK — Somente dados reais via pipeline JSON
+   AgriMacro v3.2 -- Dashboard Profissional de Commodities Agrícolas
+   ZERO MOCK -- Somente dados reais via pipeline JSON
    --------------------------------------------------------------------------- */
+
+function isStale(dateStr: string | undefined): boolean {
+  if (!dateStr) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return dateStr < today;
+}
+
+function staleDays(dateStr: string | undefined): number {
+  if (!dateStr) return 0;
+  const today = new Date();
+  const d = new Date(dateStr + "T12:00:00");
+  return Math.round((today.getTime() - d.getTime()) / 86400000);
+}
+
+function gaussianY(x: number, mean: number, std: number): number {
+  if (std === 0) return 0;
+  return Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
+}
+
+function cleanGrokContent(raw: string | undefined): string {
+  if (!raw) return "";
+  return raw
+    .replace(/Continue reading[\s\S]*/i, "")
+    .replace(/©\s*\d{4}\s*X\.?AI\s*LLC[\s\S]*/i, "")
+    .replace(/Unsubscribe[\s\S]*/i, "")
+    .replace(/^\s*\.{2,}\s*$/gm, "")
+    .trimEnd();
+}
+
+function buildGaussianSVG(
+  currentVal: number, mean: number, std: number,
+  _label: string, unit: string, width = 320, height = 110
+): string {
+  if (std === 0) return "";
+  const pad = { l: 40, r: 20, t: 20, b: 28 };
+  const W = width - pad.l - pad.r;
+  const H = height - pad.t - pad.b;
+  const xMin = mean - 3.5 * std, xMax = mean + 3.5 * std;
+  const steps = 120;
+  const pts = Array.from({ length: steps + 1 }, (_, i) => {
+    const x = xMin + (xMax - xMin) * i / steps;
+    return { x, y: gaussianY(x, mean, std) };
+  });
+  const toSX = (x: number) => pad.l + ((x - xMin) / (xMax - xMin)) * W;
+  const toSY = (y: number) => pad.t + H - y * H;
+  const curvePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`).join(" ");
+  const lo1 = mean - std, hi1 = mean + std;
+  const fillPts = pts.filter(p => p.x >= lo1 && p.x <= hi1);
+  const baseY = toSY(0);
+  const fillPath = fillPts.length > 1
+    ? `M${toSX(lo1).toFixed(1)},${baseY} ` + fillPts.map(p => `L${toSX(p.x).toFixed(1)},${toSY(p.y).toFixed(1)}`).join(" ") + ` L${toSX(hi1).toFixed(1)},${baseY} Z`
+    : "";
+  const cx = toSX(Math.max(xMin, Math.min(xMax, currentVal)));
+  const cy = toSY(gaussianY(currentVal, mean, std));
+  const zScore = (currentVal - mean) / std;
+  const cc = Math.abs(zScore) > 2 ? "#DC3C3C" : Math.abs(zScore) > 1 ? "#DCB432" : "#00C878";
+  const xLabels = [-2, -1, 0, 1, 2].map(n => ({ x: toSX(mean + n * std), label: n === 0 ? "μ" : `${n > 0 ? "+" : ""}${n}σ` }));
+  const sigmaLines = [-2, -1, 1, 2].map(n => {
+    const lx = toSX(mean + n * std);
+    return `<line x1="${lx.toFixed(1)}" y1="${pad.t}" x2="${lx.toFixed(1)}" y2="${baseY}" stroke="#1e3a4a" stroke-width="1" stroke-dasharray="${Math.abs(n) === 1 ? "4,3" : "2,3"}"/>`;
+  }).join("");
+  const valTxt = unit.trim() ? currentVal.toFixed(2) + unit : currentVal.toFixed(1) + "%";
+  const lblX = Math.min(Math.max(cx, pad.l + 30), pad.l + W - 30);
+  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+<rect width="${width}" height="${height}" fill="#0E1A24" rx="6"/>
+${fillPath ? `<path d="${fillPath}" fill="#00C878" opacity="0.12"/>` : ""}
+<path d="${curvePath}" fill="none" stroke="#8899AA" stroke-width="1.5"/>
+<line x1="${pad.l}" y1="${baseY}" x2="${pad.l + W}" y2="${baseY}" stroke="#1e3a4a" stroke-width="1"/>
+${sigmaLines}
+<line x1="${cx.toFixed(1)}" y1="${pad.t}" x2="${cx.toFixed(1)}" y2="${baseY}" stroke="${cc}" stroke-width="1.5" stroke-dasharray="3,2"/>
+<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="${cc}" stroke="#0E1A24" stroke-width="1.5"/>
+${xLabels.map(l => `<text x="${l.x.toFixed(1)}" y="${(baseY + 16).toFixed(1)}" text-anchor="middle" font-size="8" fill="#64748b" font-family="monospace">${l.label}</text>`).join("")}
+<text x="${pad.l + W}" y="${pad.t + 12}" text-anchor="end" font-size="9" fill="${cc}" font-family="monospace" font-weight="bold">z=${zScore.toFixed(2)}</text>
+<text x="${lblX.toFixed(1)}" y="${(cy - 8).toFixed(1)}" text-anchor="middle" font-size="7.5" fill="${cc}" font-family="monospace">${valTxt}</text>
+</svg>`;
+}
 
 // -- Types ------------------------------------------------------------------
 interface OHLCV { date:string; open:number; high:number; low:number; close:number; volume:number; }
@@ -14,9 +95,10 @@ interface SeasonPoint { day:number; close:number; date?:string; }
 interface SeasonEntry { symbol:string; status:string; years:string[]; series:Record<string,SeasonPoint[]>; }
 type SeasonData = Record<string, SeasonEntry>;
 
-interface SpreadInfo { 
-  name:string; unit:string; current:number; zscore_1y:number; percentile:number; 
+interface SpreadInfo {
+  name:string; unit:string; current:number; zscore_1y:number; percentile:number;
   regime:string; points:number; description?:string; trend?:string; trend_pct?:number;
+  mean_1y?:number; std_1y?:number;
   history?:{date:string;value:number}[];
 }
 interface SpreadsData { timestamp:string; spreads:Record<string,SpreadInfo>; }
@@ -96,18 +178,18 @@ interface FuturesData {
   commodities:Record<string,FuturesCommodity>;
 }
 
-type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral";
+type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk";
 
 // -- Color Theme ------------------------------------------------------------
 const C = {
   bg:"#0d1117", panel:"#161b22", panelAlt:"#1c2128", border:"rgba(148,163,184,.12)",
   text:"#e2e8f0", textDim:"#94a3b8", textMuted:"#64748b",
-  green:"#22c55e", red:"#ef4444", amber:"#f59e0b", blue:"#3b82f6", cyan:"#06b6d4", purple:"#a78bfa",
+  green:"#22c55e", red:"#ef4444", amber:"#f59e0b", blue:"#3b82f6", cyan:"#06b6d4", purple:"#a78bfa", gold:"#DCB432",
   greenBg:"rgba(34,197,94,.12)", redBg:"rgba(239,68,68,.12)", amberBg:"rgba(245,158,11,.12)", blueBg:"rgba(59,130,246,.12)",
   greenBorder:"rgba(34,197,94,.3)", redBorder:"rgba(239,68,68,.3)", amberBorder:"rgba(245,158,11,.3)",
-  candleUp:"#22c55e", candleDn:"#ef4444", wick:"rgba(148,163,184,.4)",
-  ma9:"#06b6d4", ma21:"#fbbf24", ma50:"#a78bfa", ma200:"#ef4444", bb:"rgba(148,163,184,.18)",
-  rsiLine:"#f59e0b", rsiOverbought:"rgba(239,68,68,.3)", rsiOversold:"rgba(34,197,94,.3)",
+  candleUp:"#00C878", candleDn:"#DC3C3C", wick:"rgba(148,163,184,.75)",
+  ma9:"#DCB432", ma21:"#4ade80", ma50:"#3b82f6", ma200:"#f97316", bb:"rgba(148,163,184,.18)",
+  rsiLine:"#e2e8f0", rsiOverbought:"rgba(239,68,68,.18)", rsiOversold:"rgba(34,197,94,.18)",
 };
 
 // -- Commodities ------------------------------------------------------------
@@ -133,7 +215,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral"];
+const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Grain Ratios","Livestock Risk"];
 
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
@@ -168,20 +250,20 @@ const SPREAD_DETAILS:Record<string,{whatIsIt:string;whyMatters:string}> = {
   },
   zc_zs:{
     whatIsIt:"Quantos bushels de milho uma de soja compra. Acima de 2.4 = mais vantajoso plantar soja. Abaixo de 2.2 = milho ganha.",
-    whyMatters:"Esse número influencia o que o produtor americano vai plantar na próxima safra — e isso afeta os preços futuros.",
+    whyMatters:"Esse número influencia o que o produtor americano vai plantar na próxima safra -- e isso afeta os preços futuros.",
   },
 };
 
 const SPREAD_FRIENDLY_NAMES:Record<string,string> = {
   soy_crush:"Margem de Esmagamento (Soja)",
-  ke_zw:"Prêmio Trigo Duro vs Mole (KC–CBOT)",
+  ke_zw:"Prêmio Trigo Duro vs Mole (KC-CBOT)",
   zl_cl:"Óleo de Soja vs Petróleo",
   feedlot:"Margem de Confinamento (Feedlot)",
   zc_zm:"Milho vs Farelo (Ração Animal)",
   zc_zs:"Soja vs Milho (Decisão de Plantio)",
 };
 
-function getAlertLevel(sp:{regime:string;zscore_1y:number;percentile:number}):"ok"|"atencao"|"alerta" {
+function getAlertLevel(sp:{regime:string;zscore_1y:number;percentile:number;key?:string}):"ok"|"atencao"|"alerta" {
   if(sp.regime==="EXTREMO"||Math.abs(sp.zscore_1y)>=2||sp.percentile>=95||sp.percentile<=5) return "alerta";
   if(sp.regime!=="NORMAL"||Math.abs(sp.zscore_1y)>=1.3||sp.percentile>=90||sp.percentile<=10) return "atencao";
   return "ok";
@@ -191,7 +273,7 @@ function getVerdict(sp:{key?:string;regime:string;zscore_1y:number;percentile:nu
   const pctLabel = sp.percentile>=90?"no nível mais caro":sp.percentile>=75?"acima da média":sp.percentile<=10?"no nível mais barato":sp.percentile<=25?"abaixo da média":"dentro do normal";
   const trendLabel = sp.trend==="SUBINDO"?"e subindo":sp.trend==="CAINDO"?"e caindo":"e estável";
   const alert = getAlertLevel(sp);
-  const prefix = alert==="alerta"?"?? ":alert==="atencao"?"?? ":"";
+  const prefix = alert==="alerta"?"":alert==="atencao"?"":"";
   return prefix + (SPREAD_FRIENDLY_NAMES[sp.key||""]||sp.name) + " está " + pctLabel + " no último ano " + trendLabel + (sp.trend_pct?` (${sp.trend_pct>0?"+":""}${sp.trend_pct?.toFixed(1)}%).`:".");
 }
 
@@ -204,93 +286,39 @@ function getThermometerZone(pct:number):{text:string;color:string} {
   if(pct<=90) return {text:"Caro",color:"#f97316"};
   return {text:"Muito Caro",color:"#ef4444"};
 }
-// -- Cost of Production Data ------------------------------------------------
-const COST_DATA:{sym:string;commodity:string;futuresUnit:string;regions:{region:string;cost:number;unit:string;source:string}[]}[] = [
-  {sym:"ZC",commodity:"Corn",futuresUnit:"¢/bu",regions:[
-    {region:"???? EUA (Heartland)",cost:475,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"???? EUA (High Prod.)",cost:430,unit:"¢/bu",source:"Purdue 2025"},
-    {region:"???? Brasil (MT)",cost:350,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"???? Brasil (PR)",cost:380,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"???? Argentina",cost:310,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
-  ]},
-  {sym:"ZS",commodity:"Soybeans",futuresUnit:"¢/bu",regions:[
-    {region:"???? EUA (Heartland)",cost:1103,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"???? EUA (High Prod.)",cost:1050,unit:"¢/bu",source:"Purdue 2025"},
-    {region:"???? Brasil (MT)",cost:870,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"???? Brasil (MATOPIBA)",cost:830,unit:"¢/bu",source:"CONAB 24/25"},
-    {region:"???? Argentina",cost:800,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
-  ]},
-  {sym:"ZW",commodity:"Wheat",futuresUnit:"¢/bu",regions:[
-    {region:"???? EUA (Kansas)",cost:560,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"???? EUA (N.Dakota)",cost:530,unit:"¢/bu",source:"USDA ERS 2025f"},
-    {region:"???? Rússia",cost:350,unit:"¢/bu",source:"IKAR est. 2025"},
-    {region:"???? Argentina",cost:400,unit:"¢/bu",source:"Bolsa Cereales 24/25"},
-    {region:"???? Austrália",cost:440,unit:"¢/bu",source:"ABARES est. 2025"},
-  ]},
-  {sym:"KC",commodity:"Coffee Arabica",futuresUnit:"¢/lb",regions:[
-    {region:"???? Brasil (Cerrado)",cost:155,unit:"¢/lb",source:"CONAB 24/25"},
-    {region:"???? Brasil (Sul MG)",cost:175,unit:"¢/lb",source:"CONAB 24/25"},
-    {region:"???? Colômbia",cost:220,unit:"¢/lb",source:"FNC est. 2025"},
-    {region:"???? Vietnã (Robusta eq.)",cost:105,unit:"¢/lb",source:"VICOFA est. 2025"},
-    {region:"???? Etiópia",cost:130,unit:"¢/lb",source:"ECX est. 2025"},
-  ]},
-  {sym:"SB",commodity:"Sugar #11",futuresUnit:"¢/lb",regions:[
-    {region:"???? Brasil (SP)",cost:13.5,unit:"¢/lb",source:"UNICA 24/25"},
-    {region:"???? Índia",cost:17.5,unit:"¢/lb",source:"ISMA est. 2025"},
-    {region:"???? Tailândia",cost:15.0,unit:"¢/lb",source:"OCSB est. 2025"},
-  ]},
-  {sym:"LE",commodity:"Live Cattle",futuresUnit:"¢/lb",regions:[
-    {region:"???? EUA (Feedlot)",cost:195,unit:"¢/lb",source:"USDA ERS 2025f"},
-    {region:"???? Brasil (Confin.)",cost:145,unit:"¢/lb",source:"CEPEA 2025"},
-    {region:"???? Austrália",cost:165,unit:"¢/lb",source:"MLA est. 2025"},
-    {region:"???? Argentina",cost:115,unit:"¢/lb",source:"IPCVA est. 2025"},
-  ]},
-  {sym:"CC",commodity:"Cocoa",futuresUnit:"$/mt",regions:[
-    {region:"???? Costa do Marfim",cost:3200,unit:"$/mt",source:"CCC est. 2025"},
-    {region:"???? Gana",cost:3600,unit:"$/mt",source:"COCOBOD est. 2025"},
-    {region:"???? Indonésia",cost:2800,unit:"$/mt",source:"ASKINDO est. 2025"},
-    {region:"???? Brasil (Bahia)",cost:3800,unit:"$/mt",source:"CEPLAC est. 2025"},
-  ]},
-  {sym:"CT",commodity:"Cotton #2",futuresUnit:"¢/lb",regions:[
-    {region:"???? EUA (Texas)",cost:78,unit:"¢/lb",source:"USDA ERS 2025f"},
-    {region:"???? Brasil (MT)",cost:58,unit:"¢/lb",source:"CONAB 24/25"},
-    {region:"???? Índia",cost:62,unit:"¢/lb",source:"CAI est. 2025"},
-    {region:"???? Austrália",cost:60,unit:"¢/lb",source:"Cotton AU est. 2025"},
-  ]},
-];
 
 // -- Physical Markets Data (International - placeholder) ---------------------
 const PHYS_INTL:{cat:string;items:{origin:string;price:string;basis:string;trend:string;source:string}[]}[] = [
-  {cat:"? Coffee",items:[
-    {origin:"???? Brasil (Santos) — Arabica NY 2/3",price:"—",basis:"—",trend:"Colheita 25/26 iniciando",source:"Cecafé"},
-    {origin:"???? Brasil (Cerrado) — Fine Cup",price:"—",basis:"—",trend:"Prêmio qualidade",source:"Cecafé"},
-    {origin:"???? Colômbia — Excelso EP",price:"—",basis:"—",trend:"Prêmio qualidade alto",source:"FNC"},
-    {origin:"???? Vietnã — Robusta G2",price:"—",basis:"—",trend:"Safra acima esperado",source:"VICOFA"},
+  {cat:"Coffee",items:[
+    {origin:" Brasil (Santos) -- Arabica NY 2/3",price:"--",basis:"--",trend:"Colheita 25/26 iniciando",source:"Cecafé"},
+    {origin:" Brasil (Cerrado) -- Fine Cup",price:"--",basis:"--",trend:"Prêmio qualidade",source:"Cecafé"},
+    {origin:" Colômbia -- Excelso EP",price:"--",basis:"--",trend:"Prêmio qualidade alto",source:"FNC"},
+    {origin:" Vietnã -- Robusta G2",price:"--",basis:"--",trend:"Safra acima esperado",source:"VICOFA"},
   ]},
-  {cat:"?? Soybeans",items:[
-    {origin:"???? Brasil (Paranaguá) — GMO",price:"—",basis:"—",trend:"Colheita recorde",source:"CEPEA"},
-    {origin:"???? Argentina — GMO",price:"—",basis:"—",trend:"Safra recuperando",source:"B.Cereales"},
+  {cat:"Soybeans",items:[
+    {origin:" Brasil (Paranaguá) -- GMO",price:"--",basis:"--",trend:"Colheita recorde",source:"CEPEA"},
+    {origin:" Argentina -- GMO",price:"--",basis:"--",trend:"Safra recuperando",source:"B.Cereales"},
   ]},
-  {cat:"?? Corn",items:[
-    {origin:"???? Brasil (Paranaguá) — GMO",price:"—",basis:"—",trend:"Safrinha nos portos",source:"CEPEA"},
-    {origin:"???? Argentina — GMO",price:"—",basis:"—",trend:"Safra volumosa",source:"B.Cereales"},
+  {cat:"Corn",items:[
+    {origin:" Brasil (Paranaguá) -- GMO",price:"--",basis:"--",trend:"Safrinha nos portos",source:"CEPEA"},
+    {origin:" Argentina -- GMO",price:"--",basis:"--",trend:"Safra volumosa",source:"B.Cereales"},
   ]},
-  {cat:"?? Live Cattle",items:[
-    {origin:"???? Brasil (SP) — Boi Gordo @",price:"—",basis:"—",trend:"Alta sazonal",source:"CEPEA"},
-    {origin:"???? Argentina (Liniers)",price:"—",basis:"—",trend:"Câmbio favorece export",source:"IPCVA"},
+  {cat:"Live Cattle",items:[
+    {origin:" Brasil (SP) -- Boi Gordo @",price:"--",basis:"--",trend:"Alta sazonal",source:"CEPEA"},
+    {origin:" Argentina (Liniers)",price:"--",basis:"--",trend:"Câmbio favorece export",source:"IPCVA"},
   ]},
-  {cat:"?? Wheat",items:[
-    {origin:"???? Rússia (FOB BS) — 12.5%",price:"—",basis:"—",trend:"Safra grande",source:"IKAR"},
-    {origin:"???? Argentina — Trigo Pan",price:"—",basis:"—",trend:"Normalizado",source:"B.Cereales"},
+  {cat:"Wheat",items:[
+    {origin:" Rússia (FOB BS) -- 12.5%",price:"--",basis:"--",trend:"Safra grande",source:"IKAR"},
+    {origin:" Argentina -- Trigo Pan",price:"--",basis:"--",trend:"Normalizado",source:"B.Cereales"},
   ]},
-  {cat:"?? Cocoa",items:[
-    {origin:"???? Costa do Marfim — Grade I",price:"—",basis:"—",trend:"Menor safra 10 anos",source:"CCC"},
-    {origin:"???? Gana — Grade I",price:"—",basis:"—",trend:"Produção -50%",source:"COCOBOD"},
+  {cat:"Cocoa",items:[
+    {origin:" Costa do Marfim -- Grade I",price:"--",basis:"--",trend:"Menor safra 10 anos",source:"CCC"},
+    {origin:" Gana -- Grade I",price:"--",basis:"--",trend:"Produção -50%",source:"COCOBOD"},
   ]},
-  {cat:"???? China Demand",items:[
-    {origin:"???? Soja Import (DCE)",price:"—",basis:"—",trend:"Importação desacelerando",source:"GACC"},
-    {origin:"???? Milho Import (DCE)",price:"—",basis:"—",trend:"Estoques altos",source:"GACC"},
-    {origin:"???? Suínos (Zhengzhou)",price:"—",basis:"—",trend:"Demanda estável",source:"MARA"},
+  {cat:" China Demand",items:[
+    {origin:" Soja Import (DCE)",price:"--",basis:"--",trend:"Importação desacelerando",source:"GACC"},
+    {origin:" Milho Import (DCE)",price:"--",basis:"--",trend:"Estoques altos",source:"GACC"},
+    {origin:" Suínos (Zhengzhou)",price:"--",basis:"--",trend:"Demanda estável",source:"MARA"},
   ]},
 ];
 // -- Helper Components ------------------------------------------------------
@@ -335,36 +363,6 @@ function PctBar({val}:{val:number}) {
   );
 }
 
-function MarginBar({price,cost}:{price:number;cost:number}) {
-  const margin = ((price-cost)/cost)*100;
-  const color = margin>20?"#10b981":margin>10?"#22c55e":margin>0?"#fbbf24":"#ef4444";
-  const bgColor = margin>20?"rgba(16,185,129,0.08)":margin>10?"rgba(34,197,94,0.06)":margin>0?"rgba(251,191,36,0.06)":"rgba(239,68,68,0.08)";
-  const label = margin>20?"Lucrando bem":margin>10?"Lucro moderado":margin>0?"Margem apertada":"No prejuízo";
-  const icon = margin>20?"??":margin>10?"?":margin>0?"??":"??";
-  const barWidth = Math.min(Math.abs(margin), 60);
-  const barDirection = margin >= 0 ? "right" : "left";
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:8,background:bgColor,minWidth:280}}>
-      <span style={{fontSize:16}}>{icon}</span>
-      <div style={{flex:1}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-          <span style={{fontSize:12,fontWeight:700,color}}>{label}</span>
-          <span style={{fontSize:13,fontWeight:800,fontFamily:"monospace",color}}>
-            {margin>0?"+":""}{margin.toFixed(0)}%
-          </span>
-        </div>
-        <div style={{position:"relative",height:8,background:"rgba(148,163,184,0.1)",borderRadius:4,overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,bottom:0,
-            [barDirection]:barDirection==="right"?0:undefined,
-            left:barDirection==="right"?`${50-barWidth/2}%`:undefined,
-            width:`${barWidth}%`,background:color,borderRadius:4,
-            boxShadow:`0 0 8px ${color}40`,transition:"width 0.5s ease"}}/>
-          <div style={{position:"absolute",top:-2,bottom:-2,left:"50%",width:1,background:"rgba(255,255,255,0.15)"}}/>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function SectionTitle({children}:{children:React.ReactNode}) {
   return <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:12,paddingBottom:8,
@@ -471,19 +469,19 @@ function rsiCalc(data:number[],period:number=14):number[] {
 }
 // -- Price Chart with RSI ---------------------------------------------------
 
-function PriceChart({candles,symbol}:{candles:OHLCV[];symbol:string}) {
+function PriceChart({candles,symbol,annotations}:{candles:OHLCV[];symbol:string;annotations?:{label:string;value:number;color:string}[]}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dims,setDims] = useState({w:900,h:480});
+  const [dims,setDims] = useState({w:900,h:560});
   const [hover,setHover] = useState<{i:number;x:number;y:number}|null>(null);
-  const VISIBLE = 120;
-  const RSI_HEIGHT = 80;
+  const VISIBLE = 90;
+  const RSI_HEIGHT = 110;
 
   useEffect(()=>{
     const el=containerRef.current;if(!el)return;
     const obs=new ResizeObserver(entries=>{
       const{width}=entries[0].contentRect;
-      if(width>0)setDims({w:Math.floor(width),h:480});
+      if(width>0)setDims({w:Math.floor(width),h:560});
     });
     obs.observe(el);return()=>obs.disconnect();
   },[]);
@@ -559,21 +557,37 @@ function PriceChart({candles,symbol}:{candles:OHLCV[];symbol:string}) {
       });
       ctx.stroke();
     };
-    drawLine(ema9,C.ma9,1.5);
-    drawLine(ma21,C.ma21,1);
-    drawLine(ma50,C.ma50,1);
-    if(ma200.some(v=>!isNaN(v)))drawLine(ma200,C.ma200,1);
+    drawLine(ema9,C.ma9,1);
+    drawLine(ma21,C.ma21,1.2);
+    drawLine(ma50,C.ma50,1.2);
+    if(ma200.some(v=>!isNaN(v)))drawLine(ma200,C.ma200,1.2);
 
     // Candles
     for(let i=0;i<data.length;i++){
       const c=data[i];const x=xC(i);const up=c.close>=c.open;
-      ctx.strokeStyle=C.wick;ctx.lineWidth=1;
+      ctx.strokeStyle=C.wick;ctx.lineWidth=1.5;
       ctx.beginPath();ctx.moveTo(x,yP(c.high));ctx.lineTo(x,yP(c.low));ctx.stroke();
       ctx.fillStyle=up?C.candleUp:C.candleDn;
       const top=yP(Math.max(c.open,c.close));
       const bot=yP(Math.min(c.open,c.close));
       const h=Math.max(1,bot-top);
       ctx.fillRect(x-bW/2,top,bW,h);
+      ctx.strokeStyle=up?"rgba(0,200,120,0.6)":"rgba(220,60,60,0.6)";
+      ctx.lineWidth=0.5;
+      ctx.strokeRect(x-bW/2,top,bW,h);
+    }
+
+    // Annotation lines (COP, FOB, etc.)
+    if(annotations){
+      for(const ann of annotations){
+        if(ann.value<pMn||ann.value>pMx) continue;
+        const ay=yP(ann.value);
+        ctx.strokeStyle=ann.color;ctx.lineWidth=1;ctx.setLineDash([6,4]);
+        ctx.beginPath();ctx.moveTo(pad.l,ay);ctx.lineTo(W-pad.r,ay);ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle=ann.color;ctx.font="bold 9px monospace";ctx.textAlign="right";
+        ctx.fillText(ann.label,W-pad.r-2,ay-4);
+      }
     }
 
     // Volume bars (small)
@@ -598,44 +612,63 @@ function PriceChart({candles,symbol}:{candles:OHLCV[];symbol:string}) {
     // RSI Panel
     const rsiTop=mainH+10;
     const rsiH=RSI_HEIGHT-20;
-    
+
+    // RSI label (before background so it's behind everything)
+    ctx.fillStyle="rgba(148,163,184,.5)";
+    ctx.font="bold 9px monospace";ctx.textAlign="left";
+    ctx.fillText("RSI 14",pad.l+4,rsiTop+10);
+
     // RSI background
     ctx.fillStyle=C.panelAlt;
     ctx.fillRect(pad.l,rsiTop,W-pad.l-pad.r,rsiH);
-    
+
     // RSI zones
     ctx.fillStyle=C.rsiOverbought;
     ctx.fillRect(pad.l,rsiTop,W-pad.l-pad.r,rsiH*0.3);
     ctx.fillStyle=C.rsiOversold;
     ctx.fillRect(pad.l,rsiTop+rsiH*0.7,W-pad.l-pad.r,rsiH*0.3);
-    
+
+    // Linha 70 (sobrecompra)
+    const y70=rsiTop+rsiH*0.30;
+    ctx.strokeStyle="rgba(239,68,68,.5)";ctx.lineWidth=0.75;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(pad.l,y70);ctx.lineTo(W-pad.r,y70);ctx.stroke();
+
+    // Linha 30 (sobrevenda)
+    const y30=rsiTop+rsiH*0.70;
+    ctx.strokeStyle="rgba(34,197,94,.5)";ctx.lineWidth=0.75;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(pad.l,y30);ctx.lineTo(W-pad.r,y30);ctx.stroke();
+
+    ctx.setLineDash([]);
+
     // RSI 50 line
     ctx.strokeStyle="rgba(148,163,184,.2)";ctx.lineWidth=1;
     ctx.setLineDash([4,4]);
     ctx.beginPath();ctx.moveTo(pad.l,rsiTop+rsiH*0.5);ctx.lineTo(W-pad.r,rsiTop+rsiH*0.5);ctx.stroke();
     ctx.setLineDash([]);
-    
+
     // RSI line
     const yRsi=(v:number)=>rsiTop+rsiH*(1-v/100);
-    ctx.strokeStyle=C.rsiLine;ctx.lineWidth=1.5;ctx.beginPath();
+    ctx.strokeStyle=C.rsiLine;ctx.lineWidth=2.5;ctx.beginPath();
     let rsiStarted=false;
     for(let i=0;i<rsi.length;i++){
       const x=xC(i),y=yRsi(rsi[i]);
       if(!rsiStarted){ctx.moveTo(x,y);rsiStarted=true;}else ctx.lineTo(x,y);
     }
     ctx.stroke();
-    
+
     // RSI labels
     ctx.fillStyle=C.textMuted;ctx.font="9px monospace";ctx.textAlign="right";
     ctx.fillText("70",pad.l-4,rsiTop+rsiH*0.3+3);
     ctx.fillText("50",pad.l-4,rsiTop+rsiH*0.5+3);
     ctx.fillText("30",pad.l-4,rsiTop+rsiH*0.7+3);
-    
+
     // RSI value
     const lastRsi=rsi[rsi.length-1];
     ctx.fillStyle=lastRsi>70?C.red:lastRsi<30?C.green:C.amber;
     ctx.font="bold 11px monospace";ctx.textAlign="left";
-    ctx.fillText(`RSI: ${lastRsi.toFixed(1)}`,pad.l+5,rsiTop+12);
+    ctx.fillText(`RSI: ${lastRsi.toFixed(1)}`,pad.l+5,rsiTop+24);
 
     // Legend
     const legendY=8;
@@ -713,42 +746,64 @@ function SeasonChart({entry}:{entry:SeasonEntry}) {
     const H=320;
     cvs.width=w*2;cvs.height=H*2;ctx.scale(2,2);
     cvs.style.width=w+"px";cvs.style.height=H+"px";
-    
+
     const pad={t:30,b:30,l:60,r:16};
     const cH=H-pad.t-pad.b;
-    
-    let allVals:number[]=[];
-    for(const yr of entry.years){const s=entry.series[yr];if(s)allVals.push(...s.map(p=>p.close));}
-    if(!allVals.length)return;
-    
-    const mn=Math.min(...allVals),mx=Math.max(...allVals),range=mx-mn||1;
-    const pMn=mn-range*.05,pMx=mx+range*.05;
+
+    // Normalize each year to % return from first data point (base=0%)
+    const normalized: Record<string,{day:number;pct:number}[]> = {};
+    let allPcts:number[] = [];
+    for(const yr of entry.years){
+      const s=entry.series[yr];if(!s||!s.length)continue;
+      const base=s[0].close;
+      if(!base||base<=0)continue;
+      normalized[yr]=s.map(p=>({day:p.day,pct:(p.close/base-1)*100}));
+      allPcts.push(...normalized[yr].map(p=>p.pct));
+    }
+    if(!allPcts.length)return;
+
+    const mn=Math.min(...allPcts),mx=Math.max(...allPcts),range=mx-mn||1;
+    const pMn=mn-range*.08,pMx=mx+range*.08;
     const yP=(v:number)=>pad.t+(1-(v-pMn)/(pMx-pMn))*cH;
     const xP=(day:number)=>pad.l+(day/365)*(w-pad.l-pad.r);
 
     // Background
     ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,H);
-    
+
     // Grid
     ctx.strokeStyle="rgba(148,163,184,.06)";ctx.lineWidth=1;
     for(let i=0;i<5;i++){const y=pad.t+i*(cH/4);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
-    
-    // Y axis
+
+    // Zero line (0% return)
+    if(pMn<0&&pMx>0){
+      const zeroY=yP(0);
+      ctx.strokeStyle="rgba(148,163,184,.25)";ctx.lineWidth=1;ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(pad.l,zeroY);ctx.lineTo(w-pad.r,zeroY);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=C.textMuted;ctx.font="9px monospace";ctx.textAlign="right";
+      ctx.fillText("0%",pad.l-6,zeroY+3);
+    }
+
+    // Y axis labels (% return)
     ctx.fillStyle=C.textMuted;ctx.font="10px monospace";ctx.textAlign="right";
-    for(let i=0;i<5;i++){const v=pMx-(pMx-pMn)*i/4;ctx.fillText(v.toFixed(0),pad.l-6,pad.t+i*(cH/4)+4);}
-    
+    for(let i=0;i<5;i++){
+      const v=pMx-(pMx-pMn)*i/4;
+      const label=`${v>0?"+":""}${v.toFixed(1)}%`;
+      ctx.fillText(label,pad.l-6,pad.t+i*(cH/4)+4);
+    }
+
     // X axis months
     ctx.textAlign="center";ctx.font="9px monospace";
     const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     for(let m=0;m<12;m++){const day=m*30.4+15;ctx.fillText(months[m],xP(day),H-pad.b+14);}
 
     // Draw lines (years first, then current, then average on top)
-    const drawOrder = entry.years.filter(y=>y!=="current"&&y!=="average");
-    drawOrder.push("average");
-    if(entry.years.includes("current"))drawOrder.push("current");
+    const drawOrder = entry.years.filter(y=>y!=="current"&&y!=="average"&&normalized[y]);
+    if(normalized["average"])drawOrder.push("average");
+    if(normalized["current"])drawOrder.push("current");
 
     for(const yr of drawOrder){
-      const s=entry.series[yr];if(!s||!s.length)continue;
+      const pts=normalized[yr];if(!pts||!pts.length)continue;
       const col=SEASON_COLORS[yr]||C.textMuted;
       ctx.strokeStyle=col;
       ctx.lineWidth=yr==="current"?2.5:yr==="average"?2:1;
@@ -756,18 +811,25 @@ function SeasonChart({entry}:{entry:SeasonEntry}) {
       ctx.globalAlpha=yr==="current"||yr==="average"?1:.35;
       ctx.beginPath();
       let started=false;
-      for(const p of s){
-        const x=xP(p.day),y=yP(p.close);
+      for(const p of pts){
+        const x=xP(p.day),y=yP(p.pct);
         if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);
       }
       ctx.stroke();
       ctx.globalAlpha=1;ctx.setLineDash([]);
+      // End-of-line label with YTD return
+      if(pts.length>0&&(yr==="current"||yr==="average")){
+        const lastPt=pts[pts.length-1];
+        ctx.fillStyle=col;ctx.font="bold 9px monospace";ctx.textAlign="left";
+        ctx.fillText(`${lastPt.pct>0?"+":""}${lastPt.pct.toFixed(1)}%`,xP(lastPt.day)+4,yP(lastPt.pct)+3);
+      }
     }
 
     // Legend
     let lx=pad.l;
     ctx.font="9px monospace";
     for(const yr of entry.years){
+      if(!normalized[yr])continue;
       const col=SEASON_COLORS[yr]||C.textMuted;
       ctx.fillStyle=col;
       ctx.fillRect(lx,10,yr==="current"||yr==="average"?20:14,yr==="average"?2:3);
@@ -932,28 +994,28 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
     const colors={comm:"#ef4444",noncomm:"#3b82f6",mm:"#22c55e",prod:"#f59e0b",swap:"#a78bfa"};
 
     // Build all series in one panel
-    type Line={label:string;vals:number[];color:string};
+    type Line={label:string;vals:number[];color:string;lw:number};
     let seriesLines:Line[]=[];
 
     if(type==="legacy"){
       const commNet=data.map(r=>(r.comm_long||0)-(r.comm_short||0));
       const ncNet=data.map(r=>(r.noncomm_long||0)-(r.noncomm_short||0));
       seriesLines=[
-        {label:"Commercial Net",vals:commNet,color:colors.comm},
-        {label:"Non-Comm Net",vals:ncNet,color:colors.noncomm},
+        {label:"Commercial Net",vals:commNet,color:colors.comm,lw:2.0},
+        {label:"Non-Comm Net",vals:ncNet,color:colors.noncomm,lw:2.5},
       ];
     } else {
       const mm=data.map(r=>(r.managed_money_long||0)-(r.managed_money_short||0));
       const pr=data.map(r=>(r.producer_long||0)-(r.producer_short||0));
       const sw=data.map(r=>(r.swap_long||0)-(r.swap_short||0));
       seriesLines=[
-        {label:"Managed Money",vals:mm,color:colors.mm},
-        {label:"Producer",vals:pr,color:colors.prod},
-        {label:"Swap Dealers",vals:sw,color:colors.swap},
+        {label:"Managed Money",vals:mm,color:colors.mm,lw:2.5},
+        {label:"Producer",vals:pr,color:colors.prod,lw:1.5},
+        {label:"Swap Dealers",vals:sw,color:colors.swap,lw:1.5},
       ];
     }
 
-    const H=180;
+    const H=220;
     cvs.width=w*2;cvs.height=H*2;ctx.scale(2,2);
     cvs.style.width=w+"px";cvs.style.height=H+"px";
     ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,H);
@@ -982,9 +1044,31 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
     // Zero line if range crosses zero
     if(minV<0 && maxV>0){
       const zy=yP(0);
-      ctx.strokeStyle="rgba(148,163,184,.2)";ctx.lineWidth=0.8;ctx.setLineDash([4,3]);
+      ctx.strokeStyle="rgba(148,163,184,.45)";ctx.lineWidth=1.0;ctx.setLineDash([4,3]);
       ctx.beginPath();ctx.moveTo(pad.l,zy);ctx.lineTo(w-pad.r,zy);ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // Open Interest (background area, secondary axis)
+    const oiVals=data.map(d=>d.open_interest||0);
+    const oiValid=oiVals.filter(v=>v>0);
+    if(oiValid.length>1){
+      const oiMin=Math.min(...oiValid)*0.95;const oiMax=Math.max(...oiValid)*1.05;
+      const toOIY=(v:number)=>pad.t+chartH-((v-oiMin)/(oiMax-oiMin||1))*chartH;
+      // Area fill
+      ctx.beginPath();
+      let oiStarted=false;
+      data.forEach((d,i)=>{if(!d.open_interest)return;const x=xC(i),y=toOIY(d.open_interest);if(!oiStarted){ctx.moveTo(x,y);oiStarted=true;}else ctx.lineTo(x,y);});
+      ctx.lineTo(xC(data.length-1),pad.t+chartH);ctx.lineTo(xC(0),pad.t+chartH);ctx.closePath();
+      ctx.fillStyle="rgba(148,163,184,.06)";ctx.fill();
+      // OI line
+      ctx.beginPath();oiStarted=false;
+      data.forEach((d,i)=>{if(!d.open_interest)return;const x=xC(i),y=toOIY(d.open_interest);if(!oiStarted){ctx.moveTo(x,y);oiStarted=true;}else ctx.lineTo(x,y);});
+      ctx.strokeStyle="rgba(148,163,184,.35)";ctx.lineWidth=1;ctx.setLineDash([]);ctx.stroke();
+      // OI label
+      const lastOI=data[data.length-1]?.open_interest||0;
+      ctx.fillStyle="rgba(148,163,184,.5)";ctx.font="8px monospace";ctx.textAlign="right";
+      ctx.fillText("OI: "+(lastOI/1000).toFixed(0)+"K",w-pad.r+70,pad.t+10);
     }
 
     // Draw each line with filled area to zero
@@ -1005,7 +1089,7 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
       ctx.fill();
 
       // Line
-      ctx.strokeStyle=line.color;ctx.lineWidth=1.8;ctx.beginPath();
+      ctx.strokeStyle=line.color;ctx.lineWidth=line.lw;ctx.beginPath();
       for(let i=0;i<n;i++){
         const x=xC(i),y=yP(line.vals[i]);
         if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
@@ -1022,6 +1106,20 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
       ctx.beginPath();ctx.moveTo(w-pad.r+4,badgeY);ctx.lineTo(w-pad.r,badgeY-4);ctx.lineTo(w-pad.r,badgeY+4);ctx.closePath();ctx.fill();
       ctx.fillStyle="#fff";ctx.font="bold 9px monospace";ctx.textAlign="left";
       ctx.fillText(valStr,w-pad.r+8,badgeY+3);
+
+      // COT Index badge for Managed Money (disaggregated)
+      if(type==="disaggregated"&&line.label==="Managed Money"&&line.vals.length>=20){
+        const mmVals=line.vals;
+        const mmMin=Math.min(...mmVals),mmMax=Math.max(...mmVals);
+        if(mmMax!==mmMin){
+          const cotIdx=((mmVals[mmVals.length-1]-mmMin)/(mmMax-mmMin))*100;
+          const idxStr="IDX:"+cotIdx.toFixed(0);
+          ctx.fillStyle=cotIdx>80?"#DC3C3C":cotIdx<20?"#DC3C3C":line.color;
+          ctx.fillRect(w-pad.r+4,badgeY+10,42,13);
+          ctx.fillStyle="#fff";ctx.font="bold 8px monospace";ctx.textAlign="left";
+          ctx.fillText(idxStr,w-pad.r+8,badgeY+20);
+        }
+      }
     }
 
     // Hover
@@ -1038,20 +1136,36 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
         ctx.strokeStyle=C.bg;ctx.lineWidth=1;ctx.stroke();
       }
       // Tooltip box
-      const tooltipW=160;const tooltipX=hoverIdx>n/2?hx-tooltipW-10:hx+10;
-      const tooltipH=14+seriesLines.length*14+4;
+      const hRec=data[hoverIdx];
+      const hasMmPct=type==="disaggregated"&&hRec?.mm_long_pct!=null;
+      const hasOI=!!hRec?.open_interest;
+      const extraLines=(hasMmPct?1:0)+(hasOI?1:0);
+      const tooltipW=170;const tooltipX=hoverIdx>n/2?hx-tooltipW-10:hx+10;
+      const tooltipH=14+seriesLines.length*14+extraLines*12+6;
       ctx.fillStyle="rgba(22,27,34,.92)";
       ctx.beginPath();ctx.roundRect(tooltipX,pad.t+2,tooltipW,tooltipH,4);ctx.fill();
       ctx.strokeStyle="rgba(148,163,184,.2)";ctx.lineWidth=0.5;
       ctx.beginPath();ctx.roundRect(tooltipX,pad.t+2,tooltipW,tooltipH,4);ctx.stroke();
       ctx.fillStyle=C.textDim;ctx.font="bold 9px monospace";ctx.textAlign="left";
-      ctx.fillText(data[hoverIdx].date,tooltipX+6,pad.t+14);
+      ctx.fillText(hRec.date,tooltipX+6,pad.t+14);
+      let tLineY=pad.t+14;
       seriesLines.forEach((line,li)=>{
+        tLineY+=14;
         const hVal=line.vals[hoverIdx];
         const vs=(hVal>=0?"+":"")+(Math.abs(hVal)>=1000?(hVal/1000).toFixed(1)+"K":hVal.toFixed(0));
         ctx.fillStyle=line.color;ctx.font="8px monospace";
-        ctx.fillText("\u25CF "+line.label+": "+vs,tooltipX+6,pad.t+14+14*(li+1));
+        ctx.fillText("● "+line.label+": "+vs,tooltipX+6,tLineY);
       });
+      if(hasMmPct){
+        tLineY+=12;
+        ctx.fillStyle="rgba(148,163,184,.7)";ctx.font="7px monospace";
+        ctx.fillText("  MM: L"+hRec.mm_long_pct.toFixed(1)+"% / S"+hRec.mm_short_pct.toFixed(1)+"% do OI",tooltipX+6,tLineY);
+      }
+      if(hasOI){
+        tLineY+=12;
+        ctx.fillStyle="rgba(148,163,184,.5)";ctx.font="7px monospace";
+        ctx.fillText("  OI: "+(hRec.open_interest/1000).toFixed(0)+"K",tooltipX+6,tLineY);
+      }
     }
 
     // X axis dates
@@ -1110,6 +1224,7 @@ export default function Dashboard() {
   const [selected,setSelected] = useState("ZC");
   const [stockSelected,setStockSelected] = useState<string>("ZC");
   const [tab,setTab] = useState<Tab>("Gráfico + COT");
+  const [viewMode,setViewMode] = useState<"commodity"|"global"|"intel">("commodity");
   const [loading,setLoading] = useState(true);
   const [errors,setErrors] = useState<string[]>([]);
   const [cmp1,setCmp1] = useState<string>("ZCH26");
@@ -1118,15 +1233,57 @@ export default function Dashboard() {
   const compareSyms = [cmp1,cmp2,cmp3].filter(s=>s!=="");
   const [fwdSyms,setFwdSyms] = useState<string[]>(["ZC"]);
   const [portfolio,setPortfolio] = useState<any>(null);
+  const [greeksData,setGreeksData] = useState<any>(null);
   const [lastIbkrRefresh,setLastIbkrRefresh] = useState<string|null>(null);
   const [ibkrRefreshing,setIbkrRefreshing] = useState(false);
   const [pipeRefresh,setPipeRefresh] = useState(false);
   const [pipeMsg,setPipeMsg] = useState("");
   const [calendar,setCalendar] = useState<any>(null);
   const [news,setNews] = useState<any>(null);
-  const [portfolioMsgs,setPortfolioMsgs] = useState<{role:string;content:string}[]>([]);
-  const [portfolioInput,setPortfolioInput] = useState("");
-  const [portfolioLoading,setPortfolioLoading] = useState(false);
+  const [grData, setGrData] = useState<any>(null);
+  const [payoffUnd, setPayoffUnd] = useState("CL");
+  const [payoffExpiry, setPayoffExpiry] = useState("all");
+  const [psdData, setPsdData] = useState<any>(null);
+  const [physicalBrData, setPhysicalBrData] = useState<any>(null);
+  const [imeaData, setImeaData] = useState<any>(null);
+  // INTEL state
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [bcbData, setBcbData] = useState<any>(null);
+  const [intelSentiment, setIntelSentiment] = useState<{text:string;time:string}>(()=>{
+    if(typeof window!=="undefined"){try{const s=localStorage.getItem("agrimacro_intel_sentiment");if(s)return JSON.parse(s);}catch{}}
+    return {text:"",time:""};
+  });
+  const [intelNews, setIntelNews] = useState<{text:string;time:string}>(()=>{
+    if(typeof window!=="undefined"){try{const s=localStorage.getItem("agrimacro_intel_news");if(s)return JSON.parse(s);}catch{}}
+    return {text:"",time:""};
+  });
+  const [macroIndicators, setMacroIndicators] = useState<any>(null);
+  const [googleTrends, setGoogleTrends] = useState<any>(null);
+  const [fedwatch, setFedwatch] = useState<any>(null);
+  const [intelSynthesis, setIntelSynthesis] = useState<any>(null);
+  const [correlations, setCorrelations] = useState<any>(null);
+  const [dxProcessed, setDxProcessed] = useState<any[]|null>(null);
+  const [intelCouncil, setIntelCouncil] = useState<{text:string;time:string}|null>(null);
+  const [intelCouncilLoading, setIntelCouncilLoading] = useState(false);
+  const [councilHistory, setCouncilHistory] = useState<Array<{text:string;time:string}>>(()=>{
+    if(typeof window!=="undefined"){try{const s=localStorage.getItem("agrimacro_council_history");if(s)return JSON.parse(s);}catch{}}
+    return [];
+  });
+  const [sentimentDraft, setSentimentDraft] = useState("");
+  const [newsDraft, setNewsDraft] = useState("");
+  const [grokSentiment, setGrokSentiment] = useState<any>(null);
+  const [grokNews, setGrokNews] = useState<any>(null);
+  // Strategy state
+  const [strategyInput, setStrategyInput] = useState("");
+  const [strategyResult, setStrategyResult] = useState<{text:string;thesis:string;time:string}|null>(null);
+  const [strategyLoading, setStrategyLoading] = useState(false);
+  const [strategyHistory, setStrategyHistory] = useState<{text:string;thesis:string;time:string}[]>(()=>{
+    if(typeof window!=="undefined"){try{const s=localStorage.getItem("agrimacro_strategy_history");if(s)return JSON.parse(s);}catch{}}
+    return [];
+  });
+  const [strategyCollapsed, setStrategyCollapsed] = useState<Record<string,boolean>>({});
+  const [strategyRefineMode, setStrategyRefineMode] = useState(false);
+  const [strategyConvoHistory, setStrategyConvoHistory] = useState<{role:string;content:string}[]>([]);
 
   // Load data
   useEffect(()=>{
@@ -1145,9 +1302,30 @@ export default function Dashboard() {
       fetch("/data/processed/contract_history.json").then(r=>r.json()).then(d=>setContractHist(d)).catch(()=>console.warn("No contract history")),
           fetch("/data/processed/calendar.json").then(r=>r.json()).then(setCalendar).catch(()=>console.warn("No calendar")),
       fetch("/data/processed/news.json").then(r=>r.json()).then(setNews).catch(()=>console.warn("No news")),
-      fetch("/data/processed/ibkr_export.json").then(r=>r.json()).then(d=>{setPortfolio(d);setLastIbkrRefresh(d.export_timestamp||new Date().toISOString());}).catch(()=>console.warn("No IBKR data")),
+      fetch("/data/processed/ibkr_portfolio.json").then(r=>r.json()).then(d=>{setPortfolio(d);setLastIbkrRefresh(d.generated_at||d.export_timestamp||new Date().toISOString());}).catch(()=>console.warn("No IBKR data")),
+      fetch("/api/ibkr-greeks").then(r=>r.json()).then(d=>{if(d?.portfolio_greeks) setGreeksData(d);}).catch(()=>{}),
+      fetch("/data/processed/weather_agro.json").then(r=>r.json()).then(setWeatherData).catch(()=>console.warn("No weather data")),
+      fetch("/data/processed/bcb_data.json").then(r=>r.json()).then(setBcbData).catch(()=>console.warn("No BCB data")),
+      fetch("/data/processed/macro_indicators.json").then(r=>r.json()).then(setMacroIndicators).catch(()=>console.warn("No macro indicators")),
+      fetch("/data/processed/google_trends.json").then(r=>r.json()).then(setGoogleTrends).catch(()=>console.warn("No Google Trends")),
+      fetch("/data/processed/fedwatch.json").then(r=>r.json()).then(setFedwatch).catch(()=>console.warn("No FedWatch")),
+      fetch("/data/processed/intel_synthesis.json").then(r=>r.json()).then(setIntelSynthesis).catch(()=>console.warn("No Intel Synthesis")),
+      fetch("/data/processed/correlations.json").then(r=>r.json()).then(setCorrelations).catch(()=>console.warn("No Correlations")),
+      fetch("/data/processed/price_history.json").then(r=>r.json()).then(d=>{if(d?.DX) setDxProcessed(d.DX);}).catch(()=>{}),
+      fetch("/data/processed/grok_sentiment.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setGrokSentiment(d);}).catch(()=>{}),
+      fetch("/data/processed/grok_news.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setGrokNews(d);}).catch(()=>{}),
     ]).finally(()=>{setErrors(errs);setLoading(false);});
   },[]);
+
+  // Load grain_ratios for COP annotations
+  useEffect(() => { fetch("/data/processed/grain_ratios.json").then(r=>r.json()).then(setGrData).catch(()=>{}) }, []);
+
+  // Load additional data for Intel enrichment
+  useEffect(() => {
+    fetch("/data/processed/psd_ending_stocks.json").then(r=>r.json()).then(setPsdData).catch(()=>{});
+    fetch("/data/processed/physical_br.json").then(r=>r.json()).then(setPhysicalBrData).catch(()=>{});
+    fetch("/data/processed/imea_soja.json").then(r=>r.json()).then(setImeaData).catch(()=>{});
+  }, []);
 
   // IBKR Auto-Refresh
   const refreshIbkr = async () => {
@@ -1157,7 +1335,7 @@ export default function Dashboard() {
       const res = await fetch("/api/refresh-ibkr", {method:"POST"});
       const data = await res.json();
       if(data.status === "ok") {
-        const p = await fetch("/data/processed/ibkr_export.json?t="+Date.now());
+        const p = await fetch("/data/processed/ibkr_portfolio.json?t="+Date.now());
         if(p.ok){ const d = await p.json(); setPortfolio(d); setLastIbkrRefresh(new Date().toISOString()); }
         const pr = await fetch("/data/raw/price_history.json?t="+Date.now());
         if(pr.ok){ const d = await pr.json(); setPrices(d); }
@@ -1184,7 +1362,7 @@ export default function Dashboard() {
   },[]);
 
   // Helpers
-  const lastDate = prices&&prices[selected]?.length ? prices[selected][prices[selected].length-1].date : "—";
+  const lastDate = prices&&prices[selected]?.length ? prices[selected][prices[selected].length-1].date : "--";
   const pipelineOk = !loading && errors.length === 0;
 
   const ibkrTime = lastIbkrRefresh ? new Date(lastIbkrRefresh).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "--:--";
@@ -1233,13 +1411,13 @@ export default function Dashboard() {
         {hasCOT(selected) ? (
           <>
             <div style={{fontSize:11,fontWeight:700,color:C.textDim,padding:"8px 0 4px",borderTop:`1px solid ${C.border}`}}>
-              COT — LEGACY (Commercial vs Non-Commercial)
+              COT -- LEGACY (Commercial vs Non-Commercial)
             </div>
             {cotLegacy?.history?.length ? (
               <COTChart history={cotLegacy.history} type="legacy" />
             ) : null}
             <div style={{fontSize:11,fontWeight:700,color:C.textDim,padding:"8px 0 4px",borderTop:`1px solid ${C.border}`,marginTop:4}}>
-              COT — DISAGGREGATED (Managed Money / Producer / Swap)
+              COT -- DISAGGREGATED (Managed Money / Producer / Swap)
             </div>
             {cotDisagg?.history?.length ? (
               <COTChart history={cotDisagg.history} type="disaggregated" />
@@ -1279,11 +1457,11 @@ export default function Dashboard() {
               })()}
             </div>
             <div style={{marginTop:6,fontSize:8,color:C.textMuted}}>
-              CFTC Commitments of Traders | {cotLegacy?.weeks||0}w history | Last: {cotLegacy?.latest?.date||"—"}
+              CFTC Commitments of Traders | {cotLegacy?.weeks||0}w history | Last: {cotLegacy?.latest?.date||"--"}
             </div>
           </>
         ) : (
-          <DataPlaceholder title="COT — Dados Pendentes" detail="Execute collect_cot.py para coletar dados CFTC." />
+          <DataPlaceholder title="COT -- Dados Pendentes" detail="Execute collect_cot.py para coletar dados CFTC." />
         )}
       </div>
     </div>
@@ -1293,7 +1471,7 @@ export default function Dashboard() {
   const getSymFromContract = (contract: string) => { const m = contract.match(/^([A-Z]{2})/); return m ? m[1] : contract; };
   const renderComparativo = () => (
     <div>
-      <SectionTitle>?? Comparativo Normalizado (Base 100)</SectionTitle>
+      <SectionTitle>Comparativo Normalizado (Base 100)</SectionTitle>
       <div style={{marginBottom:16,display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{display:"flex",flexDirection:"column",gap:4}}>
           <label style={{fontSize:9,color:C.textMuted,textTransform:"uppercase",letterSpacing:0.5}}>Commodity 1</label>
@@ -1370,94 +1548,118 @@ export default function Dashboard() {
       )}
 
       {/* -- Contratos Futuros -- */}
-      {/* Curva Forward */}
-      {futures && (
+      {/* Curva Forward -- contract_history.json */}
+      {(contractHist || futures) && (
         <div style={{marginTop:28}}>
           <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:18}}>??</span> Curva Forward — Contango vs Backwardation
+            Curva Forward -- Contango vs Backwardation
           </div>
           <div style={{marginBottom:12,display:"flex",gap:8,flexWrap:"wrap"}}>
-            {Object.keys(futures.commodities||{}).map(sym=>{
-              const isSel=fwdSyms.includes(sym);
-              return (
-                <button key={sym} onClick={()=>{
-                  setFwdSyms([sym]);
-                }} style={{
-                  padding:"4px 10px",fontSize:10,fontWeight:isSel?700:500,borderRadius:4,cursor:"pointer",
-                  background:isSel?"rgba(59,130,246,.15)":"transparent",
-                  color:isSel?C.blue:C.textMuted,border:`1px solid ${C.border}`,
-                  transition:"all .15s"
-                }}>{sym}</button>
-              );
-            })}
-          </div>
-          <div style={{fontSize:10,color:C.textMuted,marginBottom:8}}>Clique em uma commodity para ver sua curva forward</div>
-          <svg viewBox="0 0 900 350" style={{width:"100%",background:C.panel,borderRadius:8,border:`1px solid ${C.border}`}}>
             {(()=>{
+              const syms = new Set<string>();
+              if(contractHist?.contracts){
+                Object.values(contractHist.contracts as Record<string,any>).forEach((c:any)=>{if(c.commodity)syms.add(c.commodity);});
+              } else if(futures?.commodities){
+                Object.keys(futures.commodities).forEach(s=>syms.add(s));
+              }
+              return Array.from(syms).sort().map(sym=>{
+                const isSel=fwdSyms.includes(sym);
+                return (
+                  <button key={sym} onClick={()=>setFwdSyms([sym])} style={{
+                    padding:"4px 10px",fontSize:10,fontWeight:isSel?700:500,borderRadius:4,cursor:"pointer",
+                    background:isSel?"rgba(59,130,246,.15)":"transparent",
+                    color:isSel?C.blue:C.textMuted,border:`1px solid ${C.border}`,transition:"all .15s"
+                  }}>{sym}</button>
+                );
+              });
+            })()}
+          </div>
+          <div style={{fontSize:10,color:C.textMuted,marginBottom:8}}>Eixo X = data de vencimento | Eixo Y = último preço | Fonte: contract_history.json</div>
+          <svg viewBox="0 0 900 380" style={{width:"100%",background:C.panel,borderRadius:8,border:`1px solid ${C.border}`}}>
+            {(()=>{
+              const MO:Record<string,number>={F:1,G:2,H:3,J:4,K:5,M:6,N:7,Q:8,U:9,V:10,X:11,Z:12};
               const allCurves = fwdSyms.map((sym,si)=>{
-                const fc = (futures.commodities||{})[sym];
-                if(!fc) return null;
-                const cts = (fc.contracts||[]).filter(c=>c.close>0).sort((a,b)=>{
-                  const da=a.year+a.month_code; const db=b.year+b.month_code;
-                  return da<db?-1:da>db?1:0;
-                });
-                if(cts.length<2) return null;
-                const front=cts[0].close;
-                const pts=cts.map((c,i)=>({label:c.expiry_label,val:c.close,pct:((c.close-front)/front*100),idx:i}));
+                let pts:{label:string;val:number;idx:number}[]=[];
+                if(contractHist?.contracts){
+                  const entries = Object.values(contractHist.contracts as Record<string,any>)
+                    .filter((c:any)=>c.commodity===sym && c.bars?.length>0);
+                  const sorted = entries.map((c:any)=>{
+                    const code=(c.symbol||"").replace(sym,"");
+                    const mc=code.charAt(0);const ys=code.slice(1);
+                    const yr=ys.length===2?2000+parseInt(ys):parseInt(ys);
+                    const lastBar=c.bars[c.bars.length-1];
+                    return {label:c.expiry_label||`${mc}${ys}`,val:lastBar.close as number,sortKey:yr*100+(MO[mc]||0)};
+                  }).filter(p=>p.val>0).sort((a,b)=>a.sortKey-b.sortKey);
+                  pts=sorted.map((p,i)=>({label:p.label,val:p.val,idx:i}));
+                } else {
+                  const fc=(futures?.commodities||{})[sym];if(!fc)return null;
+                  const cts=(fc.contracts||[]).filter((c:any)=>c.close>0).sort((a:any,b:any)=>{
+                    return (parseInt(a.year)*100+(MO[a.month_code]||0))-(parseInt(b.year)*100+(MO[b.month_code]||0));
+                  });
+                  pts=cts.map((c:any,i:number)=>({label:c.expiry_label,val:c.close,idx:i}));
+                }
+                if(pts.length<2) return null;
                 return {sym,pts,color:["#3b82f6","#ef4444","#22c55e","#f59e0b","#a855f7"][si%5]};
-              }).filter(Boolean);
-              if(!allCurves.length) return <text x="450" y="175" textAnchor="middle" fill={C.textMuted} fontSize="12">Selecione commodities acima</text>;
-              const allPcts=allCurves.flatMap(c=>c.pts.map(p=>p.pct));
-              const minP=Math.min(...allPcts,-2);const maxP=Math.max(...allPcts,2);
-              const pad=60;const chartW=900-pad*2;const chartH=280;const top=30;
+              }).filter(Boolean) as {sym:string;pts:{label:string;val:number;idx:number}[];color:string}[];
+              if(!allCurves.length) return <text x="450" y="190" textAnchor="middle" fill={C.textMuted} fontSize="12">Selecione uma commodity acima</text>;
+              const allVals=allCurves.flatMap(c=>c.pts.map(p=>p.val));
+              const minV=Math.min(...allVals);const maxV=Math.max(...allVals);
+              const rng=maxV-minV||1;const pMin=minV-rng*.08;const pMax=maxV+rng*.08;
+              const padL=65;const chartW=900-padL-20;const chartH=280;const topY=35;
               const maxLen=Math.max(...allCurves.map(c=>c.pts.length));
-              const scaleX=(i)=>pad+i/(maxLen-1)*chartW;
-              const scaleY=(v)=>top+(1-(v-minP)/(maxP-minP))*chartH;
-              const zeroY=scaleY(0);
+              const scX=(i:number)=>padL+(maxLen>1?i/(maxLen-1)*chartW:chartW/2);
+              const scY=(v:number)=>topY+(1-(v-pMin)/(pMax-pMin))*chartH;
+              const c0=allCurves[0];const f0=c0.pts[0].val;const b0=c0.pts[c0.pts.length-1].val;
+              const struct=b0>f0?"CONTANGO":"BACKWARDATION";const sCol=struct==="CONTANGO"?C.amber:C.cyan;
               return (
                 <g>
+                  <text x={padL} y={18} fill={C.textDim} fontSize="10" fontWeight="600">{c0.sym} -- {COMMODITIES.find(cc=>cc.sym===c0.sym)?.unit||""} -- Estrutura: </text>
+                  <text x={padL+210} y={18} fill={sCol} fontSize="10" fontWeight="700">{struct} ({((b0-f0)/f0*100).toFixed(2)}%)</text>
                   {Array.from({length:6}).map((_,gi)=>{
-                    const val=minP+(maxP-minP)*gi/5;
-                    const y=scaleY(val);
-                    return <g key={gi}>
-                      <line x1={pad} x2={900-pad} y1={y} y2={y} stroke={C.border} strokeWidth="0.5"/>
-                      <text x={pad-8} y={y+3} textAnchor="end" fill={C.textMuted} fontSize="9">{`${val.toFixed(1)}%`}</text>
-                    </g>;
+                    const val=pMin+(pMax-pMin)*gi/5;const y=scY(val);
+                    return <g key={gi}><line x1={padL} x2={900-20} y1={y} y2={y} stroke={C.border} strokeWidth="0.5"/>
+                      <text x={padL-8} y={y+3} textAnchor="end" fill={C.textMuted} fontSize="9" fontFamily="monospace">{val.toFixed(2)}</text></g>;
                   })}
-                  <line x1={pad} x2={900-pad} y1={zeroY} y2={zeroY} stroke={C.textMuted} strokeWidth="1" strokeDasharray="4,4"/>
-                  {allCurves.map(curve=>(
-                    <g key={curve.sym}>
-                      <polyline fill="none" stroke={curve.color} strokeWidth="2.5" points={curve.pts.map(p=>`${scaleX(p.idx)},${scaleY(p.pct)}`).join(" ")}/>
-                      {curve.pts.map((p,pi)=>(
-                        <g key={pi}>
-                          <circle cx={scaleX(p.idx)} cy={scaleY(p.pct)} r="3.5" fill={curve.color} stroke={C.panel} strokeWidth="1.5"/>
-                          {pi===curve.pts.length-1 && <text x={scaleX(p.idx)+8} y={scaleY(p.pct)+4} fill={curve.color} fontSize="10" fontWeight="700">{curve.sym}</text>}
-                        </g>
-                      ))}
-                    </g>
+                  <line x1={padL} x2={900-20} y1={scY(f0)} y2={scY(f0)} stroke={C.textMuted} strokeWidth="0.8" strokeDasharray="4,4"/>
+                  <text x={900-18} y={scY(f0)+3} textAnchor="start" fill={C.textMuted} fontSize="8">front</text>
+                  {allCurves.map(curve=>{
+                    const ap=curve.pts.map(p=>`${scX(p.idx)},${scY(p.val)}`).join(" ");
+                    const fY=scY(curve.pts[0].val);
+                    return (<g key={curve.sym}>
+                      <polygon fill={curve.pts[curve.pts.length-1].val>curve.pts[0].val?"rgba(245,158,11,.08)":"rgba(6,182,212,.08)"}
+                        points={`${scX(0)},${fY} ${ap} ${scX(curve.pts.length-1)},${fY}`}/>
+                      <polyline fill="none" stroke={curve.color} strokeWidth="2.5" points={ap}/>
+                      {curve.pts.map((p,pi)=>(<g key={pi}>
+                        <circle cx={scX(p.idx)} cy={scY(p.val)} r="4" fill={curve.color} stroke={C.panel} strokeWidth="1.5"/>
+                        <text x={scX(p.idx)} y={scY(p.val)-8} textAnchor="middle" fill={curve.color} fontSize="8" fontWeight="600" fontFamily="monospace">{p.val.toFixed(1)}</text>
+                      </g>))}
+                      <text x={scX(curve.pts.length-1)+10} y={scY(curve.pts[curve.pts.length-1].val)+4} fill={curve.color} fontSize="10" fontWeight="700">{curve.sym}</text>
+                    </g>);
+                  })}
+                  {c0.pts.map((p,pi)=>(
+                    <text key={pi} x={scX(pi)} y={topY+chartH+20} textAnchor="middle" fill={C.textMuted} fontSize="8" fontWeight="500"
+                      transform={`rotate(-35,${scX(pi)},${topY+chartH+20})`}>{p.label}</text>
                   ))}
-                  {allCurves[0]?.pts.map((p,pi)=>{
-                    if(pi%Math.ceil(maxLen/10)!==0 && pi!==allCurves[0].pts.length-1) return null;
-                    return <text key={pi} x={scaleX(pi)} y={top+chartH+18} textAnchor="middle" fill={C.textMuted} fontSize="8" transform={`rotate(-30,${scaleX(pi)},${top+chartH+18})`}>{p.label}</text>;
-                  })}
                 </g>
               );
             })()}
           </svg>
-          <div style={{display:"flex",gap:16,justifyContent:"center",marginTop:8}}>
-            {fwdSyms.map((sym,si)=>(
-              <div key={sym} style={{display:"flex",alignItems:"center",gap:4,fontSize:10}}>
-                <div style={{width:12,height:3,borderRadius:2,background:["#3b82f6","#ef4444","#22c55e","#f59e0b","#a855f7"][si%5]}}/>
-                <span style={{color:C.textDim}}>{sym} (% vs front)</span>
-              </div>
-            ))}
+          <div style={{display:"flex",gap:20,justifyContent:"center",marginTop:8,fontSize:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{width:12,height:3,borderRadius:2,background:C.amber}}/>
+              <span style={{color:C.textDim}}>Contango (back &gt; front)</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{width:12,height:3,borderRadius:2,background:C.cyan}}/>
+              <span style={{color:C.textDim}}>Backwardation (front &gt; back)</span>
+            </div>
           </div>
         </div>
       )}
 
       {futures && (
         <div style={{marginTop:28}}>
-          <SectionTitle>?? Contratos Futuros — Preços por Vencimento</SectionTitle>
+          <SectionTitle>Contratos Futuros -- Preços por Vencimento</SectionTitle>
           <div style={{fontSize:10,color:C.textMuted,marginBottom:12}}>
             Todos os vencimentos em negociação | Fonte: Yahoo Finance / Stooq | {Object.keys(futures.commodities||{}).length} commodities
           </div>
@@ -1468,7 +1670,7 @@ export default function Dashboard() {
             return (
               <div key={sym} style={{marginBottom:16}}>
                 <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:6,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-                  {sym} — {nm} <span style={{color:C.textMuted,fontWeight:400}}>({fc.unit||""} | {fc.exchange||""})</span>
+                  {sym} -- {nm} <span style={{color:C.textMuted,fontWeight:400}}>({fc.unit||""} | {fc.exchange||""})</span>
                 </div>
                 <div style={{overflowX:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
@@ -1487,13 +1689,13 @@ export default function Dashboard() {
                           <tr key={ct.contract} style={{borderBottom:`1px solid ${C.border}`,background:ci===0?`rgba(59,130,246,.06)`:"transparent"}}>
                             <td style={{padding:"6px 8px",fontWeight:600,fontFamily:"monospace"}}>{ct.contract}</td>
                             <td style={{padding:"6px 8px",color:C.textDim}}>{ct.expiry_label}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{ct.close?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.open?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.high?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.low?.toFixed(2)||"—"}</td>
-                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textMuted}}>{ct.volume?.toLocaleString()||"—"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{ct.close?.toFixed(2)||"--"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.open?.toFixed(2)||"--"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.high?.toFixed(2)||"--"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{ct.low?.toFixed(2)||"--"}</td>
+                            <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:C.textMuted}}>{ct.volume?.toLocaleString()||"--"}</td>
                             <td style={{padding:"6px 8px",textAlign:"right",fontFamily:"monospace",color:spr?(spr.spread>=0?C.amber:C.cyan):C.textMuted}}>
-                              {spr?(spr.spread>=0?"+":"")+spr.spread.toFixed(2):"—"}
+                              {spr?(spr.spread>=0?"+":"")+spr.spread.toFixed(2):"--"}
                             </td>
                             <td style={{padding:"6px 8px",textAlign:"right"}}>
                               {spr?<span style={{fontSize:9,padding:"2px 6px",borderRadius:3,
@@ -1526,7 +1728,7 @@ export default function Dashboard() {
 
     return (
     <div>
-      <SectionTitle>Relações de Preço — O que está caro ou barato?</SectionTitle>
+      <SectionTitle>Relações de Preço -- O que está caro ou barato?</SectionTitle>
       <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
         Estas relações comparam preços entre commodities ligadas entre si.
         Quando uma relação sai do normal, pode indicar oportunidade ou risco.
@@ -1539,12 +1741,12 @@ export default function Dashboard() {
           border:`1px solid ${alertCounts.alerta>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:alertCounts.alerta>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{alertCounts.alerta}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Pede atenção</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>Pede atenção</div>
         </div>
         <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
           <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{alertCounts.atencao}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Fique atento</div>
+          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>Fique atento</div>
         </div>
         <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
           borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
@@ -1568,10 +1770,10 @@ export default function Dashboard() {
             const trendWord=Math.abs(trendPct)<3?"estável":trendPct>0?"subindo":"caindo";
             const trendArrow=Math.abs(trendPct)<3?"?":trendPct>0?"?":"?";
             const alertBadge=alert==="alerta"
-              ?{icon:"??",label:"Atenção!",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
+              ?{icon:"[!]",label:"Atenção!",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
               :alert==="atencao"
-              ?{icon:"??",label:"Fique atento",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"}
-              :{icon:"?",label:"Sem preocupação",bg:"rgba(34,197,94,0.08)",border:"rgba(34,197,94,0.25)",color:"#4ade80"};
+              ?{icon:"[!]",label:"Fique atento",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"}
+              :{icon:"[OK]",label:"Sem preocupação",bg:"rgba(34,197,94,0.08)",border:"rgba(34,197,94,0.25)",color:"#4ade80"};
 
             const thermSegments=[
               {start:0,end:25,color:"#22c55e"},
@@ -1620,6 +1822,7 @@ export default function Dashboard() {
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <span style={{fontSize:13,fontWeight:700,color:zone.color}}>{zone.text}</span>
                       <span style={{fontSize:11,color:C.textMuted,fontFamily:"monospace"}}>posição: {sp.percentile}%</span>
+                      <span style={{marginLeft:8,fontSize:10,fontWeight:700,fontFamily:"monospace",color:Math.abs(sp.zscore_1y||0)>2?"#DC3C3C":Math.abs(sp.zscore_1y||0)>1?"#DCB432":"#00C878"}}>z={(sp.zscore_1y||0)>0?"+"+(sp.zscore_1y||0).toFixed(2):(sp.zscore_1y||0).toFixed(2)}</span>
                     </div>
                     <div style={{position:"relative",height:20,borderRadius:10,overflow:"hidden",display:"flex"}}>
                       {thermSegments.map((seg,i)=>(
@@ -1645,11 +1848,19 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Gaussiana */}
+                {(()=>{
+                  if(!sp.mean_1y || !sp.std_1y || sp.current==null) return null;
+                  const svg = buildGaussianSVG(sp.current, sp.mean_1y, sp.std_1y, sp.name, " "+(sp.unit||""), 320, 100);
+                  if(!svg) return null;
+                  return <div style={{marginBottom:12}} dangerouslySetInnerHTML={{__html:svg}}/>;
+                })()}
+
                 {/* Verdict */}
                 <div style={{padding:"10px 14px",borderRadius:8,marginBottom:10,
                   background:alert==="alerta"?"rgba(239,68,68,0.06)":alert==="atencao"?"rgba(245,158,11,0.06)":"rgba(255,255,255,0.02)",
                   border:`1px solid ${alert==="alerta"?"rgba(239,68,68,0.15)":alert==="atencao"?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.05)"}`}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>?? RESUMO</div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>RESUMO</div>
                   <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>{verdict}</div>
                 </div>
 
@@ -1662,11 +1873,11 @@ export default function Dashboard() {
                     <div style={{marginTop:8,padding:14,borderRadius:8,
                       background:"rgba(59,130,246,0.05)",border:"1px solid rgba(59,130,246,0.12)"}}>
                       <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#60a5fa",marginBottom:4,letterSpacing:0.5}}>?? O QUE É</div>
+                        <div style={{fontSize:10,fontWeight:700,color:"#60a5fa",marginBottom:4,letterSpacing:0.5}}>O QUE É</div>
                         <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whatIsIt}</div>
                       </div>
                       <div>
-                        <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",marginBottom:4,letterSpacing:0.5}}>?? POR QUE ME INTERESSA</div>
+                        <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",marginBottom:4,letterSpacing:0.5}}>POR QUE ME INTERESSA</div>
                         <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whyMatters}</div>
                       </div>
                     </div>
@@ -1683,7 +1894,7 @@ export default function Dashboard() {
       {/* Help footer */}
       <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
         background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>?? Como ler esta página</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>Como ler esta página</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
           <div><strong style={{color:C.textDim}}>Barra "Caro/Barato"</strong><br/>Mostra onde o preço está comparado ao último ano. Bolinha na ponta vermelha = caro. Na verde = barato.</div>
           <div><strong style={{color:C.textDim}}>Gráfico de tendência</strong><br/>Mostra pra onde o preço está indo nos últimos 20 dias. Seta ? = subindo, ? = caindo.</div>
@@ -1697,14 +1908,14 @@ export default function Dashboard() {
   // -- Tab: Sazonalidade ---------------------------------------------------
   const renderSazonalidade = () => (
     <div>
-      <SectionTitle>?? Sazonalidade — {selected} ({COMMODITIES.find(c=>c.sym===selected)?.name})</SectionTitle>
+      <SectionTitle>Sazonalidade -- {selected} ({COMMODITIES.find(c=>c.sym===selected)?.name})</SectionTitle>
       {season && season[selected] ? (
         <SeasonChart entry={season[selected]} />
       ) : (
         <DataPlaceholder title="Sem dados" detail={`${selected} não encontrado em seasonality.json`} />
       )}
       <div style={{marginTop:24}}>
-        <SectionTitle>?? Preço Atual vs Média Histórica (5 Anos)</SectionTitle>
+        <SectionTitle>Preço Atual vs Média Histórica (5 Anos)</SectionTitle>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
             <thead><TableHeader cols={["Commodity","Atual","Média 5Y","Desvio %","Sinal"]} /></thead>
@@ -1714,7 +1925,7 @@ export default function Dashboard() {
                 if(!sd) return (
                   <tr key={c.sym} style={{borderBottom:`1px solid ${C.border}`}}>
                     <td style={{padding:"8px 12px",fontWeight:600}}>{c.sym} <span style={{color:C.textMuted,fontWeight:400}}>({c.name})</span></td>
-                    <td colSpan={4} style={{padding:"8px 12px",color:C.textMuted,textAlign:"center"}}>—</td>
+                    <td colSpan={4} style={{padding:"8px 12px",color:C.textMuted,textAlign:"center"}}>--</td>
                   </tr>
                 );
                 const sigCol = Math.abs(sd.dev)>15?C.red:Math.abs(sd.dev)>5?C.amber:C.green;
@@ -1748,7 +1959,7 @@ export default function Dashboard() {
 
     return (
       <div>
-        <SectionTitle>?? Stocks Watch — Estoques Reais USDA + Análise de Preço</SectionTitle>
+        <SectionTitle>Estoques -- USDA QuickStats + Análise de Preço</SectionTitle>
 
         {/* -- GRAFICO PRINCIPAL - TOPO -- */}
         {realStocks.length > 0 && (
@@ -1817,7 +2028,7 @@ export default function Dashboard() {
                   {/* Header with stats */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
                     <div>
-                      <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} — {selNm}</div>
+                      <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} -- {selNm}</div>
                       <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Estoque Trimestral ({selStock.stock_unit||""}) | Fonte: USDA QuickStats</div>
                     </div>
                     <div style={{display:"flex",gap:16}}>
@@ -1893,6 +2104,22 @@ export default function Dashboard() {
                       </svg>
                     );
                   })()}
+
+                  {/* Gaussiana de distribuição do estoque */}
+                  {(()=>{
+                    if(!selStock?.stock_avg || !selStock?.stock_current) return null;
+                    const gMean = selStock.stock_avg;
+                    const gStd = selStock.stock_avg * 0.20;
+                    const svg = buildGaussianSVG(selStock.stock_current, gMean, gStd, stockSelected+" Estoque", " "+(selStock.stock_unit||""), 420, 110);
+                    if(!svg) return null;
+                    return (
+                      <div style={{marginTop:16,padding:12,background:"#0E1A24",borderRadius:8,border:"1px solid #1e3a4a"}}>
+                        <div style={{fontSize:10,color:"#DCB432",fontWeight:700,marginBottom:8,letterSpacing:"0.5px"}}>DISTRIBUIÇÃO HISTÓRICA — ESTOQUE {stockSelected}</div>
+                        <div dangerouslySetInnerHTML={{__html:svg}}/>
+                        <div style={{fontSize:9,color:"#64748b",marginTop:4}}>μ = média histórica USDA | σ = desvio padrão estimado (20%) | zona verde = ±1σ (normal)</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
@@ -1921,7 +2148,7 @@ export default function Dashboard() {
         {/* -- Tabela de Estoque Real USDA -- */}
         {realStocks.length > 0 && (
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>?? Estoque Real — USDA QuickStats</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>Estoque Real -- USDA QuickStats</div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                 <thead><TableHeader cols={["Commodity","Estoque Atual","Média","Unidade","Desvio %","Estado","Tendência","Período"]} /></thead>
@@ -1934,13 +2161,13 @@ export default function Dashboard() {
                     return (
                       <tr key={st.symbol+"_real"} onClick={()=>setStockSelected(st.symbol)} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:isSel?"rgba(59,130,246,.06)":"transparent"}}>
                         <td style={{padding:"8px 12px",fontWeight:700}}>{st.symbol} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,fontSize:12}}>{st.stock_current?.toFixed(2)||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{st.stock_avg?.toFixed(2)||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:C.textMuted}}>{st.stock_unit||"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,fontSize:12}}>{st.stock_current?.toFixed(2)||"--"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{st.stock_avg?.toFixed(2)||"--"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:C.textMuted}}>{st.stock_unit||"--"}</td>
                         <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:devCol}}>{dev>=0?"+":""}{dev.toFixed(1)}%</td>
                         <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label={st.state.replace(/_/g," ")} color={st.state.includes("APERTO")?C.red:st.state.includes("EXCESSO")?C.green:C.amber} /></td>
-                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Tendencia"))?.replace("Tendencia: ","")||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Dado mais recente"))?.replace("Dado mais recente: ","")||"—"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Tendencia"))?.replace("Tendencia: ","")||"--"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Dado mais recente"))?.replace("Dado mais recente: ","")||"--"}</td>
                       </tr>
                     );
                   })}
@@ -1950,192 +2177,97 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* -- Tabela de Proxy (Preço vs Média) -- */}
+        {/* -- Proxy de Preço -- enriquecido com COT + sazonalidade -- */}
         <div>
-          <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>?? Proxy de Preço — Sem Dados de Estoque Real</div>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-              <thead><TableHeader cols={["Commodity","Preço","Desvio vs Média 5Y","Fonte","Estado","Fatores"]} /></thead>
-              <tbody>
-                {stocksList.filter(s=>!s.data_available?.stock_real).map(st=>{
-                  const nm=COMMODITIES.find(c=>c.sym===st.symbol)?.name||st.symbol;
-                  return (
-                    <tr key={st.symbol+"_proxy"} style={{borderBottom:`1px solid ${C.border}`}}>
-                      <td style={{padding:"8px 12px",fontWeight:600}}>{st.symbol} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
-                      <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700}}>{st.price?.toFixed(2)||"—"}</td>
-                      <td style={{padding:"8px 12px",textAlign:"right"}}><DevBar val={st.price_vs_avg} /></td>
-                      <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label="PROXY" color={C.textMuted} /></td>
-                      <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label={st.state.replace(/_/g," ")} color={st.state.includes("ELEVADO")||st.state.includes("DEPRIMIDO")?C.red:st.state.includes("ACIMA")||st.state.includes("ABAIXO")?C.amber:C.green} /></td>
-                      <td style={{padding:"8px 12px",fontSize:9,color:C.textMuted}}>{st.factors?.join("; ")||"—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  // -- Tab: Custo Produção ------------------------------------------------
-  const renderCustoProducao = () => {
-    const allRegions:{sym:string;commodity:string;region:string;cost:number;unit:string;price:number|null;margin:number|null;source:string}[] = [];
-    COST_DATA.forEach(cd=>{
-      const p=getPrice(cd.sym);
-      cd.regions.forEach(r=>{
-        const margin = p ? ((p - r.cost) / r.cost) * 100 : null;
-        allRegions.push({sym:cd.sym,commodity:cd.commodity,region:r.region,cost:r.cost,unit:r.unit,price:p,margin,source:r.source});
-      });
-    });
-    const prejuizo = allRegions.filter(r=>r.margin!==null && r.margin<0).length;
-    const apertado = allRegions.filter(r=>r.margin!==null && r.margin>=0 && r.margin<=10).length;
-    const lucro = allRegions.filter(r=>r.margin!==null && r.margin>10).length;
+          <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>Proxy de Preço -- Commodities sem dados USDA</div>
+          <div style={{display:"grid",gap:10}}>
+            {stocksList.filter(s=>!s.data_available?.stock_real).map(st=>{
+              const sym=st.symbol;
+              const nm=COMMODITIES.find(c=>c.sym===sym)?.name||sym;
+              const pva=st.price_vs_avg||0;
+              const stateLabel=(st.state||"").replace(/_/g," ");
+              const stateCol=st.state?.includes("ELEVADO")||st.state?.includes("DEPRIMIDO")?C.red:st.state?.includes("ACIMA")||st.state?.includes("ABAIXO")?C.amber:C.green;
 
-    return (
-    <div>
-      <SectionTitle>Custo de Produção — Quem lucra e quem perde?</SectionTitle>
-      <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
-        Compara o preço atual de mercado com o custo de produção em cada região.
-        <strong style={{color:C.textDim}}> Barra verde = lucro. Amarela = apertado. Vermelha = prejuízo.</strong>
-      </div>
+              // COT enrichment
+              const cotD=cot?.commodities?.[sym]?.disaggregated;
+              const mmHist=cotD?.history?.map((h:any)=>h.managed_money_net||h.mm_net||0).filter((v:number)=>v!==0);
+              let mmNet:number|null=null, mmPctile:number|null=null;
+              if(mmHist&&mmHist.length>=10){
+                mmNet=mmHist[mmHist.length-1];
+                const sorted=[...mmHist].sort((a:number,b:number)=>a-b);
+                mmPctile=Math.round(sorted.findIndex((v:number)=>v>=mmNet!)/sorted.length*100);
+              }
 
-      {/* Summary cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
-        <div style={{background:prejuizo>0?"rgba(239,68,68,0.06)":"rgba(34,197,94,0.04)",
-          border:`1px solid ${prejuizo>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
-          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
-          <div style={{fontSize:32,fontWeight:800,color:prejuizo>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{prejuizo}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? No prejuízo</div>
-        </div>
-        <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
-          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
-          <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{apertado}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Margem apertada</div>
-        </div>
-        <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
-          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
-          <div style={{fontSize:32,fontWeight:800,color:"#4ade80",fontFamily:"monospace"}}>{lucro}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>?? Lucrando</div>
-        </div>
-      </div>
-
-      {COST_DATA.map(cd=>{
-        const p=getPrice(cd.sym);
-        const margins = cd.regions.map(r=>p ? ((p - r.cost) / r.cost) * 100 : null);
-        const hasPrejuizo = margins.some(m=>m!==null && m<0);
-        const allLucro = margins.every(m=>m!==null && m>0);
-        const bestRegion = cd.regions.reduce((best,r,i)=>
-          (margins[i]!==null && (best.margin===null || margins[i]!>best.margin)) ? {region:r.region,margin:margins[i]!} : best,
-          {region:"",margin:null as number|null}
-        );
-        const worstRegion = cd.regions.reduce((worst,r,i)=>
-          (margins[i]!==null && (worst.margin===null || margins[i]!<worst.margin)) ? {region:r.region,margin:margins[i]!} : worst,
-          {region:"",margin:null as number|null}
-        );
-
-        const headerBorder = hasPrejuizo?"#ef4444":allLucro?"#10b981":"#f59e0b";
-        const headerBg = hasPrejuizo?"rgba(239,68,68,0.03)":allLucro?"rgba(16,185,129,0.03)":"transparent";
-        const alertBadge = hasPrejuizo
-          ?{icon:"??",label:"Regiões no prejuízo",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
-          :allLucro
-          ?{icon:"??",label:"Todas lucrando",bg:"rgba(16,185,129,0.1)",border:"rgba(16,185,129,0.3)",color:"#34d399"}
-          :{icon:"??",label:"Margens apertadas",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"};
-
-        return (
-          <div key={cd.sym} style={{marginBottom:16,background:headerBg,borderRadius:"0 12px 12px 0",
-            padding:"20px 24px",border:`1px solid ${C.border}`,borderLeft:`4px solid ${headerBorder}`}}>
-
-            {/* Header */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-              <div>
-                <h3 style={{margin:0,fontSize:17,fontWeight:700,color:C.text,lineHeight:1.3}}>{cd.commodity}</h3>
-                {p && <div style={{fontSize:13,color:C.textMuted,marginTop:4}}>
-                  Preço de mercado: <strong style={{color:C.text,fontFamily:"monospace",fontSize:15}}>
-                    {p.toLocaleString("en-US",{minimumFractionDigits:2})}
-                  </strong> <span style={{fontSize:11}}>{cd.futuresUnit}</span>
-                </div>}
-              </div>
-              <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 14px",borderRadius:20,
-                background:alertBadge.bg,border:`1px solid ${alertBadge.border}`}}>
-                <span style={{fontSize:13}}>{alertBadge.icon}</span>
-                <span style={{fontSize:11,fontWeight:700,color:alertBadge.color}}>{alertBadge.label}</span>
-              </span>
-            </div>
-
-            {/* Regions as visual cards */}
-            <div style={{display:"grid",gap:10}}>
-              {cd.regions.map((r,i)=>{
-                const margin = p ? ((p - r.cost) / r.cost) * 100 : null;
-                const isBest = bestRegion.region === r.region;
-                const isWorst = worstRegion.region === r.region && hasPrejuizo;
-                return (
-                  <div key={i} style={{display:"grid",gridTemplateColumns:"220px 120px 1fr",gap:16,alignItems:"center",
-                    padding:"12px 16px",borderRadius:10,
-                    background:isWorst?"rgba(239,68,68,0.04)":isBest?"rgba(16,185,129,0.04)":"rgba(255,255,255,0.02)",
-                    border:`1px solid ${isWorst?"rgba(239,68,68,0.15)":isBest?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.04)"}`}}>
-
-                    {/* Region name */}
-                    <div>
-                      <div style={{fontSize:14,fontWeight:600,color:C.text}}>{r.region}</div>
-                      <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Fonte: {r.source}</div>
-                    </div>
-
-                    {/* Cost */}
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:9,color:C.textMuted,fontWeight:600,letterSpacing:1,marginBottom:2}}>CUSTO</div>
-                      <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:C.textDim}}>
-                        {r.cost.toLocaleString("en-US",{minimumFractionDigits:1})}
-                      </div>
-                      <div style={{fontSize:10,color:C.textMuted}}>{r.unit}</div>
-                    </div>
-
-                    {/* Margin bar */}
-                    {p ? <MarginBar price={p} cost={r.cost} /> : <span style={{color:C.textMuted,fontSize:12}}>Sem preço</span>}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Verdict */}
-            <div style={{marginTop:14,padding:"10px 14px",borderRadius:8,
-              background:hasPrejuizo?"rgba(239,68,68,0.06)":allLucro?"rgba(16,185,129,0.05)":"rgba(245,158,11,0.05)",
-              border:`1px solid ${hasPrejuizo?"rgba(239,68,68,0.15)":allLucro?"rgba(16,185,129,0.12)":"rgba(245,158,11,0.12)"}`}}>
-              <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>?? RESUMO</div>
-              <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>
-                {hasPrejuizo && worstRegion.margin!==null && bestRegion.margin!==null
-                  ? `?? ${worstRegion.region.replace(/^.{4}/,"")} está no prejuízo (${worstRegion.margin.toFixed(0)}%). O produtor mais competitivo é ${bestRegion.region.replace(/^.{4}/,"")} com margem de +${bestRegion.margin.toFixed(0)}%. Preço precisa subir para viabilizar todas as regiões.`
-                  : allLucro && bestRegion.margin!==null && worstRegion.margin!==null
-                  ? `?? Todas as regiões lucrando. Melhor margem: ${bestRegion.region.replace(/^.{4}/,"")} (+${bestRegion.margin.toFixed(0)}%). Margem mais apertada: ${worstRegion.region.replace(/^.{4}/,"")} (+${(worstRegion.margin).toFixed(0)}%).`
-                  : bestRegion.margin!==null && worstRegion.margin!==null
-                  ? `?? Margens apertadas em algumas regiões. ${bestRegion.region.replace(/^.{4}/,"")} lidera com +${bestRegion.margin.toFixed(0)}%. Atenção para regiões com margem abaixo de 10%.`
-                  : "Dados de preço indisponíveis para cálculo."
+              // Seasonality -- current month avg return
+              const candles=prices?.[sym];
+              let seasonAvg:number|null=null, seasonPctPos:number|null=null, monthLabel="";
+              if(candles&&candles.length>=252){
+                const cm=new Date().getMonth();
+                monthLabel=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][cm];
+                const rets:number[]=[];
+                for(let i=22;i<candles.length;i++){
+                  if(new Date(candles[i].date).getMonth()===cm){
+                    const prev=candles[i-22]?.close;
+                    if(prev&&prev>0)rets.push((candles[i].close-prev)/prev*100);
+                  }
                 }
-              </div>
-            </div>
+                if(rets.length>=3){
+                  seasonAvg=rets.reduce((s,v)=>s+v,0)/rets.length;
+                  seasonPctPos=Math.round(rets.filter(r=>r>0).length/rets.length*100);
+                }
+              }
 
-            {/* Sources */}
-            <div style={{marginTop:8,fontSize:9,color:C.textMuted}}>
-              Fontes: {cd.regions.map(r=>r.source).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}
-            </div>
+              // Weekly / monthly change
+              let weekChg:number|null=null, monthChg:number|null=null;
+              if(candles&&candles.length>=5){
+                weekChg=(candles[candles.length-1].close-candles[candles.length-5].close)/candles[candles.length-5].close*100;
+              }
+              if(candles&&candles.length>=22){
+                monthChg=(candles[candles.length-1].close-candles[candles.length-22].close)/candles[candles.length-22].close*100;
+              }
+
+              // Combined state badge: price vs avg + COT percentile
+              let combLabel=stateLabel, combCol=stateCol;
+              if(mmPctile!==null){
+                if(mmPctile>75&&pva>10){combLabel="SOBRECOMPRADO";combCol=C.red;}
+                else if(mmPctile<25&&pva<-10){combLabel="SOBREVENDIDO";combCol=C.green;}
+              }
+
+              return (
+                <div key={sym+"_proxy"} style={{background:C.panelAlt,borderRadius:8,padding:"12px 16px",border:`1px solid ${C.border}`,borderLeft:`3px solid ${combCol}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                      <span style={{fontSize:13,fontWeight:700,color:C.text}}>{sym}</span>
+                      <span style={{fontSize:11,color:C.textMuted}}>-- {nm}</span>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:C.text}}>{st.price?.toFixed(2)||"--"}</span>
+                      <span style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:pva>=0?C.red:C.green}}>{pva>=0?"+":""}{pva.toFixed(1)}% vs média</span>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:10,color:C.textDim}}>
+                    {mmNet!==null&&mmPctile!==null&&(
+                      <span>COT: MM {mmNet>=0?"+":""}{(mmNet/1000).toFixed(1)}K <span style={{color:mmPctile>60?C.green:mmPctile<40?C.red:C.textMuted,fontWeight:600}}>Pctl {mmPctile}%</span></span>
+                    )}
+                    {seasonAvg!==null&&seasonPctPos!==null&&(
+                      <span>Sazonal {monthLabel}: <span style={{color:seasonAvg>=0?C.green:C.red,fontWeight:600}}>{seasonAvg>0?"+":""}{seasonAvg.toFixed(1)}%</span> {seasonPctPos}%+</span>
+                    )}
+                    {weekChg!==null&&(
+                      <span>Sem: <span style={{color:weekChg>=0?C.green:C.red,fontFamily:"monospace"}}>{weekChg>=0?"+":""}{weekChg.toFixed(2)}%</span></span>
+                    )}
+                    {monthChg!==null&&(
+                      <span>Mês: <span style={{color:monthChg>=0?C.green:C.red,fontFamily:"monospace"}}>{monthChg>=0?"+":""}{monthChg.toFixed(2)}%</span></span>
+                    )}
+                    <span style={{fontSize:9,fontWeight:700,padding:"1px 8px",borderRadius:3,background:`${combCol}22`,color:combCol}}>{combLabel}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
-
-      {/* Help footer */}
-      <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
-        background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>?? Como ler esta página</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
-          <div><strong style={{color:C.textDim}}>Barra de margem</strong><br/>Verde = lucro bom (acima de 20%). Amarela = margem apertada. Vermelha = produtor está perdendo dinheiro.</div>
-          <div><strong style={{color:C.textDim}}>Custo por região</strong><br/>Quanto custa produzir em cada local. Regiões com custo mais baixo conseguem lucrar mesmo com preços em queda.</div>
-          <div><strong style={{color:C.textDim}}>Resumo</strong><br/>Mostra quem está na melhor e pior situação. Se muitas regiões estão no prejuízo, a oferta tende a cair — o que pode subir o preço.</div>
         </div>
       </div>
-    </div>
     );
   };
-
-
   // -- Tab: Energia ---------------------------------------------------------
   const renderEnergia = () => {
     const s = eiaData?.series || {};
@@ -2143,7 +2275,7 @@ export default function Dashboard() {
 
     // Helper: spark SVG
     const Spark = ({data,color,w=180,h=50}:{data:{period:string;value:number}[];color:string;w?:number;h?:number}) => {
-      if(!data||data.length<2) return <span style={{color:C.textMuted,fontSize:11}}>—</span>;
+      if(!data||data.length<2) return <span style={{color:C.textMuted,fontSize:11}}>--</span>;
       const vals = [...data].reverse().map(d=>d.value);
       const mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;
       const pts=vals.map((v,i)=>`${(i/(vals.length-1))*w},${h-4-((v-mn)/rng)*(h-8)}`).join(" ");
@@ -2183,7 +2315,7 @@ export default function Dashboard() {
 
     // Helper: change badge
     const ChgBadge = ({val,suffix="WoW"}:{val:number|null|undefined;suffix?:string}) => {
-      if(val===null||val===undefined) return <span style={{color:C.textMuted,fontSize:10}}>—</span>;
+      if(val===null||val===undefined) return <span style={{color:C.textMuted,fontSize:10}}>--</span>;
       const color = val>0?"#10b981":val<0?"#ef4444":"#94a3b8";
       const arrow = val>0?"?":val<0?"?":"?";
       return <span style={{fontSize:11,fontWeight:600,color}}>{arrow} {val>0?"+":""}{val.toFixed(1)}% {suffix}</span>;
@@ -2191,39 +2323,39 @@ export default function Dashboard() {
 
     // -- Data cards config --
     const priceCards = [
-      {id:"wti_spot",label:"Petróleo WTI",icon:"???",color:"#f59e0b",
+      {id:"wti_spot",label:"Petróleo WTI",icon:"",color:"#f59e0b",
         why:"Preço do petróleo afeta o custo do diesel, frete e insumos agrícolas. Petróleo em alta = custo do produtor sobe."},
-      {id:"natural_gas_spot",label:"Gás Natural (Henry Hub)",icon:"??",color:"#3b82f6",
+      {id:"natural_gas_spot",label:"Gás Natural (Henry Hub)",icon:"",color:"#3b82f6",
         why:"Gás natural é matéria-prima de fertilizantes nitrogenados (ureia). Gás caro = adubo caro."},
-      {id:"diesel_retail",label:"Diesel (Preço Bomba EUA)",icon:"?",color:"#ef4444",
-        why:"Diesel é o principal combustível do campo — colheitadeiras, caminhões, irrigação. Cada centavo afeta a margem do produtor."},
-      {id:"gasoline_retail",label:"Gasolina (Preço Bomba EUA)",icon:"??",color:"#a855f7",
+      {id:"diesel_retail",label:"Diesel (Preço Bomba EUA)",icon:"",color:"#ef4444",
+        why:"Diesel é o principal combustível do campo -- colheitadeiras, caminhões, irrigação. Cada centavo afeta a margem do produtor."},
+      {id:"gasoline_retail",label:"Gasolina (Preço Bomba EUA)",icon:"",color:"#a855f7",
         why:"Gasolina alta incentiva etanol de milho, aumentando demanda por milho e puxando preços agrícolas."},
     ];
 
     const stockCards = [
-      {id:"crude_stocks",label:"Estoques Petróleo Cru",icon:"???",color:"#f59e0b",unit:"MBbl",
+      {id:"crude_stocks",label:"Estoques Petróleo Cru",icon:"",color:"#f59e0b",unit:"MBbl",
         why:"Estoques altos = petróleo tende a cair = diesel mais barato = custo agrícola menor. Estoques baixos = risco de alta."},
-      {id:"gasoline_stocks",label:"Estoques Gasolina",icon:"?",color:"#a855f7",unit:"MBbl",
+      {id:"gasoline_stocks",label:"Estoques Gasolina",icon:"",color:"#a855f7",unit:"MBbl",
         why:"Estoques baixos de gasolina = mais demanda por etanol = mais demanda por milho = milho sobe."},
-      {id:"distillate_stocks",label:"Estoques Diesel/Destilados",icon:"??",color:"#ef4444",unit:"MBbl",
+      {id:"distillate_stocks",label:"Estoques Diesel/Destilados",icon:"",color:"#ef4444",unit:"MBbl",
         why:"Estoque de diesel apertado = risco de frete caro na colheita. Produtor deve monitorar antes de contratar transporte."},
-      {id:"ethanol_stocks",label:"Estoques Etanol",icon:"??",color:"#22c55e",unit:"MBbl",
+      {id:"ethanol_stocks",label:"Estoques Etanol",icon:"",color:"#22c55e",unit:"MBbl",
         why:"Etanol consome ~40% do milho americano. Estoques baixos de etanol = usinas precisam comprar mais milho."},
     ];
 
     const prodCards = [
-      {id:"ethanol_production",label:"Produção Etanol",icon:"??",color:"#22c55e",unit:"MBbl/d",
+      {id:"ethanol_production",label:"Produção Etanol",icon:"",color:"#22c55e",unit:"MBbl/d",
         why:"Produção alta de etanol = forte demanda por milho. Queda na produção = demanda enfraquecendo."},
-      {id:"refinery_utilization",label:"Utilização Refinarias",icon:"??",color:"#f59e0b",unit:"%",
+      {id:"refinery_utilization",label:"Utilização Refinarias",icon:"",color:"#f59e0b",unit:"%",
         why:"Refinarias a pleno = demanda forte por combustíveis. Se cair abaixo de 85%, sinal de desaceleração econômica."},
-      {id:"crude_production",label:"Produção Petróleo EUA",icon:"????",color:"#3b82f6",unit:"MBbl/d",
+      {id:"crude_production",label:"Produção Petróleo EUA",icon:"",color:"#3b82f6",unit:"MBbl/d",
         why:"EUA é o maior produtor mundial. Produção recorde = petróleo tende a cair = diesel mais barato para o campo."},
     ];
 
     if(!eiaData) return (
       <div>
-        <SectionTitle>Energia — Petróleo, Gás e Combustíveis</SectionTitle>
+        <SectionTitle>Energia -- Petróleo, Gás e Combustíveis</SectionTitle>
         <DataPlaceholder title="Sem dados EIA" detail="Execute o pipeline para coletar dados da EIA (Energy Information Administration)" />
       </div>
     );
@@ -2233,15 +2365,15 @@ export default function Dashboard() {
 
     return (
     <div>
-      <SectionTitle>Energia — Petróleo, Gás e Combustíveis</SectionTitle>
+      <SectionTitle>Energia -- Petróleo, Gás e Combustíveis</SectionTitle>
       <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
         Dados semanais da EIA (Energy Information Administration). Energia afeta diretamente o custo do produtor rural
-        — diesel, frete, fertilizantes e demanda por etanol.
-        <strong style={{color:C.textDim}}> Atualizado: {eiaData.metadata.collected_at?.slice(0,10)||"—"}</strong>
+        -- diesel, frete, fertilizantes e demanda por etanol.
+        <strong style={{color:C.textDim}}> Atualizado: {eiaData.metadata.collected_at?.slice(0,10)||"--"}</strong>
       </div>
 
       {/* -- PREÇOS -- */}
-      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>?? Preços — Quanto custa a energia?</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>Preços -- Quanto custa a energia?</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:28}}>
         {priceCards.map(pc=>{
           const d = get(pc.id);
@@ -2262,7 +2394,7 @@ export default function Dashboard() {
                   <div style={{fontSize:32,fontWeight:800,fontFamily:"monospace",color:C.text,letterSpacing:-1}}>
                     ${d.latest_value.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:3})}
                   </div>
-                  <div style={{fontSize:11,color:C.textMuted}}>{d.unit} • {d.latest_period}</div>
+                  <div style={{fontSize:11,color:C.textMuted}}>{d.unit} * {d.latest_period}</div>
                   <div style={{display:"flex",gap:12,marginTop:6}}>
                     <ChgBadge val={d.mom_change_pct} suffix="MoM"/>
                     {d.yoy_change_pct!==null && <ChgBadge val={d.yoy_change_pct} suffix="YoY"/>}
@@ -2286,7 +2418,7 @@ export default function Dashboard() {
       </div>
 
       {/* -- ESTOQUES -- */}
-      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>?? Estoques — Quanto tem guardado?</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>Estoques -- Quanto tem guardado?</div>
       <div style={{fontSize:12,color:C.textMuted,marginBottom:14,lineHeight:1.5}}>
         Estoques baixos = risco de preço subir. Estoques altos = pressão de baixa.
         A barra mostra onde o estoque está dentro do range do último ano.
@@ -2309,16 +2441,16 @@ export default function Dashboard() {
                   <span style={{fontSize:14,fontWeight:700,color:C.text}}>{sc.label}</span>
                 </div>
                 {isLow && <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:12,
-                  background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",color:"#fbbf24"}}>?? Baixo</span>}
+                  background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",color:"#fbbf24"}}>Baixo</span>}
                 {isHigh && <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:12,
-                  background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.3)",color:"#60a5fa"}}>?? Alto</span>}
+                  background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.3)",color:"#60a5fa"}}>Alto</span>}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"center"}}>
                 <div>
                   <div style={{fontSize:26,fontWeight:800,fontFamily:"monospace",color:C.text}}>
                     {d.latest_value>=1000?`${(d.latest_value/1000).toFixed(1)}M`:d.latest_value.toLocaleString("en-US")}
                   </div>
-                  <div style={{fontSize:11,color:C.textMuted}}>{sc.unit} • {d.latest_period}</div>
+                  <div style={{fontSize:11,color:C.textMuted}}>{sc.unit} * {d.latest_period}</div>
                   <div style={{marginTop:4}}><ChgBadge val={d.wow_change_pct} /></div>
                 </div>
                 <Spark data={d.history.slice(0,26)} color={sc.color} />
@@ -2339,7 +2471,7 @@ export default function Dashboard() {
       </div>
 
       {/* -- PRODUÇÃO -- */}
-      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>?? Produção e Refino</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>Produção e Refino</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:28}}>
         {prodCards.map(pc=>{
           const d = get(pc.id);
@@ -2358,7 +2490,7 @@ export default function Dashboard() {
                   ? `${(d.latest_value/1000).toFixed(1)}M`
                   : d.latest_value.toLocaleString("en-US")}
               </div>
-              <div style={{fontSize:11,color:C.textMuted}}>{pc.unit} • {d.latest_period}</div>
+              <div style={{fontSize:11,color:C.textMuted}}>{pc.unit} * {d.latest_period}</div>
               <div style={{marginTop:4}}><ChgBadge val={d.wow_change_pct}/></div>
               <div style={{marginTop:10}}>
                 <Spark data={d.history.slice(0,26)} color={pc.color} w={160} h={40}/>
@@ -2380,7 +2512,7 @@ export default function Dashboard() {
       {/* Help footer */}
       <div style={{padding:"16px 20px",borderRadius:12,
         background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>?? Como a energia afeta o agro</div>
+        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>Como a energia afeta o agro</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
           <div><strong style={{color:C.textDim}}>Diesel e frete</strong><br/>Petróleo sobe ? diesel sobe ? custo de produção e transporte agrícola aumenta. Produtor perde margem.</div>
           <div><strong style={{color:C.textDim}}>Etanol e milho</strong><br/>~40% do milho dos EUA vira etanol. Mais demanda por etanol = mais demanda por milho = preço do milho sobe.</div>
@@ -2400,9 +2532,9 @@ export default function Dashboard() {
     return (
     <div>
       {/* -- US CASH MARKETS (dados reais USDA) -- */}
-      <SectionTitle>???? Mercado Físico EUA — Cash vs Futures</SectionTitle>
+      <SectionTitle> Mercado Físico EUA -- Cash vs Futures</SectionTitle>
       <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
-        Preços cash USDA (Prices Received) vs front-month futures. Atualizado: {physData?.timestamp?.slice(0,10) || "—"}
+        Preços cash USDA (Prices Received) vs front-month futures. Atualizado: {physData?.timestamp?.slice(0,10) || "--"}
       </div>
       {usList.length === 0 ? (
         <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12}}>
@@ -2467,9 +2599,9 @@ export default function Dashboard() {
       )}
 
       {/* -- INTERNATIONAL (dados reais) -- */}
-      <SectionTitle>?? Mercado Físico Internacional</SectionTitle>
+      <SectionTitle>Mercado Físico Internacional</SectionTitle>
       <div style={{fontSize:11,color:C.textMuted,marginBottom:16}}>
-        {physIntl ? <>Fontes: CEPEA/ESALQ via Notícias Agrícolas + MAGyP FOB Argentina. Atualizado: {physIntl.timestamp?.slice(0,10) || "—"} | <span style={{color:C.green}}>{physIntl.markets_with_data} com dados</span> / {physIntl.total_markets} total</> : "Carregando dados internacionais..."}
+        {physIntl ? <>Fontes: CEPEA/ESALQ via Notícias Agrícolas + MAGyP FOB Argentina. Atualizado: {physIntl.timestamp?.slice(0,10) || "--"} | <span style={{color:C.green}}>{physIntl.markets_with_data} com dados</span> / {physIntl.total_markets} total</> : "Carregando dados internacionais..."}
       </div>
       {(()=>{
         const intlData = physIntl?.international || {};
@@ -2502,14 +2634,14 @@ export default function Dashboard() {
                   const mx=Math.max(...vals);const mn=Math.min(...vals);const rng=mx-mn||1;
                   points=vals.map((v:number,i:number)=>`${(i/(vals.length-1))*sparkW},${sparkH-((v-mn)/rng)*sparkH}`).join(" ");
                 }
-                const trendColor = d.trend?.startsWith("+")?C.green:d.trend?.startsWith("-")?C.red:d.trend==="—"?C.textMuted:C.textDim;
+                const trendColor = d.trend?.startsWith("+")?C.green:d.trend?.startsWith("-")?C.red:d.trend==="--"?C.textMuted:C.textDim;
                 return (
                 <tr key={sym} style={{borderBottom:`1px solid ${C.border}`}}>
                   <td style={{padding:"8px 10px",fontWeight:600}}>
                     <span style={{color:C.text}}>{d.label}</span>
                   </td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:C.text,fontSize:13}}>
-                    {typeof d.price==="number"?d.price.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):"—"}
+                    {typeof d.price==="number"?d.price.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
                   </td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontSize:9,color:C.textMuted}}>{d.price_unit}</td>
                   <td style={{padding:"8px 10px",textAlign:"right",fontSize:10,color:C.textDim}}>{d.period}</td>
@@ -2519,7 +2651,7 @@ export default function Dashboard() {
                   <td style={{padding:"8px 10px"}}>
                     {points ? <svg width={sparkW} height={sparkH} style={{display:"block"}}>
                       <polyline points={points} fill="none" stroke={C.cyan} strokeWidth={1.5}/>
-                    </svg> : <span style={{fontSize:9,color:C.textMuted}}>{"—"}</span>}
+                    </svg> : <span style={{fontSize:9,color:C.textMuted}}>{"--"}</span>}
                   </td>
                   <td style={{padding:"8px 10px"}}>{srcBadge(d.source)}</td>
                 </tr>);
@@ -2528,7 +2660,7 @@ export default function Dashboard() {
           </table>
           {/* Without data */}
           {noData.length>0 && <>
-            <div style={{fontSize:11,fontWeight:600,color:C.textMuted,marginBottom:8,marginTop:16}}>{"\u26a0\ufe0f"} Mercados sem API gratuita ({noData.length})</div>
+            <div style={{fontSize:11,fontWeight:600,color:C.textMuted,marginBottom:8,marginTop:16}}>{"⚠️"} Mercados sem API gratuita ({noData.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
               {noData.map(([sym,d])=>(
                 <div key={sym} style={{padding:"8px 12px",background:"rgba(148,163,184,.04)",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10}}>
@@ -2675,184 +2807,2049 @@ export default function Dashboard() {
     );
   };
   // -- Tab Switch ---------------------------------------------------------
-  // Tab: Portfolio + AI Trading Assistant
-  const sendPortfolioChat = async () => {
-    if(!portfolioInput.trim()||portfolioLoading) return;
-    const userMsg = {role:"user",content:portfolioInput.trim()};
-    const newMsgs = [...portfolioMsgs, userMsg];
-    setPortfolioMsgs(newMsgs);
-    setPortfolioInput("");
-    setPortfolioLoading(true);
-    try {
-      const res = await fetch("/api/chat", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:newMsgs,context:"portfolio"})});
-      const data = await res.json();
-      setPortfolioMsgs([...newMsgs, {role:"assistant",content:data.error?"Erro: "+data.error:data.response}]);
-    } catch(e:any) {
-      setPortfolioMsgs([...newMsgs, {role:"assistant",content:"Erro: "+e.message}]);
+  // Tab: Portfolio
+
+  const STRIKE_DIVISORS: Record<string,number> = {CL:100,SI:100,GF:10,ZL:100,CC:1,ZC:100,ZS:100,ZW:100,ZM:100,SB:100,KC:100,CT:100,LE:100,HE:100,NG:100,GC:100};
+  const OPT_MULTIPLIERS: Record<string,number> = {CL:1000,SI:5000,GF:500,ZL:600,CC:10,ZC:50,ZS:50,ZW:50,ZM:100,SB:1120,KC:375,CT:500,LE:400,HE:400,GF2:500,NG:10000,GC:100};
+
+  function parsePosition(pos: any) {
+    const ls = (pos.local_symbol || "").trim();
+    const parts = ls.split(" ");
+    const isOption = pos.sec_type === "FOP" || pos.sec_type === "OPT" || (parts.length >= 2 && /^[CP]\d+$/.test(parts[parts.length-1]));
+    let strike = 0, optType = "", expLabel = "";
+    if (isOption && parts.length >= 2) {
+      const rightPart = parts[parts.length - 1];
+      optType = rightPart[0];
+      const rawStrike = parseInt(rightPart.slice(1));
+      strike = rawStrike / (STRIKE_DIVISORS[pos.symbol] || 100);
+      const expCode = parts[0].slice(-2);
+      const monthMap: Record<string,string> = {F:"Jan",G:"Fev",H:"Mar",J:"Abr",K:"Mai",M:"Jun",N:"Jul",Q:"Ago",U:"Set",V:"Out",X:"Nov",Z:"Dez"};
+      expLabel = (monthMap[expCode[0]] || expCode[0]) + "/2" + expCode[1];
     }
-    setPortfolioLoading(false);
-  };
+    const qty = pos.position || 0;
+    const avgCost = pos.avg_cost || 0;
+    const mktValue = pos.market_value || 0;
+    return {
+      symbol: pos.symbol, localSymbol: ls, secType: pos.sec_type || "",
+      isOption, optType, strike, expLabel, qty, avgCost, mktValue,
+      direction: qty > 0 ? "LONG" as const : "SHORT" as const,
+    };
+  }
 
   const renderPortfolio = () => {
-    const acct = portfolio?.account || {};
-    const byUnderlying = portfolio?.positions_by_underlying || {};
-    const equities = portfolio?.equity_positions || {};
-    const fixedInc = portfolio?.fixed_income || {};
-    const summary = portfolio?.portfolio_summary || {};
-    const netLiq = acct.net_liquidation || 0;
-    const cash = acct.total_cash || 0;
-    const unrealPnl = acct.unrealized_pnl || 0;
-    const buyPow = acct.buying_power || 0;
-    const grossPos = acct.gross_position_value || 0;
-    const marginUtil = acct.margin_utilization_pct || 0;
-    const symbols = Object.keys(byUnderlying).sort();
+    const summ = portfolio?.summary || {};
+    const netLiq = parseFloat(summ.NetLiquidation || "0");
+    const cash = parseFloat(summ.TotalCashValue || "0");
+    const unrealPnl = parseFloat(summ.UnrealizedPnL || "0");
+    const buyPow = parseFloat(summ.BuyingPower || "0");
+    const grossPos = parseFloat(summ.GrossPositionValue || "0");
+    const marginUtil = netLiq > 0 ? (grossPos / netLiq) * 100 : 0;
 
-    const suggestions = [
-      "Analise meu portfolio e sugira hedges",
-      "Quais posicoes tem mais risco agora?",
-      "Sugira um trade em milho baseado nos spreads",
-      "Como proteger minhas posicoes em wheat?",
-      "Qual o cenario para soja nos proximos 30 dias?",
-    ];
+    const rawPositions: any[] = portfolio?.positions || [];
+    const parsed = rawPositions.map(parsePosition);
+
+    // Group by underlying
+    const byUnd: Record<string, typeof parsed> = {};
+    parsed.forEach(p => { if (!byUnd[p.symbol]) byUnd[p.symbol] = []; byUnd[p.symbol].push(p); });
+    const symbols = Object.keys(byUnd).sort();
+
+    // Underlying summary
+    const undSummary = symbols.map(sym => {
+      const legs = byUnd[sym];
+      const netQty = legs.reduce((s, p) => s + p.qty, 0);
+      const totalMV = legs.reduce((s, p) => s + p.mktValue, 0);
+      const longMV = legs.filter(p => p.qty > 0).reduce((s, p) => s + p.mktValue, 0);
+      const shortMV = legs.filter(p => p.qty < 0).reduce((s, p) => s + Math.abs(p.mktValue), 0);
+      const dir = netQty > 0 ? "LONG" : netQty < 0 ? "SHORT" : "NEUTRO";
+      const commName = COMMODITIES.find(c => c.sym === sym)?.name || sym;
+      return { sym, commName, legs: legs.length, netQty, totalMV, longMV, shortMV, dir };
+    });
+
+    // SVG chart data — market value by underlying (exclude US-T for scale)
+    const chartData = undSummary.filter(u => u.sym !== "US-T").sort((a, b) => b.totalMV - a.totalMV);
+    const maxAbsMV = Math.max(...chartData.map(u => Math.abs(u.totalMV)), 1);
+    const barH = 28;
+    const chartH = Math.max(chartData.length * (barH + 8) + 40, 120);
+    const chartW = 700;
+    const labelW = 80;
+    const barArea = chartW - labelW - 90;
+    const centerX = labelW + barArea / 2;
+
+    // Totals
+    const totalLongMV = parsed.filter(p => p.qty > 0).reduce((s, p) => s + p.mktValue, 0);
+    const totalShortMV = parsed.filter(p => p.qty < 0).reduce((s, p) => s + Math.abs(p.mktValue), 0);
 
     return (
-    <div style={{display:"flex",gap:0,height:"100%"}}>
-      <div style={{flex:1,overflow:"auto",padding:24}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:24}}>
-          {[
-            {label:"Net Liquidation",value:netLiq,fmt:"$",color:C.text},
-            {label:"Buying Power",value:buyPow,fmt:"$",color:C.blue},
-            {label:"Cash",value:cash,fmt:"$",color:C.cyan},
-            {label:"Gross Position",value:grossPos,fmt:"$",color:C.text},
-            {label:"Unrealized P&L",value:unrealPnl,fmt:"$",color:unrealPnl>=0?C.green:C.red},
-            {label:"Margin Util",value:marginUtil,fmt:"",color:marginUtil>50?C.red:C.green},
-          ].map((card,i)=>(
-            <div key={i} style={{padding:16,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`}}>
-              <div style={{fontSize:9,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>{card.label}</div>
-              <div style={{fontSize:20,fontWeight:700,color:card.color,fontFamily:"monospace"}}>{card.fmt}{typeof card.value==="number"?card.value.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0}):card.value}{card.label==="Margin Util"?"%":""}</div>
+    <div style={{overflow:"auto",padding:24}}>
+      {/* SEÇÃO A: Summary Cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:24}}>
+        {[
+          {label:"Net Liquidation",value:netLiq,fmt:"$",color:C.text},
+          {label:"Buying Power",value:buyPow,fmt:"$",color:C.blue},
+          {label:"Cash",value:cash,fmt:"$",color:C.cyan},
+          {label:"Gross Position",value:grossPos,fmt:"$",color:C.text},
+          {label:"Unrealized P&L",value:unrealPnl,fmt:"$",color:unrealPnl>=0?C.green:C.red},
+          {label:"Margin Util",value:marginUtil,fmt:"",color:marginUtil>50?C.red:C.green},
+        ].map((card,i)=>(
+          <div key={i} style={{padding:16,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:9,color:C.textMuted,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>{card.label}</div>
+            <div style={{fontSize:20,fontWeight:700,color:card.color,fontFamily:"monospace"}}>{card.fmt}{typeof card.value==="number"?card.value.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0}):card.value}{card.label==="Margin Util"?"%":""}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+        <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"6px 16px",fontSize:11,fontWeight:600,background:ibkrRefreshing?"#555":C.blue,color:"#fff",border:"none",borderRadius:6,cursor:ibkrRefreshing?"wait":"pointer"}}>
+          {ibkrRefreshing?"Atualizando...":"Atualizar IBKR"}
+        </button>
+        <span style={{fontSize:10,color:C.textMuted}}>Ultima atualizacao: {ibkrTime}</span>
+        <span style={{fontSize:10,color:C.textMuted}}>| {parsed.length} posicoes | {symbols.length} underlyings</span>
+      </div>
+
+      {/* SEÇÃO E: Resumo Direcional */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
+        <div style={{padding:16,background:"rgba(0,200,120,.06)",borderRadius:8,border:"1px solid rgba(0,200,120,.2)",textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#00C878",fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>LONG Exposure</div>
+          <div style={{fontSize:20,fontWeight:700,color:"#00C878",fontFamily:"monospace"}}>${totalLongMV.toLocaleString("en-US",{maximumFractionDigits:0})}</div>
+        </div>
+        <div style={{padding:16,background:"rgba(220,60,60,.06)",borderRadius:8,border:"1px solid rgba(220,60,60,.2)",textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#DC3C3C",fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>SHORT Exposure</div>
+          <div style={{fontSize:20,fontWeight:700,color:"#DC3C3C",fontFamily:"monospace"}}>${totalShortMV.toLocaleString("en-US",{maximumFractionDigits:0})}</div>
+        </div>
+        <div style={{padding:16,background:unrealPnl>=0?"rgba(0,200,120,.06)":"rgba(220,60,60,.06)",borderRadius:8,border:`1px solid ${unrealPnl>=0?"rgba(0,200,120,.2)":"rgba(220,60,60,.2)"}`,textAlign:"center"}}>
+          <div style={{fontSize:9,color:unrealPnl>=0?"#00C878":"#DC3C3C",fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>P&L TOTAL</div>
+          <div style={{fontSize:20,fontWeight:700,color:unrealPnl>=0?"#00C878":"#DC3C3C",fontFamily:"monospace"}}>{unrealPnl>=0?"+":""}${unrealPnl.toLocaleString("en-US",{maximumFractionDigits:0})}</div>
+        </div>
+      </div>
+
+      {/* GREEKS REAIS DO PORTFOLIO */}
+      {greeksData?.portfolio_greeks && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24,background:"#0E1A24",borderRadius:8,padding:16,border:"1px solid #1e3a4a"}}>
+          <div>
+            <div style={{fontSize:9,color:"#64748b",marginBottom:4}}>DELTA TOTAL</div>
+            <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:greeksData.portfolio_greeks.total_delta>0?"#00C878":"#DC3C3C"}}>{greeksData.portfolio_greeks.total_delta>0?"+":""}{greeksData.portfolio_greeks.total_delta?.toFixed(1)}</div>
+            <div style={{fontSize:9,color:"#64748b"}}>por $1 no underlying</div>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:"#64748b",marginBottom:4}}>THETA DIARIO</div>
+            <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:greeksData.portfolio_greeks.total_theta>0?"#00C878":"#DC3C3C"}}>{greeksData.portfolio_greeks.total_theta>0?"+":""}${greeksData.portfolio_greeks.total_theta?.toFixed(0)}/dia</div>
+            <div style={{fontSize:9,color:"#64748b"}}>decaimento de tempo</div>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:"#64748b",marginBottom:4}}>VEGA TOTAL</div>
+            <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:"#DCB432"}}>{greeksData.portfolio_greeks.total_vega>0?"+":""}${greeksData.portfolio_greeks.total_vega?.toFixed(0)}</div>
+            <div style={{fontSize:9,color:"#64748b"}}>por 1% de IV</div>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:"#64748b",marginBottom:4}}>COBERTURA</div>
+            <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:"#00C878"}}>{greeksData.portfolio_greeks.positions_with_greeks}/{greeksData.portfolio_greeks.positions_with_greeks+greeksData.portfolio_greeks.positions_without_greeks}</div>
+            <div style={{fontSize:9,color:"#64748b"}}>posicoes com Greeks</div>
+          </div>
+        </div>
+      )}
+
+      {/* SEÇÃO B: Exposição por Underlying */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Exposicao por Underlying ({symbols.length})</div>
+      <div style={{background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,overflow:"hidden",marginBottom:24}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+          <thead>
+            <tr style={{borderBottom:`1px solid ${C.border}`}}>
+              {["Underlying","Nome","Legs","Net Qty","Direcao","Long MV","Short MV","Net MV"].map(h=>(
+                <th key={h} style={{padding:"10px 12px",textAlign:"left",color:C.textMuted,fontWeight:600,fontSize:9,textTransform:"uppercase"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {undSummary.map(u=>(
+              <tr key={u.sym} style={{borderBottom:`1px solid ${C.border}22`}}>
+                <td style={{padding:"8px 12px",color:C.amber,fontWeight:700,fontFamily:"monospace"}}>{u.sym}</td>
+                <td style={{padding:"8px 12px",color:C.text,fontSize:10}}>{u.commName}</td>
+                <td style={{padding:"8px 12px",color:C.textMuted,fontFamily:"monospace",textAlign:"center"}}>{u.legs}</td>
+                <td style={{padding:"8px 12px",color:u.netQty>0?C.green:u.netQty<0?C.red:C.textMuted,fontWeight:600,fontFamily:"monospace"}}>{u.netQty>0?"+":""}{u.netQty}</td>
+                <td style={{padding:"8px 12px"}}><span style={{fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:3,
+                  background:u.dir==="LONG"?"rgba(0,200,120,.15)":u.dir==="SHORT"?"rgba(220,60,60,.15)":"rgba(148,163,184,.1)",
+                  color:u.dir==="LONG"?"#00C878":u.dir==="SHORT"?"#DC3C3C":"#8899AA"}}>{u.dir}</span></td>
+                <td style={{padding:"8px 12px",color:C.green,fontFamily:"monospace"}}>${u.longMV.toLocaleString("en-US",{maximumFractionDigits:0})}</td>
+                <td style={{padding:"8px 12px",color:C.red,fontFamily:"monospace"}}>${u.shortMV.toLocaleString("en-US",{maximumFractionDigits:0})}</td>
+                <td style={{padding:"8px 12px",color:u.totalMV>=0?C.green:C.red,fontWeight:600,fontFamily:"monospace"}}>{u.totalMV>=0?"+":""}${u.totalMV.toLocaleString("en-US",{maximumFractionDigits:0})}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* PAYOFF DIAGRAM — OPÇÕES */}
+      {(()=>{
+        const optUnderlyings = symbols.filter(s=>byUnd[s].some(p=>p.isOption));
+        if(!optUnderlyings.length) return null;
+        const activeSym = optUnderlyings.includes(payoffUnd)?payoffUnd:optUnderlyings[0];
+
+        const getExpiry = (localSymbol: string) => {
+          const code = localSymbol.split(' ')[0];
+          const monthMap: Record<string,string> = {
+            F:'Jan',G:'Fev',H:'Mar',J:'Abr',K:'Mai',M:'Jun',
+            N:'Jul',Q:'Ago',U:'Set',V:'Out',X:'Nov',Z:'Dez'
+          };
+          const mc = code.slice(-2,-1);
+          const digit = code.slice(-1);
+          const decade = Math.floor(new Date().getFullYear() / 10) * 10;
+          const yr = decade + parseInt(digit);
+          return (monthMap[mc] || mc) + '/' + yr;
+        };
+
+        const allOptLegs = byUnd[activeSym]?.filter(p=>p.isOption)||[];
+        const expiries = [...new Set(allOptLegs.map(p=>getExpiry(p.localSymbol)))].sort();
+        const selExp = payoffExpiry;
+
+        const optLegs = allOptLegs.filter(p=>
+          selExp === 'all' || getExpiry(p.localSymbol) === selExp
+        );
+
+        const spot = prices?.[activeSym]?.slice(-1)[0]?.close || 0;
+        if(!spot||!optLegs.length) return null;
+
+        const mult = OPT_MULTIPLIERS[activeSym]||100;
+        const lo = spot*0.6, hi = spot*1.4;
+        const pts = 120;
+        const priceRange = Array.from({length:pts},(_,i)=>lo+(hi-lo)*i/(pts-1));
+
+        const payoff = priceRange.map(S=>optLegs.reduce((tot,p)=>{
+          if(!p.strike) return tot;
+          const intr = p.optType==="C"?Math.max(0,S-p.strike):Math.max(0,p.strike-S);
+          return tot + intr*Math.abs(p.qty)*mult*(p.qty>0?1:-1);
+        },0));
+
+        const premiumCredit = optLegs.reduce((tot,p)=>tot+(p.mktValue||0),0);
+
+        // Breakeven points
+        const breakevenPoints: number[] = [];
+        for (let i = 1; i < payoff.length; i++) {
+          if ((payoff[i-1] < 0 && payoff[i] >= 0) || (payoff[i-1] >= 0 && payoff[i] < 0)) {
+            const price = priceRange[i-1] + (priceRange[i] - priceRange[i-1]) * Math.abs(payoff[i-1]) / (Math.abs(payoff[i-1]) + Math.abs(payoff[i]));
+            breakevenPoints.push(Math.round(price * 100) / 100);
+          }
+        }
+
+        const minPL = Math.min(...payoff), maxPL = Math.max(...payoff);
+        const plRange = Math.max(Math.abs(minPL),Math.abs(maxPL),1);
+        const svgW=780, svgH=220, padL=70, padR=20, padT=20, padB=30;
+        const plotW=svgW-padL-padR, plotH=svgH-padT-padB;
+        const toX=(i:number)=>padL+(i/(pts-1))*plotW;
+        const toY=(v:number)=>padT+plotH/2-(v/plRange)*(plotH/2);
+        const spotX=padL+((spot-lo)/(hi-lo))*plotW;
+        const zeroY=toY(0);
+        const priceToSvgX=(price:number)=>padL+((price-lo)/(hi-lo))*plotW;
+
+        // Build path
+        const linePts = payoff.map((v,i)=>`${toX(i).toFixed(1)},${toY(v).toFixed(1)}`);
+        const pathD = "M"+linePts.join("L");
+        // Area paths (positive green, negative red)
+        const areaGreen = "M"+linePts.map((pt,i)=>{const v=payoff[i];return v>=0?pt:`${toX(i).toFixed(1)},${zeroY.toFixed(1)}`;}).join("L")+`L${toX(pts-1).toFixed(1)},${zeroY.toFixed(1)}L${toX(0).toFixed(1)},${zeroY.toFixed(1)}Z`;
+        const areaRed = "M"+linePts.map((pt,i)=>{const v=payoff[i];return v<=0?pt:`${toX(i).toFixed(1)},${zeroY.toFixed(1)}`;}).join("L")+`L${toX(pts-1).toFixed(1)},${zeroY.toFixed(1)}L${toX(0).toFixed(1)},${zeroY.toFixed(1)}Z`;
+
+        // Unique strikes with direction for coloring
+        const uniqueStrikes = [...new Set(optLegs.map(p=>p.strike))].filter(k=>k>=lo&&k<=hi).map(k=>{
+          const leg = optLegs.find(p=>p.strike===k);
+          return {strike:k, isShort:leg?leg.qty<0:false};
+        });
+
+        // Axis labels
+        const xLabels = [0,Math.floor(pts/6),Math.floor(pts/3),Math.floor(pts/2),Math.floor(2*pts/3),Math.floor(5*pts/6),pts-1];
+
+        return (
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:10}}>Payoff Diagram</div>
+            {/* Underlying selector */}
+            <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+              {optUnderlyings.map(s=>(
+                <button key={s} onClick={()=>{setPayoffUnd(s);setPayoffExpiry('all');}} style={{
+                  padding:"5px 14px",fontSize:10,fontWeight:600,borderRadius:5,cursor:"pointer",
+                  background:s===activeSym?"rgba(124,58,237,.18)":"transparent",
+                  color:s===activeSym?"#a78bfa":"#8899AA",
+                  border:`1px solid ${s===activeSym?"rgba(124,58,237,.4)":"rgba(148,163,184,.15)"}`,
+                }}>{s} ({byUnd[s].filter(p=>p.isOption).length} legs)</button>
+              ))}
             </div>
-          ))}
+            {/* Expiry selector */}
+            {expiries.length > 1 && (
+              <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
+                <button onClick={()=>setPayoffExpiry('all')} style={{
+                  padding:"4px 12px",fontSize:9,fontWeight:600,borderRadius:4,cursor:"pointer",
+                  background:selExp==='all'?"rgba(220,180,50,.18)":"transparent",
+                  color:selExp==='all'?"#DCB432":"#8899AA",
+                  border:`1px solid ${selExp==='all'?"rgba(220,180,50,.4)":"rgba(148,163,184,.15)"}`,
+                }}>Todos</button>
+                {expiries.map(exp=>(
+                  <button key={exp} onClick={()=>setPayoffExpiry(exp)} style={{
+                    padding:"4px 12px",fontSize:9,fontWeight:600,borderRadius:4,cursor:"pointer",
+                    background:selExp===exp?"rgba(220,180,50,.18)":"transparent",
+                    color:selExp===exp?"#DCB432":"#8899AA",
+                    border:`1px solid ${selExp===exp?"rgba(220,180,50,.4)":"rgba(148,163,184,.15)"}`,
+                  }}>{exp} ({allOptLegs.filter(p=>getExpiry(p.localSymbol)===exp).length} legs)</button>
+                ))}
+              </div>
+            )}
+            {/* Mixed expiry warning */}
+            {selExp === 'all' && expiries.length > 1 && (
+              <div style={{
+                fontSize:10, color:'#DCB432', marginBottom:8,
+                padding:'4px 8px', background:'rgba(220,180,50,0.1)',
+                borderRadius:4, border:'1px solid rgba(220,180,50,0.3)'
+              }}>
+                {`Aten\u00E7\u00E3o: ${expiries.length} vencimentos combinados (${expiries.join(', ')}). Selecione um vencimento para an\u00E1lise precisa.`}
+              </div>
+            )}
+            <div style={{background:"#142332",borderRadius:8,border:`1px solid ${C.border}`,padding:16}}>
+              <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{overflow:"visible"}}>
+                {/* Grid */}
+                {[0.25,0.5,0.75].map(f=><line key={f} x1={padL} y1={padT+plotH*f} x2={padL+plotW} y2={padT+plotH*f} stroke="#1e3a4a" strokeWidth={0.5}/>)}
+                {xLabels.map(i=><line key={i} x1={toX(i)} y1={padT} x2={toX(i)} y2={padT+plotH} stroke="#1e3a4a" strokeWidth={0.5}/>)}
+                {/* Areas */}
+                <path d={areaGreen} fill="#00C878" opacity={0.12}/>
+                <path d={areaRed} fill="#DC3C3C" opacity={0.12}/>
+                {/* Zero line */}
+                <line x1={padL} y1={zeroY} x2={padL+plotW} y2={zeroY} stroke="#ffffff" strokeWidth={1} strokeDasharray="6,4" opacity={0.3}/>
+                {/* Payoff line */}
+                <path d={pathD} fill="none" stroke="#E8ECF1" strokeWidth={2}/>
+                {/* Spot line */}
+                <line x1={spotX} y1={padT} x2={spotX} y2={padT+plotH} stroke="#DCB432" strokeWidth={1.5} strokeDasharray="4,3"/>
+                <text x={spotX} y={padT-4} textAnchor="middle" fill="#DCB432" fontSize={9} fontWeight={700}>ATUAL {spot.toFixed(1)}</text>
+                {/* X axis labels */}
+                {xLabels.map(i=><text key={i} x={toX(i)} y={svgH-4} textAnchor="middle" fill="#8899AA" fontSize={8}>{priceRange[i].toFixed(0)}</text>)}
+                {/* Y axis labels */}
+                {[maxPL,0,minPL].map(v=><text key={v} x={padL-6} y={toY(v)+3} textAnchor="end" fill="#8899AA" fontSize={8}>{v>=0?"+":""}{(v/1000).toFixed(0)}K</text>)}
+                {/* Strike lines with labels */}
+                {uniqueStrikes.map(({strike,isShort})=>{
+                  const sx=priceToSvgX(strike);
+                  const color=isShort?'#DC3C3C':'#00C878';
+                  return <g key={strike}>
+                    <line x1={sx} y1={padT} x2={sx} y2={padT+plotH} stroke={color} strokeWidth={0.75} strokeDasharray="3,3" opacity={0.5}/>
+                    <text x={sx} y={padT-4} textAnchor="middle" fontSize={8} fill={color} fontFamily="monospace">{strike}</text>
+                  </g>;
+                })}
+              </svg>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:9,color:"#8899AA"}}>
+                <span>{optLegs.length} legs | mult={mult}{selExp!=='all'?` | ${selExp}`:''}</span>
+                <span>Max P&L: <span style={{color:"#00C878"}}>+${(maxPL/1000).toFixed(0)}K</span> | Min: <span style={{color:"#DC3C3C"}}>${(minPL/1000).toFixed(0)}K</span></span>
+              </div>
+              {breakevenPoints.length > 0 && (
+                <div style={{fontSize:10, color:'#DCB432', marginTop:4}}>
+                  Breakeven: {breakevenPoints.map(p => '$' + p).join(' | ')}
+                </div>
+              )}
+              <div style={{fontSize:10, color:'#64748b', marginTop:4}}>
+                {`Valor de mercado atual das posi\u00E7\u00F5es: `}
+                <span style={{
+                  color: premiumCredit >= 0 ? '#00C878' : '#DC3C3C',
+                  fontWeight:700
+                }}>
+                  {premiumCredit >= 0 ? '+' : ''}
+                  ${premiumCredit.toLocaleString('en-US', {maximumFractionDigits:0})}
+                </span>
+                {` (n\u00E3o inclui pr\u00EAmio original de entrada)`}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* DISTRIBUIÇÃO DE P&L ESPERADO (Gaussiana) */}
+      {(()=>{
+        if(!grossPos) return null;
+        const mean = unrealPnl;
+        const pgk = greeksData?.portfolio_greeks;
+        const vegaStd = pgk?.total_vega ? Math.abs(pgk.total_vega) * 5 : null;
+        const deltaStd = pgk?.total_delta ? Math.abs(pgk.total_delta) * 0.02 * 97 : null;
+        const std = vegaStd && deltaStd ? Math.max(vegaStd, deltaStd) : vegaStd || deltaStd || grossPos * 0.15;
+        const var95 = mean - 1.645 * std;
+        const var99 = mean - 2.33 * std;
+        const lo = mean - 3.5 * std, hi = mean + 3.5 * std;
+        const pts = 200;
+        const gauss = (x:number) => Math.exp(-0.5*((x-mean)/std)**2) / (std*Math.sqrt(2*Math.PI));
+        const data = Array.from({length:pts},(_,i)=>{const x=lo+(hi-lo)*i/(pts-1);return {x,y:gauss(x)};});
+        const maxY = Math.max(...data.map(d=>d.y));
+
+        const svgW=780, svgH=160, padL=60, padR=20, padT=14, padB=28;
+        const plotW=svgW-padL-padR, plotH=svgH-padT-padB;
+        const toX=(v:number)=>padL+((v-lo)/(hi-lo))*plotW;
+        const toY=(v:number)=>padT+plotH-(v/maxY)*plotH;
+        const zeroX=toX(0);
+        const meanX=toX(mean);
+        const var95X=toX(var95);
+        const var99X=toX(var99);
+
+        const curvePts = data.map(d=>`${toX(d.x).toFixed(1)},${toY(d.y).toFixed(1)}`);
+        const curveD = "M"+curvePts.join("L");
+        const baseY = padT+plotH;
+        // Green area (right of zero)
+        const greenPts = data.filter(d=>d.x>=0);
+        const greenD = greenPts.length>1 ? `M${toX(0).toFixed(1)},${baseY} `+greenPts.map(d=>`L${toX(d.x).toFixed(1)},${toY(d.y).toFixed(1)}`).join(" ")+` L${toX(greenPts[greenPts.length-1].x).toFixed(1)},${baseY}Z` : "";
+        // Red area (left of zero)
+        const redPts = data.filter(d=>d.x<=0);
+        const redD = redPts.length>1 ? `M${toX(redPts[0].x).toFixed(1)},${baseY} `+redPts.map(d=>`L${toX(d.x).toFixed(1)},${toY(d.y).toFixed(1)}`).join(" ")+` L${toX(0).toFixed(1)},${baseY}Z` : "";
+
+        const fmtK = (v:number) => (v>=0?"+":"")+(v/1000).toFixed(0)+"K";
+
+        return (
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:10}}>Distribuicao de P&L Esperado</div>
+            <div style={{background:"#142332",borderRadius:8,border:`1px solid ${C.border}`,padding:16}}>
+              <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{overflow:"visible"}}>
+                {greenD && <path d={greenD} fill="#00C878" opacity={0.15}/>}
+                {redD && <path d={redD} fill="#DC3C3C" opacity={0.15}/>}
+                <path d={curveD} fill="none" stroke="#E8ECF1" strokeWidth={1.5}/>
+                {/* Zero line */}
+                {zeroX>=padL&&zeroX<=padL+plotW && <><line x1={zeroX} y1={padT} x2={zeroX} y2={baseY} stroke="#ffffff" strokeWidth={0.5} opacity={0.3} strokeDasharray="4,3"/>
+                <text x={zeroX} y={svgH-4} textAnchor="middle" fill="#8899AA" fontSize={8}>$0</text></>}
+                {/* VaR lines */}
+                <line x1={var95X} y1={padT} x2={var95X} y2={baseY} stroke="#DC3C3C" strokeWidth={1} strokeDasharray="3,3" opacity={0.7}/>
+                <text x={var95X} y={padT-2} textAnchor="middle" fill="#DC3C3C" fontSize={8} fontWeight={600}>VaR 95% {fmtK(var95)}</text>
+                <line x1={var99X} y1={padT} x2={var99X} y2={baseY} stroke="#DC3C3C" strokeWidth={1} strokeDasharray="2,2" opacity={0.5}/>
+                <text x={var99X+30} y={padT+12} textAnchor="start" fill="#DC3C3C" fontSize={7}>VaR 99% {fmtK(var99)}</text>
+                {/* Current position */}
+                <line x1={meanX} y1={padT} x2={meanX} y2={baseY} stroke="#DCB432" strokeWidth={1.5} strokeDasharray="4,3"/>
+                <text x={meanX} y={svgH-4} textAnchor="middle" fill="#DCB432" fontSize={9} fontWeight={700}>ATUAL {fmtK(mean)}</text>
+              </svg>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:9,color:"#8899AA"}}>
+                <span>Modelo: Normal(μ=${fmtK(mean)}, σ=${(std/1000).toFixed(0)}K) {pgk?"[Greeks reais]":"[estimado]"}</span>
+                <span>VaR 95%: <span style={{color:"#DC3C3C"}}>${fmtK(var95)}</span> | VaR 99%: <span style={{color:"#DC3C3C"}}>${fmtK(var99)}</span></span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* SEÇÃO D: Gráfico SVG de Market Value por Underlying */}
+      {chartData.length > 0 && (
+        <div style={{marginBottom:24}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Market Value por Underlying</div>
+          <div style={{background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,padding:16}}>
+            <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{overflow:"visible"}}>
+              {/* Zero line */}
+              <line x1={centerX} y1={10} x2={centerX} y2={chartH - 20} stroke="#8899AA" strokeWidth={1} strokeDasharray="4,4" opacity={0.4} />
+              <text x={centerX} y={chartH - 6} textAnchor="middle" fill="#8899AA" fontSize={9}>$0</text>
+              {chartData.map((u, i) => {
+                const y = 16 + i * (barH + 8);
+                const barW = (u.totalMV / maxAbsMV) * (barArea / 2);
+                const x = u.totalMV >= 0 ? centerX : centerX + barW;
+                const color = u.totalMV >= 0 ? "#00C878" : "#DC3C3C";
+                const valLabel = (u.totalMV >= 0 ? "+" : "") + "$" + Math.round(u.totalMV).toLocaleString("en-US");
+                return (
+                  <g key={u.sym}>
+                    <text x={labelW - 8} y={y + barH / 2 + 4} textAnchor="end" fill={C.amber} fontSize={11} fontWeight={700} fontFamily="monospace">{u.sym}</text>
+                    <rect x={x} y={y} width={Math.abs(barW)} height={barH} rx={4} fill={color} opacity={0.8} />
+                    <text x={u.totalMV >= 0 ? centerX + Math.abs(barW) + 6 : centerX - Math.abs(barW) - 6} y={y + barH / 2 + 4}
+                      textAnchor={u.totalMV >= 0 ? "start" : "end"} fill={color} fontSize={9} fontFamily="monospace" fontWeight={600}>{valLabel}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* SEÇÃO C: Tabela de posições detalhada */}
+      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Posicoes Detalhadas ({parsed.length})</div>
+      {symbols.map(sym => {
+        const legs = byUnd[sym];
+        const commName = COMMODITIES.find(c => c.sym === sym)?.name || sym;
+        return (
+          <div key={sym} style={{marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              <span style={{fontSize:13,fontWeight:700,color:C.amber}}>{commName}</span>
+              <span style={{fontSize:10,color:C.textMuted,background:C.panel,padding:"2px 8px",borderRadius:4}}>{sym}</span>
+              <span style={{fontSize:10,color:C.textMuted}}>{legs.length} legs</span>
+            </div>
+            <div style={{background:C.panelAlt,borderRadius:6,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+                <thead>
+                  <tr style={{borderBottom:`1px solid ${C.border}`}}>
+                    {["Contrato","Tipo","Dir","Qtd","Strike","Venc","Custo/Ctto","Mkt Value"].map(h=>(
+                      <th key={h} style={{padding:"8px 10px",textAlign:"left",color:C.textMuted,fontWeight:600,fontSize:9,textTransform:"uppercase"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {legs.map((p,j) => (
+                    <tr key={j} style={{borderBottom:`1px solid ${C.border}22`}}>
+                      <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace",fontWeight:500}}>{p.localSymbol}</td>
+                      <td style={{padding:"6px 10px"}}><span style={{fontSize:8,fontWeight:700,padding:"2px 5px",borderRadius:3,
+                        background:p.isOption?(p.optType==="C"?"rgba(0,200,120,.15)":"rgba(220,60,60,.15)"):"rgba(148,163,184,.1)",
+                        color:p.isOption?(p.optType==="C"?"#00C878":"#DC3C3C"):"#8899AA"
+                      }}>{p.isOption?(p.optType==="C"?"CALL":"PUT"):p.secType}</span></td>
+                      <td style={{padding:"6px 10px"}}><span style={{fontSize:8,fontWeight:700,color:p.direction==="LONG"?"#00C878":"#DC3C3C"}}>{p.direction==="LONG"?"L":"S"}</span></td>
+                      <td style={{padding:"6px 10px",color:p.qty>0?C.green:C.red,fontWeight:600,fontFamily:"monospace"}}>{p.qty>0?"+":""}{p.qty}</td>
+                      <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace"}}>{p.isOption?p.strike.toFixed(1):"—"}</td>
+                      <td style={{padding:"6px 10px",color:C.textMuted}}>{p.expLabel||"—"}</td>
+                      <td style={{padding:"6px 10px",color:C.textMuted,fontFamily:"monospace"}}>${p.avgCost.toLocaleString("en-US",{maximumFractionDigits:0})}</td>
+                      <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace"}}>{p.mktValue>=0?"":"-"}${Math.abs(p.mktValue).toLocaleString("en-US",{maximumFractionDigits:0})}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+
+      {parsed.length === 0 && <DataPlaceholder title="Sem posicoes" detail="Faca export do IBKR via pipeline" />}
+    </div>
+    );
+  };
+
+  // == COMMODITY-FIRST VIEW ====================================================
+  const renderCommodityView = () => {
+    const sym = selected;
+    const comm = COMMODITIES.find(c=>c.sym===sym);
+    const name = comm?.name || sym;
+    const group = comm?.group || "";
+    const unit = comm?.unit || "";
+    const p = getPrice(sym);
+    const ch = getChange(sym);
+    const candles = prices?.[sym];
+
+    // Week change
+    const weekChange = candles && candles.length >= 5 ? ((candles[candles.length-1].close - candles[candles.length-5].close) / candles[candles.length-5].close * 100) : null;
+    // Month change
+    const monthChange = candles && candles.length >= 22 ? ((candles[candles.length-1].close - candles[candles.length-22].close) / candles[candles.length-22].close * 100) : null;
+
+    // COT data
+    const cotComm_ = cot?.commodities?.[sym];
+    const cotLeg_ = cotComm_?.legacy;
+    const cotDis_ = cotComm_?.disaggregated;
+    const hasCotData = cotLeg_?.history?.length || cotDis_?.history?.length;
+
+    // Physical data
+    const physIntlData = physIntl?.international || {};
+    const physBR = physIntlData[`${sym}_BR`];
+    const physAR = physIntlData[`${sym}_AR`];
+    const physUS = physical?.us_cash;
+
+    // Forward curve contracts
+    const MO:Record<string,number> = {F:1,G:2,H:3,J:4,K:5,M:6,N:7,Q:8,U:9,V:10,X:11,Z:12};
+    const fwdContracts = (() => {
+      if (!contractHist?.contracts) return [];
+      const _now = new Date();
+      const currentYearMonth = _now.getFullYear() * 100 + (_now.getMonth() + 1);
+      return Object.values(contractHist.contracts as Record<string,any>)
+        .filter((c:any) => c.commodity === sym && c.bars?.length > 0)
+        .map((c:any) => {
+          const code = (c.symbol||"").replace(sym,"");
+          const mc = code.charAt(0); const ys = code.slice(1);
+          const yr = ys.length===2?2000+parseInt(ys):parseInt(ys);
+          const lastBar = c.bars[c.bars.length-1];
+          return { label: c.expiry_label||`${mc}${ys}`, val: lastBar.close as number, sortKey: yr*100+(MO[mc]||0) };
+        })
+        .filter(c => c.val > 0 && c.sortKey >= currentYearMonth)
+        .sort((a,b) => a.sortKey - b.sortKey);
+    })();
+
+    // Stocks watch
+    const stockEntry = stocks?.commodities?.[sym];
+
+    // -- CAMADA 1: 5-FACTOR SCORECARD --------------------------
+    // Factor 1: Technical -- price vs MA200, RSI zone
+    const techFactor = (() => {
+      if (!candles || candles.length < 200) return null;
+      const closes = candles.map(c => c.close);
+      const ma200 = closes.slice(-200).reduce((s,v)=>s+v,0)/200;
+      const rsiArr = rsiCalc(closes, 14);
+      const rsi = rsiArr[rsiArr.length-1];
+      const aboveMa = p !== null && p > ma200;
+      const rsiZone = rsi > 70 ? "SOBRECOMPRADO" : rsi < 30 ? "SOBREVENDIDO" : "NEUTRO";
+      const signal = aboveMa && rsi < 70 ? "BULL" : !aboveMa && rsi > 30 ? "BEAR" : "NEUTRO";
+      const score = signal === "BULL" ? 1 : signal === "BEAR" ? -1 : 0;
+      return { label: "Técnico", detail: `${aboveMa?"Acima":"Abaixo"} MA200 | RSI ${rsi.toFixed(0)} (${rsiZone})`, signal, score, section: "tecnica" };
+    })();
+
+    // Factor 2: COT -- Managed Money percentile
+    const cotFactor = (() => {
+      if (!cotDis_?.history?.length) return null;
+      const hist = cotDis_.history.map((h:any) => h.managed_money_net || h.mm_net || 0).filter((v:number)=>v!==0);
+      if (hist.length < 10) return null;
+      const current = hist[hist.length-1];
+      const sorted = [...hist].sort((a:number,b:number) => a-b);
+      const pctile = Math.round(sorted.findIndex((v:number) => v >= current) / sorted.length * 100);
+      const signal = pctile > 60 ? "BULL" : pctile < 40 ? "BEAR" : "NEUTRO";
+      return { label: "COT", detail: `MM Percentil ${pctile}% (${(current/1000).toFixed(0)}K)`, signal, score: signal==="BULL"?1:signal==="BEAR"?-1:0, section: "cot" };
+    })();
+
+    // Factor 3: Seasonal -- current month avg return
+    const seasonFactor = (() => {
+      if (!candles || candles.length < 252) return null;
+      const currentMonth = new Date().getMonth();
+      const monthNames = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      // Calculate monthly returns
+      const monthlyReturns: number[] = [];
+      for (let i = 22; i < candles.length; i++) {
+        const d = new Date(candles[i].date);
+        if (d.getMonth() === currentMonth) {
+          const prev = candles[i-22]?.close;
+          if (prev && prev > 0) monthlyReturns.push((candles[i].close - prev) / prev * 100);
+        }
+      }
+      if (monthlyReturns.length < 3) return null;
+      const avg = monthlyReturns.reduce((s,v)=>s+v,0) / monthlyReturns.length;
+      const pctPos = Math.round(monthlyReturns.filter(r=>r>0).length / monthlyReturns.length * 100);
+      const signal = avg > 1.5 ? "BULL" : avg < -1.5 ? "BEAR" : "NEUTRO";
+      return { label: "Sazonal", detail: `${monthNames[currentMonth]}: ${avg>0?"+":""}${avg.toFixed(1)}% médio (${pctPos}% positivo)`, signal, score: signal==="BULL"?1:signal==="BEAR"?-1:0, section: "sazonalidade" };
+    })();
+
+    // Factor 4: Fundamentals -- stocks state or margin
+    const fundFactor = (() => {
+      if (!stockEntry) return null;
+      const state = stockEntry.state || "";
+      const pva = typeof stockEntry.price_vs_avg === "number" ? stockEntry.price_vs_avg : 0;
+      const signal = state.includes("APERTADO") || state.includes("DEPRIMIDO") ? "BULL" : state.includes("ELEVADO") || state.includes("EXCESSO") ? "BEAR" : "NEUTRO";
+      return { label: "Fundamentos", detail: `${state.replace(/_/g," ")} (${pva>0?"+":""}${pva.toFixed(1)}% vs média)`, signal, score: signal==="BULL"?1:signal==="BEAR"?-1:0, section: "fundamentos" };
+    })();
+
+    // Factor 5: Physical -- basis (cash - futures)
+    const physFactor = (() => {
+      if (!physBR || p === null) return null;
+      const physPrice = parseFloat(physBR.price);
+      if (isNaN(physPrice) || physPrice <= 0) return null;
+      // Can't directly compare BRL/saca vs cents/bu -- show basis direction only if same unit
+      const basisLabel = physBR.price_unit || "";
+      const signal = "NEUTRO" as const;
+      return { label: "Físico", detail: `${physBR.price} ${basisLabel}`, signal, score: 0, section: "fisico" };
+    })();
+
+    const factors = [techFactor, cotFactor, seasonFactor, fundFactor, physFactor].filter(Boolean) as {label:string;detail:string;signal:string;score:number;section:string}[];
+    const compositeScore = factors.length > 0 ? factors.reduce((s,f) => s + f.score, 0) : 0;
+    const compositeLabel = compositeScore >= 2 ? "BULL" : compositeScore <= -2 ? "BEAR" : "NEUTRO";
+    const compositeColor = compositeScore >= 2 ? "#00C878" : compositeScore <= -2 ? "#DC3C3C" : "#DCB432";
+
+    // -- CAMADA 3: Annotations for PriceChart --------------------
+    const chartAnnotations: {label:string;value:number;color:string}[] = [];
+    // COP line (grain_ratios margins)
+    // Attempt to read from grainRatios state if available
+    const grKey = sym === "ZC" ? "corn" : sym === "ZS" ? "soy" : sym === "ZW" ? "wheat" : null;
+    // We need grainRatios data -- fetch inline if needed
+    // grData is hoisted to Dashboard component level
+    if (grKey && grData?.current_snapshot?.margins?.[grKey]?.cop) {
+      const cop = grData.current_snapshot.margins[grKey].cop;
+      // Convert $/bu to cents/bu if the commodity is in cents
+      const copVal = unit.includes("¢") ? cop * 100 : cop;
+      chartAnnotations.push({ label: `COP $${cop.toFixed(2)}`, value: copVal, color: "#DCB432" });
+    }
+    // FOB line from physical_intl
+    if (physBR && physBR.price) {
+      const fobPrice = parseFloat(physBR.price);
+      if (!isNaN(fobPrice) && fobPrice > 0) {
+        chartAnnotations.push({ label: `FOB ${fobPrice.toFixed(1)} ${physBR.price_unit||""}`, value: fobPrice, color: "#DC3C3C" });
+      }
+    }
+
+    // -- CAMADA 2: Monthly returns calculation -------------------
+    const monthlyBars = (() => {
+      if (!candles || candles.length < 252) return null;
+      const months = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      const result: {month:string;avgReturn:number;pctPositive:number;stdDev:number;isCurrent:boolean}[] = [];
+      const currentMonth = new Date().getMonth();
+      for (let m = 0; m < 12; m++) {
+        const returns: number[] = [];
+        for (let i = 22; i < candles.length; i++) {
+          const d = new Date(candles[i].date);
+          if (d.getMonth() === m) {
+            const prev = candles[i-22]?.close;
+            if (prev && prev > 0) returns.push((candles[i].close - prev) / prev * 100);
+          }
+        }
+        if (returns.length < 3) { result.push({month:months[m],avgReturn:0,pctPositive:0,stdDev:0,isCurrent:m===currentMonth}); continue; }
+        const avg = returns.reduce((s,v)=>s+v,0)/returns.length;
+        const pctPos = Math.round(returns.filter(r=>r>0).length/returns.length*100);
+        const std = Math.sqrt(returns.reduce((s,v)=>s+(v-avg)**2,0)/returns.length);
+        result.push({month:months[m],avgReturn:avg,pctPositive:pctPos,stdDev:std,isCurrent:m===currentMonth});
+      }
+      return result;
+    })();
+
+    // -- CAMADA 4: AI Narrative state ----------------------------
+    // Section header component
+    const SH = ({title,id}:{title:string;id?:string}) => (
+      <div id={id} style={{display:"flex",alignItems:"center",gap:8,padding:"14px 0 10px",borderBottom:`1px solid #1E3044`,marginBottom:14,scrollMarginTop:20}}>
+        <div style={{width:3,height:18,borderRadius:2,background:"#DCB432"}} />
+        <span style={{fontSize:14,fontWeight:700,color:"#DCB432",letterSpacing:0.3}}>{title}</span>
+      </div>
+    );
+
+    return (
+      <div style={{maxWidth:1100,margin:"0 auto"}}>
+
+        {/* -- SEÇÃO 1: VISÃO RÁPIDA + SCORECARD ------------------- */}
+        <div style={{background:"#142332",borderRadius:10,padding:"20px 24px",marginBottom:20,border:"1px solid #1E3044"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:16}}>
+            <div>
+              <div style={{fontSize:22,fontWeight:800,color:"#E8ECF1",letterSpacing:0.5}}>{sym} <span style={{fontWeight:400,fontSize:16,color:"#8C96A5"}}>-- {name}</span></div>
+              <div style={{fontSize:10,color:"#8C96A5",marginTop:2}}>{group} | {unit} | {candles?.length||0} dias de histórico</div>
+            </div>
+            <div style={{display:"flex",gap:16,alignItems:"center"}}>
+              {p !== null && (
+                <div style={{fontSize:32,fontWeight:800,fontFamily:"monospace",color:"#E8ECF1"}}>{p.toFixed(2)}</div>
+              )}
+              <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                {ch && <div style={{fontSize:11,fontFamily:"monospace",fontWeight:600,color:ch.pct>=0?"#00C878":"#DC3C3C",background:ch.pct>=0?"rgba(0,200,120,.1)":"rgba(220,60,60,.1)",padding:"2px 8px",borderRadius:4}}>Dia {ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>}
+                {weekChange!==null && <div style={{fontSize:10,fontFamily:"monospace",color:weekChange>=0?"#00C878":"#DC3C3C"}}>Sem {weekChange>=0?"+":""}{weekChange.toFixed(2)}%</div>}
+                {monthChange!==null && <div style={{fontSize:10,fontFamily:"monospace",color:monthChange>=0?"#00C878":"#DC3C3C"}}>Mês {monthChange>=0?"+":""}{monthChange.toFixed(2)}%</div>}
+              </div>
+            </div>
+          </div>
+
+          {/* 5-Factor Scorecard */}
+          <div style={{marginTop:16,borderTop:"1px solid #1E3044",paddingTop:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+              <span style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:compositeColor}}>{compositeLabel}</span>
+              <span style={{fontSize:10,color:"#8C96A5"}}>Score composto: {compositeScore>0?"+":""}{compositeScore} ({factors.length} fatores)</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(factors.length||1,5)},1fr)`,gap:8}}>
+              {factors.map(f => {
+                const col = f.signal==="BULL"?"#00C878":f.signal==="BEAR"?"#DC3C3C":"#8C96A5";
+                return (
+                  <div key={f.label} onClick={()=>{const el=document.getElementById(`section-${f.section}`);el?.scrollIntoView({behavior:"smooth"})}}
+                    style={{padding:"8px 10px",background:"#0E1A24",borderRadius:6,border:`1px solid ${col}33`,cursor:"pointer",transition:"border-color .2s"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                      <span style={{fontSize:9,fontWeight:700,color:"#8C96A5",letterSpacing:0.5}}>{f.label.toUpperCase()}</span>
+                      <span style={{fontSize:8,fontWeight:700,padding:"1px 6px",borderRadius:3,background:`${col}22`,color:col}}>{f.signal}</span>
+                    </div>
+                    <div style={{fontSize:9,color:"#8C96A5",lineHeight:1.3}}>{f.detail}</div>
+                  </div>
+                );
+              })}
+              {factors.length === 0 && <div style={{fontSize:10,color:"#8C96A5",padding:8}}>Dados insuficientes para scorecard</div>}
+            </div>
+          </div>
         </div>
 
-        {summary.dominant_strategy && (
-          <div style={{padding:"12px 16px",background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`,marginBottom:20,display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
-            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Estrategia</span><div style={{fontSize:12,fontWeight:600,color:C.amber,marginTop:2}}>{summary.dominant_strategy}</div></div>
-            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Bias</span><div style={{fontSize:12,fontWeight:600,color:C.text,marginTop:2}}>{summary.directional_bias}</div></div>
-            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Risco</span><div style={{fontSize:12,fontWeight:600,color:C.text,marginTop:2}}>{summary.risk_profile}</div></div>
-            <div><span style={{fontSize:9,color:C.textMuted,textTransform:"uppercase"}}>Vencimentos</span><div style={{fontSize:12,fontWeight:600,color:C.red,marginTop:2}}>{summary.nearest_expirations}</div></div>
+        {/* -- SEÇÃO 2+5: ANÁLISE TÉCNICA + COT (zoom sincronizado) -- */}
+        {candles && candles.length > 0 && (
+          <div style={{marginBottom:28}}>
+            <SH title="ANÁLISE TÉCNICA + COT" id="section-tecnica" />
+            <SyncedChartPanel candles={candles} symbol={sym}
+              annotations={chartAnnotations.length>0?chartAnnotations:undefined}
+              cotLegacy={cotLeg_} cotDisagg={cotDis_} />
           </div>
         )}
 
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-          <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"6px 16px",fontSize:11,fontWeight:600,background:ibkrRefreshing?"#555":C.blue,color:"#fff",border:"none",borderRadius:6,cursor:ibkrRefreshing?"wait":"pointer"}}>
-            {ibkrRefreshing?"Atualizando...":"Atualizar IBKR"}
-          </button>
-          <span style={{fontSize:10,color:C.textMuted}}>Ultima atualizacao: {ibkrTime}</span>
-          <span style={{fontSize:10,color:C.textMuted}}>| {summary.total_option_legs||0} legs, {summary.total_option_contracts_gross||0} contratos</span>
+        {/* -- SEÇÃO 3: CURVA FUTURA -------------------------------- */}
+        {fwdContracts.length >= 2 && (
+          <div style={{marginBottom:28}}>
+            <SH title="CURVA FUTURA" id="section-curva" />
+            <div style={{background:"#142332",borderRadius:8,padding:16,border:"1px solid #1E3044"}}>
+              <svg viewBox="0 0 900 320" style={{width:"100%"}}>
+                {(() => {
+                  const vals = fwdContracts.map(c=>c.val);
+                  const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx-mn||1;
+                  const pMin = mn-rng*.08, pMax = mx+rng*.08;
+                  const padL = 60, chartW = 900-padL-20, chartH = 240, topY = 30;
+                  const n = fwdContracts.length;
+                  const scX = (i:number) => padL+(n>1?i/(n-1)*chartW:chartW/2);
+                  const scY = (v:number) => topY+(1-(v-pMin)/(pMax-pMin))*chartH;
+                  const f0 = vals[0], bk = vals[vals.length-1];
+                  const struct = bk > f0 ? "CONTANGO" : "BACKWARDATION";
+                  const sCol = struct==="CONTANGO" ? "#f59e0b" : "#06b6d4";
+                  const pts = fwdContracts.map((c,i) => `${scX(i)},${scY(c.val)}`).join(" ");
+                  return (
+                    <g>
+                      <text x={padL} y={16} fill="#8C96A5" fontSize="10" fontWeight="600">{struct} ({((bk-f0)/f0*100).toFixed(2)}%)</text>
+                      <text x={900-20} y={16} fill={sCol} fontSize="10" fontWeight="700" textAnchor="end">{sym}</text>
+                      {Array.from({length:5}).map((_,i) => {
+                        const val = pMin+(pMax-pMin)*i/4; const y = scY(val);
+                        return <g key={i}><line x1={padL} x2={900-20} y1={y} y2={y} stroke="#1E3044" strokeWidth="0.5"/>
+                          <text x={padL-6} y={y+3} textAnchor="end" fill="#8C96A5" fontSize="9" fontFamily="monospace">{val.toFixed(1)}</text></g>;
+                      })}
+                      <line x1={padL} x2={900-20} y1={scY(f0)} y2={scY(f0)} stroke="#8C96A5" strokeWidth="0.6" strokeDasharray="4,4"/>
+                      <polygon fill={bk>f0?"rgba(245,158,11,.06)":"rgba(6,182,212,.06)"} points={`${scX(0)},${scY(f0)} ${pts} ${scX(n-1)},${scY(f0)}`}/>
+                      <polyline fill="none" stroke={sCol} strokeWidth="2.5" points={pts}/>
+                      {fwdContracts.length < 3 && (
+                        <text x={450} y={topY+chartH+35} textAnchor="middle" fill="#8C96A5" fontSize="9">Dados limitados — pipeline desatualizado</text>
+                      )}
+                      {fwdContracts.map((c,i) => (
+                        <g key={i}>
+                          <circle cx={scX(i)} cy={scY(c.val)} r={i===0?"5":"4"} fill={i===0?"#DCB432":sCol} stroke="#142332" strokeWidth="1.5"/>
+                          {i===0 && <text x={scX(i)} y={scY(c.val)+14} textAnchor="middle" fill="#DCB432" fontSize="6.5" fontWeight="600">Próximo vencimento</text>}
+                          <text x={scX(i)} y={scY(c.val)-7} textAnchor="middle" fill={i===0?"#DCB432":sCol} fontSize="7" fontWeight="600" fontFamily="monospace">{c.val.toFixed(1)}</text>
+                        </g>
+                      ))}
+                      {fwdContracts.map((c,i) => (
+                        <text key={`l${i}`} x={scX(i)} y={topY+chartH+16} textAnchor="middle" fill="#8C96A5" fontSize="7" transform={`rotate(-35,${scX(i)},${topY+chartH+16})`}>{c.label}</text>
+                      ))}
+                    </g>
+                  );
+                })()}
+              </svg>
+            </div>
+          </div>
+        )}
+
+        {/* -- SEÇÃO 4: SAZONALIDADE (barras mensais apenas) -------- */}
+        {monthlyBars && (
+          <div style={{marginBottom:28}}>
+            <SH title="SAZONALIDADE" id="section-sazonalidade" />
+            {(()=>{
+              const sd = getSeasonDev(sym);
+              if (!sd) return null;
+              return (
+                <div style={{marginBottom:10,display:"flex",gap:16,fontSize:11,color:"#8C96A5"}}>
+                  <span>Atual: <strong style={{color:"#E8ECF1",fontFamily:"monospace"}}>{sd.current.toFixed(2)}</strong></span>
+                  <span>Média 5Y: <strong style={{fontFamily:"monospace"}}>{sd.avg.toFixed(2)}</strong></span>
+                  <span>Desvio: <strong style={{color:Math.abs(sd.dev)>10?(sd.dev>0?"#DC3C3C":"#00C878"):"#8C96A5",fontFamily:"monospace"}}>{sd.dev>0?"+":""}{sd.dev.toFixed(1)}%</strong></span>
+                </div>
+              );
+            })()}
+            {monthlyBars && (
+              <div style={{marginTop:16}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#8C96A5",marginBottom:8}}>RETORNO MÉDIO MENSAL HISTÓRICO</div>
+                <svg viewBox="0 0 600 200" style={{width:"100%",background:"#0E1A24",borderRadius:6,display:"block"}}>
+                  {(()=>{
+                    const maxAbs = Math.max(...monthlyBars.map(b=>Math.abs(b.avgReturn)),1) || 1;
+                    const maxStd = Math.max(...monthlyBars.map(b=>b.stdDev),0);
+                    const topVal = Math.max(maxAbs, maxAbs+maxStd*0.5);
+                    const padL=40,padR=10,padT=18,padB=22;
+                    const chartW=600-padL-padR, chartH=200-padT-padB;
+                    const zeroY=padT+chartH/2;
+                    const barW=chartW/12*0.55;
+                    const gap=chartW/12;
+                    const scY=(v:number)=>zeroY-(v/topVal)*(chartH/2);
+                    return (
+                      <g>
+                        {/* Zero line */}
+                        <line x1={padL} x2={600-padR} y1={zeroY} y2={zeroY} stroke="#1E3044" strokeWidth="1"/>
+                        {/* Grid lines */}
+                        {[-topVal,-topVal/2,topVal/2,topVal].map((v,gi)=>{
+                          const y=scY(v);
+                          return <g key={gi}>
+                            <line x1={padL} x2={600-padR} y1={y} y2={y} stroke="#1E3044" strokeWidth="0.5" strokeDasharray="2,3"/>
+                            <text x={padL-4} y={y+3} textAnchor="end" fill="#64748b" fontSize="7" fontFamily="monospace">{v>0?"+":""}{v.toFixed(1)}%</text>
+                          </g>;
+                        })}
+                        <text x={padL-4} y={zeroY+3} textAnchor="end" fill="#8C96A5" fontSize="7" fontFamily="monospace">0%</text>
+                        {/* Bars */}
+                        {monthlyBars.map((mb,i)=>{
+                          const cx=padL+gap*i+gap/2;
+                          const barTop=scY(mb.avgReturn);
+                          const barBot=zeroY;
+                          const y1=Math.min(barTop,barBot), h=Math.abs(barTop-barBot)||1;
+                          const col=mb.avgReturn>=0?"#00C878":"#DC3C3C";
+                          // Std dev zone
+                          const sdTop=scY(mb.avgReturn+mb.stdDev);
+                          const sdBot=scY(mb.avgReturn-mb.stdDev);
+                          return (
+                            <g key={i}>
+                              {/* ±1sd zone */}
+                              {mb.stdDev>0 && <rect x={cx-barW/2-2} y={Math.min(sdTop,sdBot)} width={barW+4} height={Math.abs(sdTop-sdBot)||1}
+                                fill={col} opacity={0.06} rx={2}/>}
+                              {/* Bar */}
+                              <rect x={cx-barW/2} y={y1} width={barW} height={h} fill={col} opacity={0.8} rx={2}
+                                stroke={mb.isCurrent?"#DCB432":"none"} strokeWidth={mb.isCurrent?1.5:0}/>
+                              {/* Value label */}
+                              <text x={cx} y={mb.avgReturn>=0?barTop-4:barTop+h+9} textAnchor="middle" fill={col} fontSize="7" fontWeight="600" fontFamily="monospace">
+                                {mb.avgReturn>0?"+":""}{mb.avgReturn.toFixed(1)}%
+                              </text>
+                              {/* % positive label */}
+                              <text x={cx} y={mb.avgReturn>=0?barTop-12:barTop+h+17} textAnchor="middle" fill="#64748b" fontSize="6">
+                                {mb.pctPositive}%+
+                              </text>
+                              {/* Month label */}
+                              <text x={cx} y={200-padB+12} textAnchor="middle" fill={mb.isCurrent?"#DCB432":"#64748b"} fontSize="8" fontWeight={mb.isCurrent?700:400}>
+                                {mb.month}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+                </svg>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#64748b",marginTop:4}}>
+                  <span>Borda dourada = mês atual | Zona sombreada = ±1sd</span>
+                  <span>Fonte: price_history.json ({candles?.length||0} dias)</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SEÇÃO 5 (COT) integrada ao SyncedChartPanel acima -- scroll target mantido */}
+        <div id="section-cot" style={{scrollMarginTop:20}} />
+
+        {/* -- SEÇÃO 6: FUNDAMENTOS (condicional por grupo) --------- */}
+        {stockEntry && (
+          <div style={{marginBottom:28}}>
+            <SH title="FUNDAMENTOS" id="section-fundamentos" />
+            <div style={{background:"#142332",borderRadius:8,padding:16,border:"1px solid #1E3044"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:12}}>
+                {stockEntry.data_available?.stock_real && (
+                  <>
+                    <div style={{padding:10,background:"#0E1A24",borderRadius:6}}>
+                      <div style={{fontSize:8,color:"#8C96A5",fontWeight:600}}>ESTOQUE ATUAL</div>
+                      <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:"#E8ECF1"}}>{stockEntry.stock_current || "--"}</div>
+                      <div style={{fontSize:9,color:"#8C96A5"}}>{stockEntry.stock_unit || ""}</div>
+                    </div>
+                    <div style={{padding:10,background:"#0E1A24",borderRadius:6}}>
+                      <div style={{fontSize:8,color:"#8C96A5",fontWeight:600}}>MÉDIA 5Y</div>
+                      <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:"#8C96A5"}}>{stockEntry.stock_avg || "--"}</div>
+                    </div>
+                  </>
+                )}
+                <div style={{padding:10,background:"#0E1A24",borderRadius:6}}>
+                  <div style={{fontSize:8,color:"#8C96A5",fontWeight:600}}>PREÇO VS MÉDIA</div>
+                  <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:(stockEntry.price_vs_avg||0)>0?"#DC3C3C":"#00C878"}}>{(stockEntry.price_vs_avg||0)>0?"+":""}{(stockEntry.price_vs_avg||0).toFixed(1)}%</div>
+                </div>
+                <div style={{padding:10,background:"#0E1A24",borderRadius:6}}>
+                  <div style={{fontSize:8,color:"#8C96A5",fontWeight:600}}>ESTADO</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#DCB432"}}>{(stockEntry.state||"").replace(/_/g," ")}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* -- SEÇÃO 7: MERCADO FÍSICO (condicional) ---------------- */}
+        {(physBR || physAR || (physUS && physUS[name?.toLowerCase()])) && (
+          <div style={{marginBottom:28}}>
+            <SH title="MERCADO FÍSICO" id="section-fisico" />
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+              {physBR && (
+                <div style={{background:"#142332",borderRadius:8,padding:14,border:"1px solid #1E3044"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#DCB432",marginBottom:6}}>Brasil</div>
+                  <div style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:"#E8ECF1"}}>{physBR.price} <span style={{fontSize:10,color:"#8C96A5"}}>{physBR.price_unit}</span></div>
+                  {physBR.period && <div style={{fontSize:9,color:"#8C96A5",marginTop:4}}>{physBR.period}</div>}
+                  {physBR.source && <div style={{fontSize:8,color:"#64748b"}}>{physBR.source}</div>}
+                </div>
+              )}
+              {physAR && (
+                <div style={{background:"#142332",borderRadius:8,padding:14,border:"1px solid #1E3044"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:"#DCB432",marginBottom:6}}>Argentina</div>
+                  <div style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:"#E8ECF1"}}>{physAR.price} <span style={{fontSize:10,color:"#8C96A5"}}>{physAR.price_unit}</span></div>
+                  {physAR.source && <div style={{fontSize:8,color:"#64748b"}}>{physAR.source}</div>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+      </div>
+    );
+  };
+
+  // -- INTEL: Central de Inteligência -----------------------------------------
+  const renderIntelPage = () => {
+    const panelStyle:any = {background:"#142332",borderRadius:10,padding:20,marginBottom:20,border:"1px solid rgba(148,163,184,.12)"};
+    const sectionTitle = (t:string) => <div style={{fontSize:14,fontWeight:700,color:"#DCB432",marginBottom:14,letterSpacing:0.5}}>{t}</div>;
+    const placeholder = (msg:string) => <div style={{color:"#64748b",fontSize:11,fontStyle:"italic"}}>{msg}</div>;
+
+    // -- Shared AI context builder (all sources) --
+    const buildIntelPrompt = () => {
+      const sections:string[] = [];
+
+      sections.push("Você é um analista sênior de commodities com acesso completo ao contexto de mercado e portfólio do usuário. Analise a situação atual considerando:");
+
+      // Synthesis
+      const syn = intelSynthesis;
+      if(syn && !syn.is_fallback) {
+        sections.push("\n=== SÍNTESE DO DIA ===");
+        if(syn.summary) sections.push(syn.summary);
+        if(syn.priority_high?.length) sections.push("Sinais críticos:\n" + syn.priority_high.map((s:any)=>"- "+s.title+(s.detail?" ("+s.detail+")":"")).join("\n"));
+        if(syn.priority_medium?.length) sections.push("Sinais atenção:\n" + syn.priority_medium.map((s:any)=>"- "+s.title).join("\n"));
+      }
+
+      // Macro
+      const mi = macroIndicators;
+      const fw = fedwatch;
+      const macroLines:string[] = [];
+      if(mi?.vix) macroLines.push(`VIX: ${mi.vix.value} (${mi.vix.level}, ${mi.vix.change_pct>0?"+":""}${mi.vix.change_pct}%)`);
+      if(mi?.sp500) macroLines.push(`S&P 500: ${mi.sp500.price} (${mi.sp500.change_pct>0?"+":""}${mi.sp500.change_pct}% dia, ${mi.sp500.change_week_pct>0?"+":""}${mi.sp500.change_week_pct}% semana)`);
+      if(mi?.treasury_10y) macroLines.push(`Juros 10Y EUA: ${mi.treasury_10y.yield_pct}% (${mi.treasury_10y.direction}, ${mi.treasury_10y.change_bps>0?"+":""}${mi.treasury_10y.change_bps} bps)`);
+      if(dxSeries?.length) macroLines.push(`DXY: ${dxLast?.close?.toFixed(2)}`);
+      if(bcbData?.brl_usd?.length) { const bl=bcbData.brl_usd.slice(-1)[0]; macroLines.push(`BRL/USD: ${bl.value} (${bl.date})`); }
+      if(fw?.probabilities) macroLines.push(`Fed: ${fw.market_expectation} (hold ${fw.probabilities.hold}%, corte ${fw.probabilities.cut_25bps}%, alta ${fw.probabilities.hike_25bps}%) — próximo FOMC ${fw.next_meeting}`);
+      if(macroLines.length) { sections.push("\n=== MACRO ==="); sections.push(macroLines.join("\n")); }
+
+      // Composite signals
+      if(correlations?.composite_signals?.length) {
+        sections.push("\n=== COMPOSITE SIGNALS (multifatorial) ===");
+        correlations.composite_signals.forEach((c:any)=>{
+          const bulls = (c.factors_bull||[]).join("; ");
+          const bears = (c.factors_bear||[]).join("; ");
+          sections.push(`${c.asset}: ${c.signal} (confiança ${(c.confidence*100).toFixed(0)}%, ${c.sources_count} fontes)${bulls?" | +"+bulls:""}${bears?" | -"+bears:""}`);
+        });
+      }
+
+      // COT extremes
+      if(cot?.commodities) {
+        const cotLines:string[] = [];
+        Object.entries(cot.commodities).forEach(([sym,v]:any)=>{
+          const leg = v?.legacy;
+          if(!leg?.latest || !leg?.history?.length) return;
+          const hist = leg.history;
+          const nets = hist.map((h:any)=>h.noncomm_net).filter((n:any)=>n!=null);
+          if(nets.length < 20) return;
+          const mn = Math.min(...nets), mx = Math.max(...nets);
+          if(mx === mn) return;
+          const cotIndex = ((leg.latest.noncomm_net - mn) / (mx - mn)) * 100;
+          if(cotIndex > 80 || cotIndex < 20) {
+            const prev = hist.length >= 2 ? hist[hist.length-2] : null;
+            const delta = prev?.noncomm_net != null ? leg.latest.noncomm_net - prev.noncomm_net : null;
+            cotLines.push(`${sym}: net=${leg.latest.noncomm_net} | cot_index=${cotIndex.toFixed(0)}/100 | oi=${leg.latest.open_interest}${delta!=null?" | delta_semanal="+(delta>0?"+":"")+delta:""}`);
+          }
+        });
+        if(cotLines.length) { sections.push("\n=== COT REPORT (POSICIONAMENTO EXTREMO) ==="); sections.push(cotLines.join("\n")); }
+      }
+
+      // Spreads
+      if(spreads?.spreads) {
+        const extremos = Object.entries(spreads.spreads).filter(([,v]:any)=>v.regime==="EXTREMO"||v.regime==="DISSONÂNCIA");
+        if(extremos.length) {
+          sections.push("\n=== SPREADS ===");
+          extremos.forEach(([k,v]:any)=>sections.push(`${v.name}: ${v.current?.toFixed(4)} ${v.unit} | z=${v.zscore_1y?.toFixed(2)} | ${v.regime} | ${v.trend}`));
+        }
+      }
+
+      // Climate + Sentiment
+      const climaLines:string[] = [];
+      if(weatherData?.enso) climaLines.push(`ENSO: ${weatherData.enso.status} (ONI=${weatherData.enso.oni_value})`);
+      if(weatherData?.regions) {
+        const alerts:string[] = [];
+        Object.values(weatherData.regions).forEach((r:any)=>(r.alerts||[]).forEach((a:any)=>alerts.push(`${r.label}: ${a.type} ${a.severity}`)));
+        if(alerts.length) climaLines.push(`Alertas: ${alerts.join("; ")}`);
+      }
+      if(googleTrends?.spikes?.length) climaLines.push(`Google Trends spikes: ${googleTrends.spikes.join(", ")}`);
+      if(intelSentiment.text) climaLines.push(`Sentimento (Grok): ${intelSentiment.text.slice(0,500)}`);
+      if(intelNews.text) climaLines.push(`Notícias: ${intelNews.text.slice(0,500)}`);
+      if(climaLines.length) { sections.push("\n=== CLIMA E SENTIMENTO ==="); sections.push(climaLines.join("\n")); }
+
+      // Grain Ratios scorecard
+      if(grData?.scorecards) {
+        const grLines:string[] = [];
+        const snap = grData.current_snapshot || {};
+        const grMap:{[k:string]:string} = {corn:"ZC",soy:"ZS",wheat:"ZW"};
+        for(const [grain,sym] of Object.entries(grMap)) {
+          const sc = grData.scorecards[grain];
+          const cot = snap.cot?.[grain];
+          const mg = snap.margins?.[grain];
+          if(!sc) continue;
+          const cotPct = cot?.cot_index != null ? ` | COT percentil=${cot.cot_index.toFixed(0)}` : "";
+          const copLabel = mg?.margin != null ? (mg.margin < 0 ? " | Preço ABAIXO do custo de produção" : " | Preço ACIMA do custo de produção") : "";
+          grLines.push(`${sym}: ${sc.composite_signal} (score=${sc.composite_score?.toFixed(0)})${cotPct}${copLabel}`);
+        }
+        if(grLines.length) { sections.push("\n=== GRAIN RATIOS (modelo multifatorial) ==="); sections.push(grLines.join("\n")); }
+      }
+
+      // Physical international / arbitrage
+      if(grData?.arbitrage) {
+        const arb = grData.arbitrage;
+        const phLines:string[] = [];
+        const cif = arb.spread_delivered_china || {};
+        const fobP = cif.fob_paranagua || {};
+        const fobG = cif.fob_gulf || {};
+        const fobR = cif.fob_rosario || {};
+        for(const crop of ["soy","corn"]) {
+          const cropName = crop==="soy"?"Soja":"Milho";
+          const parts:string[] = [];
+          if(fobP[crop] && fobG[crop]) parts.push(`FOB: Paranaguá=$${fobP[crop]?.toFixed(0)} Gulf=$${fobG[crop]?.toFixed(0)}`);
+          if(fobR[crop]) parts.push(`Rosario=$${fobR[crop]?.toFixed(0)}`);
+          const cifQ = cif.cif_qingdao || {};
+          const vals = [cifQ[crop+"_us"],cifQ[crop+"_br"],cifQ[crop+"_arg"]].filter((v:any)=>v!=null);
+          if(vals.length>=2) parts.push(`CIF Qingdao: US=$${cifQ[crop+"_us"]?.toFixed(0)} BR=$${cifQ[crop+"_br"]?.toFixed(0)} ARG=$${cifQ[crop+"_arg"]?.toFixed(0)}`);
+          if(parts.length) phLines.push(`${cropName}: ${parts.join(" | ")}`);
+        }
+        const bdiVal = typeof arb.bdi === "number" ? arb.bdi : arb.bdi?.value || cif.bdi_used;
+        if(bdiVal != null && typeof bdiVal === "number") phLines.push(`BDI: ${bdiVal} pts`);
+        if(phLines.length) { sections.push("\n=== MERCADO FÍSICO INTERNACIONAL ==="); sections.push(phLines.join("\n")); }
+      }
+
+      // Calendar — next 7 days
+      if(calendar?.events) {
+        const now = new Date();
+        const in7 = new Date(now.getTime() + 7*24*60*60*1000);
+        const todayStr = now.toISOString().slice(0,10);
+        const in7Str = in7.toISOString().slice(0,10);
+        const upcoming = calendar.events.filter((e:any)=>e.date>=todayStr && e.date<=in7Str).slice(0,6);
+        if(upcoming.length) {
+          sections.push("\n=== EVENTOS CRÍTICOS — PRÓXIMOS 7 DIAS ===");
+          upcoming.forEach((e:any)=>sections.push(`${e.date} | ${e.name} (${e.category}) | impacto: ${e.impact}`));
+        }
+      }
+
+      // Portfolio
+      if(portfolio) {
+        const pLines:string[] = [];
+        const isEnriched = !!portfolio?.positions_by_underlying;
+        const summ = portfolio?.summary || {};
+        const acct = isEnriched ? (portfolio?.account || {}) : {};
+        const netLiq = isEnriched ? acct.net_liquidation : parseFloat(summ.NetLiquidation || "0");
+        const buyPow = isEnriched ? acct.buying_power : parseFloat(summ.BuyingPower || "0");
+        const cash = isEnriched ? acct.total_cash : parseFloat(summ.TotalCashValue || "0");
+        const unrealPnl = isEnriched ? acct.unrealized_pnl : parseFloat(summ.UnrealizedPnL || "0");
+
+        if(netLiq) pLines.push(`Net Liquidation: $${Number(netLiq).toLocaleString("en-US",{maximumFractionDigits:0})}`);
+        if(buyPow) pLines.push(`Buying Power: $${Number(buyPow).toLocaleString("en-US",{maximumFractionDigits:0})}`);
+        if(cash) pLines.push(`Cash: $${Number(cash).toLocaleString("en-US",{maximumFractionDigits:0})}`);
+        if(unrealPnl) pLines.push(`Unrealized PnL: $${Number(unrealPnl).toLocaleString("en-US",{maximumFractionDigits:0})}`);
+
+        // Positions
+        const positions = portfolio?.positions || [];
+        if(positions.length) {
+          pLines.push(`Posições abertas (${positions.length}):`);
+          const agriSyms = new Set(["ZC","ZS","ZW","KE","ZM","ZL","SB","KC","CT","CC","LE","GF","HE","CL","NG","GC","SI","DX"]);
+          const overlaps:string[] = [];
+          positions.forEach((p:any)=>{
+            const sym = p.symbol || p.local_symbol || "?";
+            const qty = p.position || p.quantity || 0;
+            const avg = p.avg_cost || p.avgCost || 0;
+            const pnl = p.unrealizedPnL || p.unrealized_pnl || "";
+            pLines.push(`  ${sym}: ${qty} @ ${avg}${pnl?" | PnL: $"+pnl:""}`);
+            if(agriSyms.has(sym?.replace(/[A-Z]{2}[FGHJKMNQUVXZ]\d{2}/,"").replace(/\d+/,"").slice(0,2))) overlaps.push(sym);
+          });
+          if(overlaps.length) pLines.push(`Exposição AgriMacro: ${overlaps.join(", ")}`);
+        }
+
+        if(pLines.length) { sections.push("\n=== PORTFÓLIO PESSOAL (IBKR) ==="); sections.push(pLines.join("\n")); }
+      }
+
+      // Portfolio breakdown by underlying (parsed options)
+      if(portfolio?.positions?.length) {
+        const rawPos = portfolio.positions as any[];
+        const optByUnd: Record<string, {strikes:number[];exps:Set<string>;netQty:number;legs:number}> = {};
+        rawPos.forEach((pos:any) => {
+          const ls = (pos.local_symbol||"").trim().split(" ");
+          const isOpt = pos.sec_type==="FOP" && ls.length>=2 && /^[CP]\d+/.test(ls[ls.length-1]);
+          if(!isOpt) return;
+          const sym = pos.symbol;
+          if(!optByUnd[sym]) optByUnd[sym] = {strikes:[],exps:new Set(),netQty:0,legs:0};
+          const u = optByUnd[sym];
+          u.legs++;
+          u.netQty += pos.position;
+          const right = ls[ls.length-1];
+          const rawStrike = parseInt(right.slice(1));
+          const div = ({CL:100,SI:100,GF:10,ZL:100,CC:1} as Record<string,number>)[sym]||100;
+          u.strikes.push(rawStrike/div);
+          const expCode = ls[0].slice(-2);
+          const mm:Record<string,string> = {F:"Jan",G:"Fev",H:"Mar",J:"Abr",K:"Mai",M:"Jun",N:"Jul",Q:"Ago",U:"Set",V:"Out",X:"Nov",Z:"Dez"};
+          u.exps.add((mm[expCode[0]]||expCode[0])+"/2"+expCode[1]);
+        });
+        const bLines:string[] = [];
+        Object.entries(optByUnd).forEach(([sym,u])=>{
+          const dir = u.netQty>0?"NET_LONG":u.netQty<0?"NET_SHORT":"NEUTRO";
+          const strikes = [...new Set(u.strikes)].sort((a,b)=>a-b);
+          bLines.push(`${sym}: ${u.legs} legs | ${dir} (net=${u.netQty}) | strikes=[${strikes.join(",")}] | venc=[${[...u.exps].join(",")}]`);
+        });
+        if(bLines.length) {
+          sections.push("\n=== PORTFOLIO — BREAKDOWN POR UNDERLYING ===");
+          sections.push(bLines.join("\n"));
+          sections.push("Nota: gregas reais nao disponiveis no formato IBKR exportado");
+        }
+      }
+
+      // Physical international data
+      if(physIntl?.international) {
+        const phIntlLines:string[] = [];
+        Object.entries(physIntl.international).forEach(([k,v]:any)=>{
+          if(v?.price) phIntlLines.push(`${v.label||k}: ${v.price_unit?.includes("R$")?"R$":"US$"}${v.price} ${v.price_unit||""} ${v.trend||""}`);
+        });
+        if(phIntlLines.length) { sections.push("\n=== MERCADO FÍSICO INTERNACIONAL (DETALHADO) ==="); sections.push(phIntlLines.join("\n")); }
+      }
+
+      // Stocks/ending stocks from stocks_watch
+      if(stocks?.commodities) {
+        const stkLines:string[] = [];
+        Object.entries(stocks.commodities).forEach(([sym,v]:any)=>{
+          if(v?.stock_current) {
+            const dev = v.stock_avg ? ((v.stock_current - v.stock_avg) / v.stock_avg * 100).toFixed(1) : "?";
+            stkLines.push(`${sym}: ${v.stock_current} ${v.stock_unit||""} | Média 5A: ${v.stock_avg||"?"} | Desvio: ${dev}% | ${v.state||"?"}`);
+          }
+        });
+        if(stkLines.length) { sections.push("\n=== ESTOQUES / ENDING STOCKS ==="); sections.push(stkLines.join("\n")); }
+      }
+
+      // PSD USDA ending stocks detail
+      if(psdData?.commodities) {
+        const psdLines:string[] = [];
+        const psdMap:{[k:string]:string} = {soybeans:"ZS",corn:"ZC",wheat:"ZW",soybean_oil:"ZL",soybean_meal:"ZM",cotton:"CT",sugar:"SB"};
+        Object.entries(psdData.commodities).forEach(([k,v]:any)=>{
+          const sym = psdMap[k] || k.toUpperCase();
+          const parts:string[] = [`${sym}`];
+          if(v.current != null) parts.push(`estoque=${v.current} ${v.unit||""}`);
+          if(v.days_of_use != null) parts.push(`dias_consumo=${v.days_of_use}`);
+          if(v.avg_5y != null) parts.push(`media_5a=${v.avg_5y}`);
+          if(v.deviation != null) parts.push(`desvio=${v.deviation>0?"+":""}${v.deviation.toFixed(1)}%`);
+          psdLines.push(parts.join(" | "));
+        });
+        if(psdLines.length) { sections.push("\n=== PSD USDA — ENDING STOCKS DETALHADO ==="); sections.push(psdLines.join("\n")); }
+      }
+
+      // Physical BR (CEPEA spot prices)
+      if(physicalBrData) {
+        const brLines:string[] = [];
+        const products = physicalBrData.products || physicalBrData;
+        if(typeof products === "object") {
+          Object.entries(products).forEach(([k,v]:any)=>{
+            if(v?.price) {
+              const chg = v.change_pct != null ? ` (${v.change_pct>=0?"+":""}${v.change_pct}% d/d)` : (v.trend ? ` ${v.trend}` : "");
+              brLines.push(`${v.label||k}: R$${v.price} ${v.unit||""}${chg}${v.source?" | "+v.source:""}`);
+            }
+          });
+        }
+        if(brLines.length) { sections.push("\n=== MERCADO FÍSICO BRASIL (CEPEA) ==="); sections.push(brLines.join("\n")); }
+      }
+
+      // IMEA Soja (COP Mato Grosso)
+      if(imeaData && !imeaData.is_fallback) {
+        const imLines:string[] = [];
+        if(imeaData.cop_rs_saca != null) imLines.push(`COP MT: R$${imeaData.cop_rs_saca}/saca`);
+        if(imeaData.preco_rs_saca != null) imLines.push(`Preço spot MT: R$${imeaData.preco_rs_saca}/saca`);
+        if(imeaData.margem_pct != null) imLines.push(`Margem produtor: ${imeaData.margem_pct>0?"+":""}${imeaData.margem_pct.toFixed(1)}%`);
+        if(imeaData.safra) imLines.push(`Safra: ${imeaData.safra}`);
+        if(imeaData.summary) imLines.push(imeaData.summary);
+        if(imLines.length) { sections.push("\n=== CUSTO DE PRODUÇÃO / MARGEM PRODUTOR (IMEA) ==="); sections.push(imLines.join("\n")); }
+      }
+
+      // Analysis request
+      sections.push("\n=== ANÁLISE SOLICITADA ===");
+      sections.push("Com base em todos os dados acima:\n1. Quais são os maiores riscos para o portfólio atual dado o ambiente de mercado?\n2. Quais posições estão alinhadas com os sinais multifatoriais?\n3. Quais estão em conflito com os sinais (maior risco)?\n4. Recomendações de ajuste de exposição (apresentar como análise de risco, sem ser prescritivo)\n5. O que monitorar nas próximas 24-48 horas?\n\nResponda em português brasileiro, tom institucional e analítico.");
+
+      return sections.join("\n");
+    };
+
+    // -- MACRO cards --
+    const dxSeries = prices?.["DX"] || dxProcessed;
+    const dxLast = dxSeries?.slice(-1)[0];
+    const dxPrev = dxSeries?.slice(-2,-1)[0];
+    const dxChg = dxLast&&dxPrev ? ((dxLast.close-dxPrev.close)/dxPrev.close*100) : null;
+
+    const brlSeries = bcbData?.brl_usd;
+    const brlLast = brlSeries?.slice(-1)[0];
+    const brlPrev = brlSeries?.slice(-2,-1)[0];
+    const brlChg = brlLast&&brlPrev ? ((brlLast.value-brlPrev.value)/brlPrev.value*100) : null;
+
+    const selicSeries = bcbData?.selic_meta;
+    const selicLast = selicSeries?.slice(-1)[0];
+
+    // macro_indicators.json data
+    const mi = macroIndicators;
+    const sp = mi?.sp500;
+    const vix = mi?.vix;
+    const ty = mi?.treasury_10y;
+
+    const macroCards:{label:string;value:string;change:number|null;unit:string;date:string}[] = [
+      {label:"DXY (Dollar Index)",value:dxLast?dxLast.close.toFixed(2):"--",change:dxChg,unit:"index",date:dxLast?.date||""},
+      {label:"BRL/USD",value:brlLast?brlLast.value.toFixed(4):"--",change:brlChg,unit:"R$",date:brlLast?.date||""},
+      {label:"Selic Meta",value:selicLast?selicLast.value.toFixed(2)+"%":"--",change:null,unit:"% a.a.",date:selicLast?.date||""},
+      {label:"S&P 500",value:sp?sp.price.toLocaleString("en-US",{minimumFractionDigits:1}):"--",change:sp?.change_pct??null,unit:"index",date:sp?.date||""},
+      {label:"VIX",value:vix?vix.value.toFixed(1):"--",change:vix?.change_pct??null,unit:"index",date:vix?.date||""},
+      {label:"Juros 10Y EUA",value:ty?ty.yield_pct.toFixed(3)+"%":"--",change:null,unit:"%",date:ty?.date||""},
+    ];
+
+    // -- WEATHER --
+    const weatherRegions = weatherData?.regions || {};
+    const regionKeys = ["corn_belt","cerrado_mt","sul_pr_rs","pampas_arg"];
+    const regionLabels:Record<string,string> = {corn_belt:"Corn Belt",cerrado_mt:"Cerrado MT",sul_pr_rs:"Sul BR (PR/RS)",pampas_arg:"Pampas Argentina"};
+
+    function weatherStatus(r:any):{label:string;color:string} {
+      if(!r) return {label:"Sem dados",color:"#64748b"};
+      const alerts = r.alerts || [];
+      if(alerts.some((a:any)=>a.severity==="ALTA"||a.severity==="CRITICA")) return {label:"Alerta",color:"#DC3C3C"};
+      if(alerts.length>0) return {label:"Atenção",color:"#DCB432"};
+      return {label:"Normal",color:"#00C878"};
+    }
+
+    return (
+      <div style={{maxWidth:1000}}>
+        <div style={{fontSize:20,fontWeight:800,color:"#DCB432",marginBottom:4,letterSpacing:1}}>CENTRAL DE INTELIGÊNCIA</div>
+        <div style={{fontSize:11,color:"#64748b",marginBottom:24}}>Visão consolidada: macro, clima, sentimento e síntese IA</div>
+
+        {/* SEÇÃO 0: SÍNTESE DO DIA */}
+        {(()=>{
+          const syn = intelSynthesis;
+          if(!syn || syn.is_fallback) return null;
+          const sc = syn.signal_count||{};
+          const prioColors:Record<string,{bg:string;text:string;label:string}> = {
+            high:{bg:"rgba(220,60,60,.12)",text:"#DC3C3C",label:"CRÍTICO"},
+            medium:{bg:"rgba(220,180,50,.12)",text:"#DCB432",label:"ATENÇÃO"},
+            low:{bg:"rgba(59,130,246,.10)",text:"#3b82f6",label:"INFO"},
+          };
+          const catIcons:Record<string,string> = {composite:"⚡",macro:"\ud83c\udfe6",spread:"\ud83d\udcca",causal:"\ud83d\udd17",clima:"☁️",sentimento:"\ud83d\udcf1",safra:"\ud83c\udf31"};
+          const allSignals = [...(syn.priority_high||[]),...(syn.priority_medium||[]),...(syn.priority_low||[])];
+          return (
+            <div style={{...panelStyle,border:"1px solid rgba(220,180,50,.25)",marginBottom:24}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                {sectionTitle("SÍNTESE DO DIA")}
+                <div style={{display:"flex",gap:8}}>
+                  {sc.high>0 && <div style={{fontSize:10,fontWeight:700,color:"#DC3C3C",background:"rgba(220,60,60,.12)",padding:"3px 10px",borderRadius:12}}>{sc.high} crítico{sc.high>1?"s":""}</div>}
+                  {sc.medium>0 && <div style={{fontSize:10,fontWeight:700,color:"#DCB432",background:"rgba(220,180,50,.12)",padding:"3px 10px",borderRadius:12}}>{sc.medium} atenção</div>}
+                  {sc.low>0 && <div style={{fontSize:10,fontWeight:700,color:"#3b82f6",background:"rgba(59,130,246,.10)",padding:"3px 10px",borderRadius:12}}>{sc.low} info</div>}
+                </div>
+              </div>
+
+              {/* Summary */}
+              {syn.summary && (
+                <div style={{background:"#0E1A24",borderRadius:8,padding:16,marginBottom:14,border:"1px solid rgba(220,180,50,.2)",borderLeft:"3px solid #DCB432"}}>
+                  <div style={{fontSize:12,color:"#E8ECF1",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{syn.summary}</div>
+                  <div style={{fontSize:8,color:"#64748b",marginTop:8}}>{syn.generated_at?.slice(0,16).replace("T"," ")}</div>
+                </div>
+              )}
+
+              {/* Signal list */}
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {allSignals.slice(0,12).map((s:any,i:number)=>{
+                  const pc = prioColors[s.priority]||prioColors.low;
+                  return (
+                    <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px",background:"#0E1A24",borderRadius:6,borderLeft:`3px solid ${pc.text}`}}>
+                      <div style={{fontSize:12,minWidth:18}}>{catIcons[s.category]||"◆"}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:10,fontWeight:600,color:"#E8ECF1"}}>{s.title}</div>
+                        {s.detail && <div style={{fontSize:9,color:"#8899AA",marginTop:2}}>{s.detail}</div>}
+                      </div>
+                      <div style={{fontSize:8,fontWeight:700,color:pc.text,background:pc.bg,padding:"2px 6px",borderRadius:4,whiteSpace:"nowrap"}}>{pc.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Causal chains */}
+              {syn.causal_chains_active?.length>0 && (
+                <div style={{marginTop:12}}>
+                  <div style={{fontSize:9,fontWeight:600,color:"#8899AA",letterSpacing:0.5,marginBottom:6}}>CADEIAS CAUSAIS ATIVAS</div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {syn.causal_chains_active.map((c:any)=>(
+                      <div key={c.id} style={{background:"#0E1A24",borderRadius:6,padding:"6px 10px",border:"1px solid rgba(220,180,50,.15)",fontSize:9}}>
+                        <div style={{fontWeight:700,color:"#DCB432"}}>{c.name}</div>
+                        <div style={{color:"#8899AA",marginTop:2}}>{c.signal}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Deepen with AI */}
+              <div style={{marginTop:14,textAlign:"center"}}>
+                <button onClick={async()=>{
+                  if(intelCouncilLoading) return;
+                  setIntelCouncilLoading(true);
+                  try {
+                    const prompt = buildIntelPrompt();
+                    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{role:"user",content:prompt}]})});
+                    const d = await res.json();
+                    if(res.ok && d.response){
+                      const entry={text:d.response,time:new Date().toLocaleString("pt-BR")};
+                      setIntelCouncil(entry);
+                      setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                    } else setIntelCouncil({text:"ERRO: "+(d.error||`API ${res.status}`),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                  }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});}
+                  setIntelCouncilLoading(false);
+                }} disabled={intelCouncilLoading} style={{
+                  padding:"8px 24px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
+                  background:intelCouncilLoading?"#1E3044":"rgba(220,180,50,.10)",color:"#DCB432",
+                  border:"1px solid #DCB43244",transition:"all .2s",
+                }}>{intelCouncilLoading?"Analisando...":"Aprofundar com IA"}</button>
+                <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Envia síntese + macro + portfólio + sinais para Claude API</div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* MAPA DE CORRELAÇÕES */}
+        <div style={panelStyle}>
+          {sectionTitle("MAPA DE CORRELAÇÕES")}
+          {correlations && !correlations.is_fallback ? (
+            <CorrelationMap correlations={correlations} prices={prices} />
+          ) : (
+            placeholder("correlations.json não disponível. Execute o pipeline para gerar correlações.")
+          )}
         </div>
 
-        <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Estrategias por Commodity ({symbols.length})</div>
-        {symbols.map(sym=>{
-          const data = byUnderlying[sym];
-          const legs = data.legs || [];
-          const structures = data.structures || [];
-          return (
-            <div key={sym} style={{marginBottom:20}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                <span style={{fontSize:14,fontWeight:700,color:C.amber}}>{data.name || sym}</span>
-                <span style={{fontSize:10,color:C.textMuted,background:C.panel,padding:"2px 8px",borderRadius:4}}>{sym}</span>
-                <span style={{fontSize:10,color:C.cyan,fontWeight:600}}>{data.strategy_summary}</span>
+        {/* SEÇÃO 1: MACRO DO DIA */}
+        <div style={panelStyle}>
+          {sectionTitle("MACRO DO DIA")}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
+            {macroCards.map(mc=>{
+              const isVix = mc.label==="VIX";
+              const isSP = mc.label==="S&P 500";
+              const is10Y = mc.label==="Juros 10Y EUA";
+              const vixColors:Record<string,{bg:string;text:string}> = {baixo:{bg:"rgba(0,200,120,.15)",text:"#00C878"},normal:{bg:"rgba(148,163,184,.12)",text:"#8899AA"},atencao:{bg:"rgba(245,158,11,.18)",text:"#f59e0b"},extremo:{bg:"rgba(220,60,60,.18)",text:"#DC3C3C"}};
+              const vixLevel = isVix&&vix ? (vix.value>=30?"extremo":vix.value>=20?"atencao":vix.value>=15?"normal":"baixo") : "";
+              const vc = isVix&&vix ? vixColors[vixLevel]||vixColors.normal : null;
+              return (
+                <div key={mc.label} style={{background:"#0E1A24",borderRadius:8,padding:14,border:isVix&&vc?`1px solid ${vc.text}33`:"1px solid rgba(148,163,184,.08)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{fontSize:9,color:"#8899AA",fontWeight:600,letterSpacing:0.5}}>{mc.label}</div>
+                    {isVix&&vix&&vc && <div style={{fontSize:8,fontWeight:700,color:vc.text,background:vc.bg,padding:"2px 6px",borderRadius:4,letterSpacing:0.5,textTransform:"uppercase"}}>{vixLevel==="atencao"?"ATENÇÃO":vixLevel.toUpperCase()}</div>}
+                  </div>
+                  <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:mc.value==="--"?"#64748b":"#FFFFFF"}}>{mc.value}</div>
+                  {mc.change!==null ? (
+                    <div style={{fontSize:10,fontFamily:"monospace",color:isVix?(mc.change>0?"#DC3C3C":"#00C878"):(mc.change>=0?"#00C878":"#DC3C3C"),marginTop:4}}>
+                      {mc.change>=0?"+":""}{mc.change.toFixed(2)}%
+                    </div>
+                  ) : is10Y&&ty ? (
+                    <div style={{fontSize:10,fontFamily:"monospace",color:ty.direction==="subindo"?"#DC3C3C":ty.direction==="caindo"?"#00C878":"#8899AA",marginTop:4}}>
+                      {ty.direction==="subindo"?"↑":ty.direction==="caindo"?"↓":"↔"} {ty.change_bps>=0?"+":""}{ty.change_bps} bps {ty.direction}
+                    </div>
+                  ) : mc.value==="--" ? (
+                    <div style={{fontSize:9,color:"#64748b",marginTop:4,fontStyle:"italic"}}>Aguardando pipeline</div>
+                  ) : null}
+                  {isSP&&sp&&sp.change_week_pct!=null && (
+                    <div style={{fontSize:9,fontFamily:"monospace",color:sp.change_week_pct>=0?"#00C878":"#DC3C3C",marginTop:2}}>
+                      Semana: {sp.change_week_pct>=0?"+":""}{sp.change_week_pct.toFixed(2)}%
+                    </div>
+                  )}
+                  {mc.date && (
+                    <div style={{fontSize:8,marginTop:2,display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{color:"#64748b"}}>{mc.date}</span>
+                      {isStale(mc.date) && (
+                        <span style={{
+                          background:"#92400e",color:"#fbbf24",fontSize:7,fontWeight:700,
+                          padding:"1px 4px",borderRadius:3,animation:"stalePulse 2s infinite",letterSpacing:"0.3px"
+                        }}>
+                          {staleDays(mc.date)===1?"ONTEM":`${staleDays(mc.date)}d`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* FedWatch sub-card */}
+          {(()=>{
+            const fw = fedwatch;
+            if(!fw || fw.is_fallback) return (
+              <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginTop:12,border:"1px solid rgba(148,163,184,.08)"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#8899AA",letterSpacing:0.5}}>FEDWATCH</div>
+                <div style={{color:"#64748b",fontSize:10,fontStyle:"italic",marginTop:6}}>Aguardando pipeline (fedwatch.json)</div>
               </div>
-              {structures.length > 0 && (
-                <div style={{display:"flex",gap:10,marginBottom:8,flexWrap:"wrap"}}>
-                  {structures.map((st:any,si:number)=>(
-                    <div key={si} style={{padding:"8px 14px",background:C.panelAlt,borderRadius:6,border:`1px solid ${C.border}`,fontSize:10}}>
-                      <div style={{color:C.gold,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>{(st.type||"").replace(/_/g," ")}</div>
-                      <div style={{color:C.text}}>{st.long_strike && st.short_strike ? st.long_strike+"/"+st.short_strike : st.lower && st.upper ? st.lower+"/"+st.middle+"/"+st.upper : ""}{st.expiry ? " "+st.expiry : ""}{st.qty ? " x"+st.qty : ""}</div>
-                      {st.max_risk_per_lot && <div style={{color:C.red,marginTop:2}}>{"Max risk/lot: $"+st.max_risk_per_lot}</div>}
-                      {st.credit_received_per_lot && <div style={{color:C.green,marginTop:2}}>{"Credit/lot: $"+st.credit_received_per_lot.toFixed(2)}</div>}
-                      {st.note && <div style={{color:C.textMuted,marginTop:2,fontStyle:"italic"}}>{st.note}</div>}
+            );
+            const probs = fw.probabilities;
+            const expMap:Record<string,{label:string;color:string}> = {hold:{label:"MANTER",color:"#DCB432"},cut:{label:"CORTE",color:"#00C878"},hike:{label:"ALTA",color:"#DC3C3C"}};
+            const exp = expMap[fw.market_expectation]||expMap.hold;
+            const bars:{label:string;value:number;color:string}[] = probs ? [
+              {label:"Manter",value:probs.hold,color:"#DCB432"},
+              {label:"Corte 25bp",value:probs.cut_25bps,color:"#00C878"},
+              {label:"Alta 25bp",value:probs.hike_25bps,color:"#DC3C3C"},
+            ] : [];
+            const meetings = (fw.meetings_ahead||[]).slice(0,4);
+            return (
+              <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginTop:12,border:"1px solid rgba(220,180,50,.12)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#DCB432"}}>FedWatch — Expectativa de Juros</div>
+                  <div style={{fontSize:8,fontWeight:700,color:exp.color,background:`${exp.color}18`,padding:"2px 8px",borderRadius:4,letterSpacing:0.5}}>{exp.label}</div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:8,color:"#8899AA",marginBottom:2}}>Taxa Atual</div>
+                    <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:"#FFFFFF"}}>{fw.current_rate?.toFixed(2)||"--"}%</div>
+                    {fw.target_range && <div style={{fontSize:8,color:"#64748b"}}>{fw.target_range.lower}-{fw.target_range.upper}%</div>}
+                  </div>
+                  <div>
+                    <div style={{fontSize:8,color:"#8899AA",marginBottom:2}}>Próximo FOMC</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#FFFFFF"}}>{fw.next_meeting||"--"}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:8,color:"#8899AA",marginBottom:2}}>Expectativa</div>
+                    <div style={{fontSize:14,fontWeight:800,color:exp.color}}>{exp.label}</div>
+                    {probs && <div style={{fontSize:8,color:"#64748b"}}>{probs.hold?.toFixed(0)}% prob.</div>}
+                  </div>
+                </div>
+                {bars.length>0 && (
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:9,fontWeight:600,color:"#8899AA",letterSpacing:0.5,marginBottom:6}}>PROBABILIDADES PRÓXIMO FOMC</div>
+                    {bars.map(b=>(
+                      <div key={b.label} style={{marginBottom:5}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                          <span style={{fontSize:9,color:"#E8ECF1"}}>{b.label}</span>
+                          <span style={{fontSize:10,fontFamily:"monospace",fontWeight:700,color:b.color}}>{b.value?.toFixed(1)}%</span>
+                        </div>
+                        <div style={{height:6,background:"rgba(148,163,184,.1)",borderRadius:3,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${Math.min(b.value||0,100)}%`,background:b.color,borderRadius:3,transition:"width .3s"}}/>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {meetings.length>1 && (
+                  <div>
+                    <div style={{fontSize:9,fontWeight:600,color:"#8899AA",letterSpacing:0.5,marginBottom:6}}>REUNIÕES SEGUINTES</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {meetings.slice(1).map((m:any)=>{
+                        const me = expMap[m.expected]||{label:m.expected,color:"#8899AA"};
+                        return (
+                          <div key={m.date} style={{background:"#142332",borderRadius:6,padding:"6px 10px",border:`1px solid ${me.color}22`,minWidth:90}}>
+                            <div style={{fontSize:9,fontWeight:600,color:"#E8ECF1"}}>{m.date}</div>
+                            <div style={{fontSize:8,color:me.color,fontWeight:700,marginTop:2}}>{me.label}{m.cut_prob!=null&&m.cut_prob>0?` (corte ${m.cut_prob.toFixed(0)}%)`:m.hike_prob!=null&&m.hike_prob>0?` (alta ${m.hike_prob.toFixed(0)}%)`:""}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* SEÇÃO 2: CLIMA */}
+        <div style={panelStyle}>
+          {sectionTitle("CLIMA — REGIÕES AGRÍCOLAS")}
+          {!weatherData ? placeholder("weather_agro.json não disponível. Execute o pipeline para coletar dados climáticos.") : (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+              {regionKeys.map(rk=>{
+                const reg = weatherRegions[rk];
+                const st = weatherStatus(reg);
+                const cur = reg?.current;
+                const alerts = reg?.alerts || [];
+                return (
+                  <div key={rk} style={{background:"#0E1A24",borderRadius:8,padding:14,border:`1px solid ${st.color}33`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#FFFFFF"}}>{regionLabels[rk]||rk}</div>
+                      <div style={{fontSize:9,fontWeight:700,color:st.color,background:`${st.color}18`,padding:"2px 8px",borderRadius:4,letterSpacing:0.5}}>{st.label.toUpperCase()}</div>
+                    </div>
+                    {cur ? (
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:10,color:"#8899AA"}}>
+                        <div>Temp: <span style={{color:"#FFFFFF"}}>{cur.temp_min?.toFixed(0)}° ~ {cur.temp_max?.toFixed(0)}°C</span></div>
+                        <div>Chuva: <span style={{color:cur.precip_mm>20?"#3b82f6":"#FFFFFF"}}>{cur.precip_mm?.toFixed(0)}mm</span></div>
+                        <div>Umidade: <span style={{color:"#FFFFFF"}}>{cur.humidity}%</span></div>
+                        <div>Safras: <span style={{color:"#FFFFFF"}}>{reg?.crops?.join(", ")||"--"}</span></div>
+                      </div>
+                    ) : placeholder("Sem dados")}
+                    {alerts.length>0 && (
+                      <div style={{marginTop:8}}>
+                        {alerts.map((a:any,i:number)=>(
+                          <div key={i} style={{fontSize:9,color:a.severity==="ALTA"||a.severity==="CRITICA"?"#DC3C3C":"#DCB432",marginTop:4,padding:"4px 8px",background:"rgba(220,180,50,.08)",borderRadius:4}}>
+                            {a.type}: {a.message}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* SEÇÃO 3: SENTIMENTO DE MERCADO */}
+        <div style={panelStyle}>
+          {sectionTitle("SENTIMENTO DE MERCADO")}
+
+          {/* Google Trends sub-card */}
+          {(()=>{
+            const gt = googleTrends;
+            if(!gt || gt.is_fallback) return (
+              <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginBottom:14,border:"1px solid rgba(148,163,184,.08)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#DCB432"}}>Google Trends</div>
+                </div>
+                <div style={{color:"#64748b",fontSize:10,fontStyle:"italic"}}>Aguardando pipeline (google_trends.json)</div>
+              </div>
+            );
+            const trends = gt.trends||{};
+            const spikes = gt.spikes||[];
+            const sorted = Object.entries(trends).sort((a:any,b:any)=>(b[1].current||0)-(a[1].current||0));
+            const top5 = sorted.slice(0,5);
+            return (
+              <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginBottom:14,border:"1px solid rgba(220,180,50,.12)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#DCB432"}}>Google Trends (90 dias)</div>
+                  {gt.generated_at && <div style={{fontSize:8,color:"#64748b"}}>{gt.generated_at.slice(0,10)}</div>}
+                </div>
+                {spikes.length>0 && (
+                  <div style={{marginBottom:10,padding:"6px 10px",background:"rgba(220,60,60,.08)",borderRadius:6,border:"1px solid rgba(220,60,60,.15)"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:"#DC3C3C",letterSpacing:0.5,marginBottom:4}}>INTERESSE DETECTADO</div>
+                    {spikes.map((term:string)=>{
+                      const t=trends[term] as any;
+                      const cur=t?.current||0;
+                      const avg=t?.avg_30d||0;
+                      const dir=cur>avg?"\u2191 ALTA":cur<avg?"\u2193 QUEDA":"\u2192 EST\u00C1VEL";
+                      const col=cur>avg?"#DC3C3C":cur<avg?"#f97316":"#DCB432";
+                      return <div key={term} style={{fontSize:11,color:col,marginTop:2,fontWeight:600}}>
+                        {term} — {dir} ({cur} vs média {avg.toFixed(1)})
+                      </div>;
+                    })}
+                  </div>
+                )}
+                <div style={{fontSize:9,fontWeight:600,color:"#8899AA",marginBottom:6,letterSpacing:0.5}}>TOP 5 POR INTERESSE</div>
+                {top5.map(([term,d]:any)=>{
+                  const isSpike = spikes.includes(term);
+                  const barColor = isSpike?"#DC3C3C":d.direction==="subindo"?"#00C878":d.direction==="caindo"?"#DC3C3C":"#DCB432";
+                  return (
+                    <div key={term} style={{marginBottom:6}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                        <div style={{fontSize:10,color:isSpike?"#DC3C3C":"#E8ECF1",fontWeight:isSpike?700:400}}>{term}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:9,color:d.direction==="subindo"?"#00C878":d.direction==="caindo"?"#DC3C3C":"#8899AA"}}>{d.direction==="subindo"?"↑":d.direction==="caindo"?"↓":"↔"}</span>
+                          <span style={{fontSize:10,fontFamily:"monospace",color:"#FFFFFF",fontWeight:600,minWidth:20,textAlign:"right"}}>{d.current}</span>
+                        </div>
+                      </div>
+                      <div style={{height:4,background:"rgba(148,163,184,.1)",borderRadius:2,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${Math.min(d.current,100)}%`,background:barColor,borderRadius:2,transition:"width .3s"}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+                {gt.summary && <div style={{fontSize:9,color:"#8899AA",marginTop:8,fontStyle:"italic"}}>{gt.summary}</div>}
+              </div>
+            );
+          })()}
+
+          {/* Grok Tasks auto-feed */}
+          {grokSentiment && (
+            <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginBottom:12,border:"1px solid rgba(0,200,120,.15)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#00C878"}}>Grok Tasks (auto)</div>
+                <div style={{fontSize:8,display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{color:"#64748b"}}>{grokSentiment.email_date||grokSentiment.generated_at?.slice(0,16)}</span>
+                  {isStale(grokSentiment.generated_at?.slice(0,10)) && (
+                    <span style={{background:"#92400e",color:"#fbbf24",fontSize:7,fontWeight:700,padding:"1px 4px",borderRadius:3,animation:"stalePulse 2s infinite"}}>
+                      {staleDays(grokSentiment.generated_at?.slice(0,10))===1?"ONTEM":`${staleDays(grokSentiment.generated_at?.slice(0,10))}d`}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:"#E8ECF1",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{cleanGrokContent(grokSentiment.content)}</div>
+            </div>
+          )}
+
+          {intelSentiment.text && (
+            <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginBottom:12,border:"1px solid rgba(220,180,50,.15)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#DCB432"}}>Colado manualmente</div>
+                <div style={{fontSize:8,color:"#64748b"}}>{intelSentiment.time}</div>
+              </div>
+              <div style={{fontSize:11,color:"#E8ECF1",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{intelSentiment.text}</div>
+            </div>
+          )}
+          <textarea value={sentimentDraft} onChange={e=>setSentimentDraft(e.target.value)}
+            placeholder="Cole aqui o resumo diário do Grok (fallback manual)..."
+            style={{width:"100%",minHeight:80,background:"#0E1A24",color:"#E8ECF1",border:"1px solid rgba(148,163,184,.15)",borderRadius:6,padding:12,fontSize:11,lineHeight:1.6,resize:"vertical",fontFamily:"inherit"}} />
+          <button onClick={()=>{
+            if(!sentimentDraft.trim()) return;
+            const entry = {text:sentimentDraft.trim(),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" "+new Date().toLocaleDateString("pt-BR")};
+            setIntelSentiment(entry); setSentimentDraft("");
+            localStorage.setItem("agrimacro_intel_sentiment",JSON.stringify(entry));
+          }} style={{marginTop:8,padding:"8px 20px",fontSize:10,fontWeight:600,background:"rgba(0,200,120,.12)",color:"#00C878",border:"1px solid rgba(0,200,120,.3)",borderRadius:6,cursor:"pointer"}}>
+            Salvar Sentimento
+          </button>
+        </div>
+
+        {/* SEÇÃO 4: NOTÍCIAS DO DIA */}
+        <div style={panelStyle}>
+          {sectionTitle("NOTÍCIAS DO DIA")}
+          {/* Grok Tasks auto-feed */}
+          {grokNews && (
+            <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginBottom:12,border:"1px solid rgba(0,200,120,.15)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#00C878"}}>Grok Tasks (auto)</div>
+                <div style={{fontSize:8,display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{color:"#64748b"}}>{grokNews.email_date||grokNews.generated_at?.slice(0,16)}</span>
+                  {isStale(grokNews.generated_at?.slice(0,10)) && (
+                    <span style={{background:"#92400e",color:"#fbbf24",fontSize:7,fontWeight:700,padding:"1px 4px",borderRadius:3,animation:"stalePulse 2s infinite"}}>
+                      {staleDays(grokNews.generated_at?.slice(0,10))===1?"ONTEM":`${staleDays(grokNews.generated_at?.slice(0,10))}d`}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:"#E8ECF1",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{cleanGrokContent(grokNews.content)}</div>
+            </div>
+          )}
+          {intelNews.text && (
+            <div style={{background:"#0E1A24",borderRadius:8,padding:14,marginBottom:12,border:"1px solid rgba(220,180,50,.15)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div style={{fontSize:10,fontWeight:600,color:"#DCB432"}}>Colado manualmente</div>
+                <div style={{fontSize:8,color:"#64748b"}}>{intelNews.time}</div>
+              </div>
+              <div style={{fontSize:11,color:"#E8ECF1",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{intelNews.text}</div>
+            </div>
+          )}
+          <textarea value={newsDraft} onChange={e=>setNewsDraft(e.target.value)}
+            placeholder="Cole aqui notícias (fallback manual)..."
+            style={{width:"100%",minHeight:80,background:"#0E1A24",color:"#E8ECF1",border:"1px solid rgba(148,163,184,.15)",borderRadius:6,padding:12,fontSize:11,lineHeight:1.6,resize:"vertical",fontFamily:"inherit"}} />
+          <button onClick={()=>{
+            if(!newsDraft.trim()) return;
+            const entry = {text:newsDraft.trim(),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" "+new Date().toLocaleDateString("pt-BR")};
+            setIntelNews(entry); setNewsDraft("");
+            localStorage.setItem("agrimacro_intel_news",JSON.stringify(entry));
+          }} style={{marginTop:8,padding:"8px 20px",fontSize:10,fontWeight:600,background:"rgba(0,200,120,.12)",color:"#00C878",border:"1px solid rgba(0,200,120,.3)",borderRadius:6,cursor:"pointer"}}>
+            Salvar Notícias
+          </button>
+        </div>
+
+        {/* SEÇÃO 5: COUNCIL DIÁRIO — exibe resultado do "Aprofundar com IA" */}
+        <div style={panelStyle}>
+          {sectionTitle("COUNCIL DIÁRIO — SÍNTESE IA")}
+          {intelCouncilLoading && (
+            <div style={{textAlign:"center",padding:"16px 0"}}>
+              <div style={{fontSize:11,color:"#DCB432",marginBottom:8}}>Gerando síntese...</div>
+              <div style={{width:200,height:3,background:"rgba(148,163,184,.1)",borderRadius:2,margin:"0 auto",overflow:"hidden"}}>
+                <div style={{width:"40%",height:"100%",background:"#DCB432",borderRadius:2,animation:"pulse 1.5s ease-in-out infinite"}}/>
+              </div>
+            </div>
+          )}
+          {intelCouncil && !intelCouncilLoading && (
+            <div style={{background:"#0E1A24",borderRadius:8,padding:16,border:"1px solid rgba(220,180,50,.2)"}}>
+              <div style={{fontSize:12,color:"#E8ECF1",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{intelCouncil.text}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10}}>
+                <div style={{fontSize:9,color:"#64748b"}}>Gerado em {intelCouncil.time}</div>
+                <button onClick={()=>setIntelCouncil(null)} style={{fontSize:9,color:"#DCB432",background:"none",border:"1px solid #DCB43244",borderRadius:4,padding:"2px 8px",cursor:"pointer"}}>Regenerar</button>
+              </div>
+            </div>
+          )}
+          {!intelCouncil && !intelCouncilLoading && (
+            <div style={{textAlign:"center",padding:"16px 0",color:"#64748b",fontSize:11,fontStyle:"italic"}}>
+              Use o botão "Aprofundar com IA" nas Cadeias Causais acima para gerar a síntese.
+            </div>
+          )}
+          {councilHistory.length > 1 && (
+            <div style={{marginTop:16}}>
+              <div style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:"0.5px",marginBottom:8}}>
+                ANÁLISES ANTERIORES ({councilHistory.length - 1})
+              </div>
+              {councilHistory.slice(1).map((item, i) => (
+                <details key={i} style={{marginBottom:6,background:"#0E1A24",borderRadius:6,border:"1px solid #1e3a4a"}}>
+                  <summary style={{padding:"8px 12px",cursor:"pointer",fontSize:10,color:"#64748b",listStyle:"none",display:"flex",justifyContent:"space-between"}}>
+                    <span>Análise {councilHistory.length - 1 - i}</span>
+                    <span>{item.time}</span>
+                  </summary>
+                  <div style={{padding:"8px 12px 12px",fontSize:11,color:"#94a3b8",lineHeight:1.6,borderTop:"1px solid #1e3a4a",whiteSpace:"pre-wrap",maxHeight:200,overflowY:"auto"}}>
+                    {item.text}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* SEÇÃO 6: ESTRATÉGIA ASSISTIDA */}
+        {(()=>{
+          const badgeColor = (tag:string):{bg:string;text:string;label:string} => {
+            if(tag==="SUPORTA") return {bg:"rgba(0,200,120,.12)",text:"#00C878",label:"SUPORTA"};
+            if(tag==="CONTRADIZ") return {bg:"rgba(220,60,60,.12)",text:"#DC3C3C",label:"CONTRADIZ"};
+            return {bg:"rgba(220,180,50,.12)",text:"#DCB432",label:"NEUTRO"};
+          };
+
+          const renderStrategyResponse = (text:string) => {
+            const sectionRegex = /^## (.+)$/gm;
+            const parts:{title:string;content:string}[] = [];
+            let match;
+            const matches:{title:string;index:number}[] = [];
+            while((match=sectionRegex.exec(text))!==null) {
+              matches.push({title:match[1],index:match.index+match[0].length});
+            }
+            if(matches.length===0) {
+              return <div style={{fontSize:12,color:"#E8ECF1",lineHeight:1.8,whiteSpace:"pre-wrap"}}>{text}</div>;
+            }
+            for(let i=0;i<matches.length;i++) {
+              const end = i<matches.length-1 ? text.lastIndexOf("\n",matches[i+1].index-matches[i+1].title.length-4) : text.length;
+              parts.push({title:matches[i].title,content:text.slice(matches[i].index,end).trim()});
+            }
+            // Preamble before first section
+            const preamble = text.slice(0,matches[0].index-matches[0].title.length-4).trim();
+
+            return (
+              <div>
+                {preamble && <div style={{fontSize:12,color:"#E8ECF1",lineHeight:1.8,whiteSpace:"pre-wrap",marginBottom:12}}>{preamble}</div>}
+                {parts.map((sec,i)=>{
+                  const key = `sec-${i}`;
+                  const isCollapsed = strategyCollapsed[key];
+                  const sectionIcon:Record<string,string> = {
+                    "VALIDAÇÃO DA TESE":"✓","RISCOS IDENTIFICADOS":"⚠","DADOS QUE SUPORTAM":"▲",
+                    "DADOS QUE CONTRADIZEM":"▼","CORRELAÇÕES RELEVANTES":"◈","SAZONALIDADE":"◐",
+                    "SUGESTÕES DE AJUSTE":"◆","MONITORAMENTO CRÍTICO":"◉"
+                  };
+                  const icon = sectionIcon[sec.title]||"◆";
+                  // Render content with inline badges
+                  const renderContent = (raw:string) => {
+                    const lines = raw.split("\n");
+                    return lines.map((line,li)=>{
+                      let badge = null;
+                      let cleaned = line;
+                      if(line.includes("[SUPORTA]")) { badge=badgeColor("SUPORTA"); cleaned=line.replace("[SUPORTA]","").trim(); }
+                      else if(line.includes("[CONTRADIZ]")) { badge=badgeColor("CONTRADIZ"); cleaned=line.replace("[CONTRADIZ]","").trim(); }
+                      else if(line.includes("[NEUTRO]")) { badge=badgeColor("NEUTRO"); cleaned=line.replace("[NEUTRO]","").trim(); }
+                      // Highlight z-scores, percentis and numbers
+                      const highlighted = cleaned.replace(/(z[=-]?\s*[+-]?\d+\.?\d*|percentil\s*[=:]?\s*\d+|[+-]?\d+\.?\d*%|\b\d+\.?\d*σ)/gi,(m)=>`⟨${m}⟩`);
+                      const segments = highlighted.split(/⟨|⟩/);
+                      return (
+                        <div key={li} style={{display:"flex",alignItems:"flex-start",gap:6,marginBottom:3}}>
+                          {badge && <span style={{fontSize:8,fontWeight:700,color:badge.text,background:badge.bg,padding:"1px 6px",borderRadius:3,whiteSpace:"nowrap",marginTop:2,flexShrink:0}}>{badge.label}</span>}
+                          <span style={{fontSize:11,color:"#E8ECF1",lineHeight:1.7}}>
+                            {segments.map((seg,si)=>{
+                              if(si%2===1) return <strong key={si} style={{color:"#DCB432",fontFamily:"monospace"}}>{seg}</strong>;
+                              return <span key={si}>{seg}</span>;
+                            })}
+                          </span>
+                        </div>
+                      );
+                    });
+                  };
+
+                  return (
+                    <div key={key} style={{marginBottom:8,background:"#0E1A24",borderRadius:8,border:"1px solid rgba(148,163,184,.08)",overflow:"hidden"}}>
+                      <div onClick={()=>setStrategyCollapsed(prev=>({...prev,[key]:!prev[key]}))}
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",cursor:"pointer",
+                          background:isCollapsed?"transparent":"rgba(220,180,50,.04)"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:12}}>{icon}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:"#DCB432",letterSpacing:0.3}}>{sec.title}</span>
+                        </div>
+                        <span style={{fontSize:10,color:"#64748b",transition:"transform .2s",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▼</span>
+                      </div>
+                      {!isCollapsed && (
+                        <div style={{padding:"8px 14px 14px"}}>{renderContent(sec.content)}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          };
+
+          const handleAnalyze = async (input:string) => {
+            if(!input.trim()||strategyLoading) return;
+            setStrategyLoading(true);
+            setStrategyCollapsed({});
+            try {
+              const res = await fetch("/api/strategy",{
+                method:"POST",headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({thesis:input.trim(), history:strategyConvoHistory})
+              });
+              const d = await res.json();
+              if(res.ok && d.response) {
+                const entry = {text:d.response,thesis:input.trim(),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})+" "+new Date().toLocaleDateString("pt-BR")};
+                setStrategyResult(entry);
+                // Update conversation history for follow-ups
+                setStrategyConvoHistory(prev=>[...prev,{role:"user",content:input.trim()},{role:"assistant",content:d.response}]);
+                // Save to history (max 3)
+                const newHist = [entry,...strategyHistory].slice(0,3);
+                setStrategyHistory(newHist);
+                localStorage.setItem("agrimacro_strategy_history",JSON.stringify(newHist));
+              } else {
+                setStrategyResult({text:"ERRO: "+(d.error||`API ${res.status}`),thesis:input.trim(),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+              }
+            } catch(e:any) {
+              setStrategyResult({text:"ERRO: "+(e.message||"Falha"),thesis:input.trim(),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+            }
+            setStrategyLoading(false);
+            setStrategyRefineMode(false);
+            setStrategyInput("");
+          };
+
+          return (
+            <div style={{...panelStyle,border:"1px solid rgba(220,180,50,.2)",background:"linear-gradient(180deg,#142332 0%,#0E1A24 100%)"}}>
+              {sectionTitle("ESTRATÉGIA ASSISTIDA")}
+              <div style={{fontSize:10,color:"#8899AA",marginBottom:16,marginTop:-8}}>
+                Descreva sua tese e receba análise estruturada com todos os dados do pipeline
+              </div>
+
+              {/* Snapshot buttons — always visible */}
+              {(()=>{
+                const formatMarketData = (d:any):string[] => {
+                  const L:string[]=[];
+                  // Prices
+                  if(d.prices){L.push("\n== PRECOS ==");for(const [sym,arr] of Object.entries(d.prices)){const a=arr as any[];if(!Array.isArray(a)||!a.length)continue;const last=a[a.length-1];const prev=a.length>1?a[a.length-2]:null;const chg=prev?((last.close-prev.close)/prev.close*100).toFixed(2):"?";L.push(`${sym}: ${last.close} (${Number(chg)>=0?"+":""}${chg}%) [${last.date}]`);}}
+                  // Macro
+                  if(d.macro_indicators){const mi=d.macro_indicators;L.push("\n== MACRO ==");if(mi.vix)L.push(`VIX: ${mi.vix.value} (${mi.vix.level}, ${mi.vix.change_pct>0?"+":""}${mi.vix.change_pct}%)`);if(mi.sp500)L.push(`S&P500: ${mi.sp500.price} (${mi.sp500.change_pct>0?"+":""}${mi.sp500.change_pct}%)`);if(mi.treasury_10y)L.push(`10Y: ${mi.treasury_10y.yield_pct}% (${mi.treasury_10y.direction}, ${mi.treasury_10y.change_bps>0?"+":""}${mi.treasury_10y.change_bps}bps)`);}
+                  if(d.bcb){const brl=d.bcb.brl_usd?.slice(-1)[0];if(brl)L.push(`BRL/USD: ${brl.value} [${brl.date}]`);const sel=d.bcb.selic_meta?.slice(-1)[0];if(sel)L.push(`Selic: ${sel.value}%`);}
+                  if(d.fedwatch?.probabilities){const fw=d.fedwatch;L.push(`Fed: ${fw.market_expectation} (hold ${fw.probabilities.hold}%, corte ${fw.probabilities.cut_25bps}%) proximo ${fw.next_meeting}`);}
+                  // COT enriched
+                  if(d.cot?.commodities){L.push("\n== COT ==");for(const [sym,val] of Object.entries(d.cot.commodities)){const v=val as any;const leg=v?.legacy?.latest;if(!leg)continue;const hist=v?.legacy?.history||[];let cotIdx="?";if(hist.length>=20){const nets=hist.map((h:any)=>h.noncomm_net).filter((n:any)=>n!=null);if(nets.length>=20){const mn=Math.min(...nets),mx=Math.max(...nets);if(mx!==mn)cotIdx=((leg.noncomm_net-mn)/(mx-mn)*100).toFixed(0);}}const prev=hist.length>=2?hist[hist.length-2]:null;const delta=prev?leg.noncomm_net-prev.noncomm_net:null;L.push(`${sym}: Fundos ${leg.noncomm_net>0?"+":""}${leg.noncomm_net} | COT Index ${cotIdx}/100 | OI ${leg.open_interest}${delta!=null?" | dsem "+(delta>0?"+":"")+delta:""}`);}
+                  } else if(d.cot){L.push("\n== COT ==");for(const [sym,val] of Object.entries(d.cot)){const v=val as any;if(!v?.managed_money&&!v?.legacy)continue;const mm=v.managed_money||v.legacy||{};L.push(`${sym}: net=${mm.net_position??mm.net??"?"}`);}}
+                  // Spreads
+                  if(d.spreads?.spreads){L.push("\n== SPREADS ==");for(const [k,v] of Object.entries(d.spreads.spreads)){const s=v as any;L.push(`${s.name||k}: ${s.current?.toFixed(4)} ${s.unit||""} z=${s.zscore_1y?.toFixed(2)} ${s.regime} ${s.trend||""}`);}}
+                  // Composite signals
+                  if(d.correlations?.composite_signals){L.push("\n== COMPOSITE SIGNALS ==");for(const c of d.correlations.composite_signals){L.push(`${(c as any).asset}: ${(c as any).signal} (conf=${((c as any).confidence*100).toFixed(0)}%, ${(c as any).sources_count} fontes)`);}}
+                  // Synthesis
+                  if(d.intel_synthesis&&!d.intel_synthesis.is_fallback){const syn=d.intel_synthesis;if(syn.summary){L.push("\n== SINTESE ==");L.push(syn.summary);}if(syn.priority_high?.length){L.push("Criticos:");syn.priority_high.forEach((s:any)=>L.push(`  - ${s.title}${s.detail?" ("+s.detail+")":""}`));}}
+                  // Grain ratios
+                  if(d.grain_ratios?.scorecards){L.push("\n== GRAIN RATIOS ==");const gr=d.grain_ratios;for(const [g,sym] of Object.entries({corn:"ZC",soy:"ZS",wheat:"ZW"} as Record<string,string>)){const sc=(gr.scorecards as any)[g];if(!sc)continue;L.push(`${sym}: ${sc.composite_signal} (score=${sc.composite_score?.toFixed(0)})`);}}
+                  // PSD ending stocks enriched
+                  if(d.psd_ending_stocks?.commodities){L.push("\n== ESTOQUES USDA ==");for(const [k,v] of Object.entries(d.psd_ending_stocks.commodities)){const s=v as any;if(!s?.current)continue;const dev=s.deviation!=null?s.deviation.toFixed(1)+"%":"?";const cls=s.deviation!=null?(s.deviation>15?"ACIMA avg":(s.deviation<-15?"ABAIXO avg":"NORMAL")):"";L.push(`${k}: ${s.current} ${s.unit||""} | Media 5A ${s.avg_5y||"?"} | ${dev} | ${cls}`);}}
+                  // Physical BR
+                  try{const pbr=d.physical_br?.products||d.physical_br;if(pbr&&typeof pbr==="object"){const entries=Object.entries(pbr).filter(([,v])=>(v as any)?.price);if(entries.length){L.push("\n== FISICO BR ==");for(const [k,v] of entries){const p=v as any;L.push(`${p.label||k}: R$${p.price} ${p.unit||""} ${p.change_pct!=null?((p.change_pct>=0?"+":"")+p.change_pct+"% d/d"):(p.trend||"")} | ${p.source||""}`);};}}}catch{}
+                  // Physical intl
+                  try{const pi=d.physical_intl?.international||d.physical_intl;if(pi&&typeof pi==="object"){const entries=Object.entries(pi).filter(([,v])=>(v as any)?.price);if(entries.length){L.push("\n== FISICO INTERNACIONAL ==");for(const [k,v] of entries){const p=v as any;L.push(`${p.label||k}: ${p.price_unit?.includes("R$")?"R$":"US$"}${p.price} ${p.price_unit||""} ${p.trend||""}`);};}}}catch{}
+                  // EIA energy
+                  try{const eia=d.eia?.series||d.eia_data?.series;if(eia){L.push("\n== ENERGIA (EIA) ==");for(const k of ["wti_spot","natural_gas_spot","crude_stocks","ethanol_production","diesel_retail"]){const s=eia[k];if(!s?.latest_value)continue;const wow=s.wow_change_pct!=null?` (${s.wow_change_pct>0?"+":""}${s.wow_change_pct.toFixed(1)}% sem)`:"";L.push(`${s.name||k}: ${s.latest_value} ${s.unit||""}${wow} [${s.latest_period||""}]`);}}}catch{}
+                  // Seasonality
+                  try{const sn=d.seasonality;if(sn){const now=new Date();const curMonth=now.getMonth();const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];const items:string[]=[];for(const sym of ["ZS","ZC","ZL","GF"]){const s=sn[sym];if(!s?.series)continue;const years=Object.keys(s.series).filter((k:string)=>k.match(/^\d{4}$/));if(years.length<3)continue;let ups=0,total=0;for(const yr of years){const pts=s.series[yr]as any[];if(!pts||pts.length<2)continue;const mPts=pts.filter((p:any)=>{const d2=new Date(p.date);return d2.getMonth()===curMonth;});if(mPts.length>=2){total++;if(mPts[mPts.length-1].close>mPts[0].close)ups++;}}if(total>0)items.push(`${sym}: ${monthNames[curMonth]} positivo em ${((ups/total)*100).toFixed(0)}% dos ultimos ${total} anos`);}if(items.length){L.push("\n== SAZONALIDADE ==");items.forEach(i=>L.push(i));}}}catch{}
+                  // CONAB
+                  try{const cn=d.conab;if(cn?.boletim_info?.principais_culturas){const bi=cn.boletim_info;const cult=bi.principais_culturas;L.push(`\n== CONAB (${bi.safra||""} ${bi.levantamento||""}o lev.) ==`);if(bi.producao_total_mt)L.push(`Producao total BR: ${bi.producao_total_mt} mi t`);for(const [k,v] of Object.entries(cult)){const c=v as any;if(c?.producao_mt)L.push(`${k}: ${c.producao_mt} mi t | area ${c.area_mha||"?"} mi ha | prod. ${c.produtividade_kg_ha||"?"} kg/ha`);}}}catch{}
+                  // Futures curve
+                  try{const fc=d.futures_contracts?.commodities;if(fc){const items:string[]=[];for(const sym of ["ZS","ZC","ZL","ZW","CL","GF"]){const c=fc[sym];if(!c?.contracts?.length)continue;const cts=(c.contracts as any[]).slice(0,3);if(cts.length<2)continue;const f1=cts[0],f2=cts[1];const spread=((f2.close-f1.close)/f1.close*100).toFixed(2);const structure=f1.close>f2.close?"BACKWARDATION":"CONTANGO";const parts=cts.map((ct:any)=>`${ct.expiry_label||ct.contract}: ${ct.close}`).join(" | ");items.push(`${sym}: ${parts} [${structure} ${spread}%]`);}if(items.length){L.push("\n== CURVA FUTURA ==");items.forEach(i=>L.push(i));}}}catch{}
+                  // News top 5
+                  try{const nw=d.news?.news;if(nw?.length){L.push("\n== NOTICIAS ==");for(const n of nw.slice(0,5)){L.push(`- ${(n as any).title} [${(n as any).source}]`);}}}catch{}
+                  // Weather
+                  if(d.weather){L.push("\n== CLIMA ==");if(d.weather.enso)L.push(`ENSO: ${d.weather.enso.status} (ONI=${d.weather.enso.oni_value})`);if(d.weather.regions){for(const [rk,rv] of Object.entries(d.weather.regions)){const r=rv as any;const alerts=(r.alerts||[]).map((a:any)=>`${a.type} ${a.severity}`).join(", ");if(alerts)L.push(`${r.label||rk}: ${alerts}`);}}}
+                  // Grok
+                  for(const [key,label] of [["grok_sentiment","SENTIMENTO GROK"],["grok_news","NOTICIAS GROK"],["grok_macro","MACRO GROK"]]){const g=d[key];if(g&&!g.is_fallback&&g.content){L.push(`\n== ${label} ==`);L.push(g.content.slice(0,800));}}
+                  return L;
+                };
+                return (
+                  <div style={{display:"flex",gap:8,marginBottom:16}}>
+                    <button id="snap-public-btn" onClick={async()=>{
+                      const btn=document.getElementById("snap-public-btn");
+                      if(btn) btn.textContent="Carregando...";
+                      try{
+                        const res=await fetch("/api/snapshot/public",{headers:{"X-Snapshot-Token":"agrimacro2026"}});
+                        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const snap=await res.json();const d=snap.data||{};
+                        const lines:string[]=[];
+                        const ts=new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                        lines.push(`SNAPSHOT AGRIMACRO ${ts}`);lines.push("=".repeat(50));
+                        lines.push(...formatMarketData(d));
+                        await navigator.clipboard.writeText(lines.join("\n"));
+                        if(btn){btn.innerHTML="\u{1F4CB} Copiado!";setTimeout(()=>{btn.innerHTML="\u{1F4CB} Copiar Snapshot";},2000);}
+                      }catch(e:any){if(btn){btn.innerHTML="\u{1F4CB} Erro!";setTimeout(()=>{btn.innerHTML="\u{1F4CB} Copiar Snapshot";},2000);}}
+                    }} style={{padding:"8px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:"pointer",
+                      background:"rgba(124,58,237,.10)",color:"#7C3AED",border:"1px solid rgba(124,58,237,.25)",transition:"all .2s"}}>
+                      {"\u{1F4CB}"} Copiar Snapshot
+                    </button>
+                    <button id="snap-private-btn" onClick={async()=>{
+                      const btn=document.getElementById("snap-private-btn");
+                      if(btn) btn.textContent="Carregando...";
+                      try{
+                        const res=await fetch("/api/snapshot/private",{headers:{"X-Snapshot-Token":"agrimacro_private_2026_secure"}});
+                        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const snap=await res.json();const d=snap.data||{};
+                        const lines:string[]=[];
+                        const ts=new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                        lines.push(`SNAPSHOT AGRIMACRO (COM PORTFOLIO) ${ts}`);lines.push("=".repeat(50));
+                        const pm=d.portfolio_masked;
+                        if(pm){
+                          lines.push("\n== PORTFOLIO (mascarado) ==");
+                          if(pm.summary_ranges){for(const [k,v] of Object.entries(pm.summary_ranges)){lines.push(`${k}: ${v}`);}}
+                          if(pm.positions){lines.push(`Posicoes (${pm.positions.length}):`);for(const p of pm.positions as any[]){lines.push(`  ${p.symbol} ${p.local_symbol}: ${p.direction} ${p.quantity}x | MV: ${p.market_value_range}${p.pnl_pct!=null?" | PnL: "+p.pnl_pct+"%":""}`);}};
+                        }
+                        lines.push(...formatMarketData(d));
+                        await navigator.clipboard.writeText(lines.join("\n"));
+                        if(btn){btn.innerHTML="\u{1F512} Copiado!";setTimeout(()=>{btn.innerHTML="\u{1F512} Copiar com Portfolio";},2000);}
+                      }catch(e:any){if(btn){btn.innerHTML="\u{1F512} Erro!";setTimeout(()=>{btn.innerHTML="\u{1F512} Copiar com Portfolio";},2000);}}
+                    }} style={{padding:"8px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:"pointer",
+                      background:"rgba(91,33,182,.10)",color:"#5B21B6",border:"1px solid rgba(91,33,182,.25)",transition:"all .2s"}}>
+                      {"\u{1F512}"} Copiar com Portfólio
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Input area */}
+              {(!strategyResult || strategyRefineMode) && (
+                <div>
+                  <textarea
+                    value={strategyInput}
+                    onChange={e=>setStrategyInput(e.target.value)}
+                    placeholder={"Descreva sua tese, estratégia ou pergunta de mercado...\nEx: 'Estou short ZL via puts. ZS bearish com estoques altos. Como ficam minhas correlações com GF e CL dado cenário de estagflação e trégua Irã?'"}
+                    onKeyDown={e=>{if(e.key==="Enter"&&e.ctrlKey){e.preventDefault();handleAnalyze(strategyInput);}}}
+                    style={{
+                      width:"100%",minHeight:strategyRefineMode?60:100,background:"#0E1A24",color:"#E8ECF1",
+                      border:"1px solid rgba(220,180,50,.2)",borderRadius:8,padding:14,fontSize:12,
+                      lineHeight:1.7,resize:"vertical",fontFamily:"inherit",
+                      transition:"border-color .2s",
+                    }}
+                  />
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10}}>
+                    <div style={{fontSize:9,color:"#64748b"}}>Ctrl+Enter para enviar • Acessa todos os JSONs do pipeline</div>
+                    <div style={{display:"flex",gap:8}}>
+                      {strategyRefineMode && (
+                        <button onClick={()=>{setStrategyRefineMode(false);setStrategyInput("");}}
+                          style={{padding:"8px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:"pointer",
+                            background:"transparent",color:"#8899AA",border:"1px solid rgba(148,163,184,.2)"}}>
+                          Cancelar
+                        </button>
+                      )}
+                      <button onClick={()=>handleAnalyze(strategyInput)} disabled={strategyLoading||!strategyInput.trim()}
+                        style={{
+                          padding:"10px 28px",fontSize:11,fontWeight:700,borderRadius:6,
+                          cursor:strategyLoading||!strategyInput.trim()?"not-allowed":"pointer",
+                          background:strategyLoading?"#1E3044":!strategyInput.trim()?"#1E3044":"rgba(220,180,50,.12)",
+                          color:strategyLoading||!strategyInput.trim()?"#64748b":"#DCB432",
+                          border:"1px solid "+(strategyLoading||!strategyInput.trim()?"rgba(148,163,184,.15)":"#DCB43266"),
+                          transition:"all .2s",letterSpacing:0.5,
+                        }}>
+                        {strategyLoading?"Analisando...":strategyRefineMode?"Refinar Análise":"Analisar Estratégia"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading animation */}
+              {strategyLoading && (
+                <div style={{textAlign:"center",padding:"24px 0"}}>
+                  <div style={{fontSize:11,color:"#DCB432",marginBottom:8}}>Cruzando dados de mercado, COT, spreads, clima e macro...</div>
+                  <div style={{width:200,height:3,background:"rgba(148,163,184,.1)",borderRadius:2,margin:"0 auto",overflow:"hidden"}}>
+                    <div style={{width:"40%",height:"100%",background:"#DCB432",borderRadius:2,animation:"pulse 1.5s ease-in-out infinite"}}/>
+                  </div>
+                  <style>{`@keyframes pulse{0%,100%{transform:translateX(-100%);opacity:.5}50%{transform:translateX(150%);opacity:1}}`}</style>
+                </div>
+              )}
+
+              {/* Result */}
+              {strategyResult && !strategyLoading && (
+                <div style={{marginTop:strategyRefineMode?0:4}}>
+                  {/* Thesis reminder */}
+                  <div style={{background:"rgba(220,180,50,.06)",borderRadius:6,padding:"8px 12px",marginBottom:12,
+                    borderLeft:"3px solid #DCB432"}}>
+                    <div style={{fontSize:9,fontWeight:600,color:"#8899AA",letterSpacing:0.5,marginBottom:2}}>TESE ANALISADA</div>
+                    <div style={{fontSize:11,color:"#E8ECF1",lineHeight:1.5}}>{strategyResult.thesis}</div>
+                  </div>
+
+                  {/* Parsed response with collapsible sections */}
+                  {renderStrategyResponse(strategyResult.text)}
+
+                  {/* Action bar */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:14,paddingTop:12,
+                    borderTop:"1px solid rgba(148,163,184,.08)"}}>
+                    <div style={{fontSize:9,color:"#64748b"}}>{strategyResult.time}</div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>{setStrategyRefineMode(true);setStrategyInput("");}}
+                        style={{padding:"6px 14px",fontSize:9,fontWeight:600,borderRadius:4,cursor:"pointer",
+                          background:"rgba(220,180,50,.08)",color:"#DCB432",border:"1px solid #DCB43233"}}>
+                        Refinar análise
+                      </button>
+                      <button onClick={()=>{
+                        const blob = new Blob(["ESTRATÉGIA ASSISTIDA — AgriMacro\n"+strategyResult.time+"\n\nTESE: "+strategyResult.thesis+"\n\n"+strategyResult.text],{type:"text/plain"});
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href=url;a.download=`estrategia_${new Date().toISOString().slice(0,10)}.txt`;
+                        a.click();URL.revokeObjectURL(url);
+                      }} style={{padding:"6px 14px",fontSize:9,fontWeight:600,borderRadius:4,cursor:"pointer",
+                        background:"rgba(59,130,246,.08)",color:"#3b82f6",border:"1px solid rgba(59,130,246,.2)"}}>
+                        Exportar TXT
+                      </button>
+                      <button onClick={()=>{setStrategyResult(null);setStrategyRefineMode(false);setStrategyConvoHistory([]);setStrategyCollapsed({});}}
+                        style={{padding:"6px 14px",fontSize:9,fontWeight:600,borderRadius:4,cursor:"pointer",
+                          background:"rgba(220,60,60,.08)",color:"#DC3C3C",border:"1px solid rgba(220,60,60,.2)"}}>
+                        Nova análise
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* History */}
+              {strategyHistory.length>0 && !strategyResult && (
+                <div style={{marginTop:16}}>
+                  <div style={{fontSize:9,fontWeight:600,color:"#8899AA",letterSpacing:0.5,marginBottom:8}}>ANÁLISES RECENTES</div>
+                  {strategyHistory.map((h,i)=>(
+                    <div key={i} onClick={()=>{setStrategyResult(h);setStrategyCollapsed({});}}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",
+                        background:"#0E1A24",borderRadius:6,marginBottom:4,cursor:"pointer",
+                        border:"1px solid rgba(148,163,184,.06)",transition:"border-color .15s"}}
+                      onMouseEnter={e=>(e.currentTarget.style.borderColor="rgba(220,180,50,.2)")}
+                      onMouseLeave={e=>(e.currentTarget.style.borderColor="rgba(148,163,184,.06)")}>
+                      <div style={{fontSize:10,color:"#E8ECF1",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:12}}>
+                        {h.thesis.slice(0,80)}{h.thesis.length>80?"...":""}
+                      </div>
+                      <div style={{fontSize:8,color:"#64748b",whiteSpace:"nowrap"}}>{h.time}</div>
                     </div>
                   ))}
                 </div>
               )}
-              <div style={{background:C.panelAlt,borderRadius:6,border:`1px solid ${C.border}`,overflow:"hidden"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
-                  <thead>
-                    <tr style={{borderBottom:`1px solid ${C.border}`}}>
-                      {["Contrato","Tipo","Strike","Venc","Qtd","Side","Custo Med"].map(h=>(
-                        <th key={h} style={{padding:"8px 10px",textAlign:"left",color:C.textMuted,fontWeight:600,fontSize:9,textTransform:"uppercase"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {legs.map((leg:any,j:number)=>(
-                      <tr key={j} style={{borderBottom:`1px solid ${C.border}22`}}>
-                        <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace",fontWeight:500}}>{leg.local_symbol}</td>
-                        <td style={{padding:"6px 10px",color:leg.type==="PUT"?C.red:C.green,fontWeight:600}}>{leg.type}</td>
-                        <td style={{padding:"6px 10px",color:C.text,fontFamily:"monospace"}}>{leg.strike}</td>
-                        <td style={{padding:"6px 10px",color:C.textMuted}}>{leg.expiry}</td>
-                        <td style={{padding:"6px 10px",color:leg.position>0?C.green:C.red,fontWeight:600,fontFamily:"monospace"}}>{leg.position>0?"+":""}{leg.position}</td>
-                        <td style={{padding:"6px 10px",color:leg.side==="LONG"?C.green:C.red,fontWeight:600}}>{leg.side}</td>
-                        <td style={{padding:"6px 10px",color:C.textMuted,fontFamily:"monospace"}}>{"$"+leg.avg_cost.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
           );
-        })}
-
-        {Object.keys(equities).length > 0 && (
-          <div style={{marginTop:20}}>
-            <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:14}}>Equity & Renda Fixa</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-              {Object.entries({...equities,...fixedInc}).map(([k,v]:any)=>(
-                <div key={k} style={{padding:14,background:C.panelAlt,borderRadius:8,border:`1px solid ${C.border}`}}>
-                  <div style={{fontSize:12,fontWeight:700,color:C.amber}}>{v.name}</div>
-                  <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>{v.sec_type} | {v.position.toLocaleString()}{v.sec_type==="STK"?" shares":""}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.text,fontFamily:"monospace",marginTop:6}}>{"$"+v.notional_at_cost.toLocaleString("en-US",{minimumFractionDigits:0})}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {symbols.length===0 && Object.keys(equities).length===0 && <DataPlaceholder title="Sem posicoes" detail="Faca export do IBKR via Claude chat" />}
+        })()}
       </div>
-
-            {/* RIGHT: AI Chat */}
-      <div style={{width:400,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",background:C.panel}}>
-        <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,fontSize:13,fontWeight:700,color:C.amber}}>AI Trading Assistant</div>
-
-        {/* Suggestions */}
-        {portfolioMsgs.length===0 && (
-          <div style={{padding:16,display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{fontSize:10,color:C.textMuted,marginBottom:4}}>Sugestoes:</div>
-            {suggestions.map((s,i)=>(
-              <button key={i} onClick={()=>{setPortfolioInput(s);}} style={{padding:"8px 12px",fontSize:10,color:C.text,background:C.panelAlt,border:`1px solid ${C.border}`,borderRadius:6,cursor:"pointer",textAlign:"left"}}>{s}</button>
-            ))}
-          </div>
-        )}
-
-        {/* Messages */}
-        <div style={{flex:1,overflow:"auto",padding:12,display:"flex",flexDirection:"column",gap:10}}>
-          {portfolioMsgs.map((m,i)=>(
-            <div key={i} style={{padding:"10px 14px",borderRadius:8,fontSize:11,lineHeight:1.6,maxWidth:"90%",alignSelf:m.role==="user"?"flex-end":"flex-start",background:m.role==="user"?"rgba(59,130,246,.15)":C.panelAlt,color:C.text,border:`1px solid ${m.role==="user"?"rgba(59,130,246,.3)":C.border}`,whiteSpace:"pre-wrap"}}>
-              {m.content}
-            </div>
-          ))}
-          {portfolioLoading && <div style={{fontSize:10,color:C.textMuted,padding:8}}>Analisando...</div>}
-        </div>
-
-        {/* Input */}
-        <div style={{padding:12,borderTop:`1px solid ${C.border}`,display:"flex",gap:8}}>
-          <input value={portfolioInput} onChange={e=>setPortfolioInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendPortfolioChat()} placeholder="Pergunte sobre seu portfolio..." style={{flex:1,padding:"10px 14px",fontSize:11,background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,outline:"none"}} />
-          <button onClick={sendPortfolioChat} disabled={portfolioLoading} style={{padding:"10px 16px",fontSize:11,fontWeight:600,background:C.amber,color:"#000",border:"none",borderRadius:6,cursor:"pointer"}}>Enviar</button>
-        </div>
-      </div>
-    </div>
     );
   };
 
@@ -2864,11 +4861,13 @@ export default function Dashboard() {
       case "Sazonalidade": return renderSazonalidade();
       case "Stocks Watch": return renderStocksWatch();
       case "Energia": return renderEnergia();
-      case "Custo Produção": return renderCustoProducao();
+      case "Custo Produção": return <CostOfProductionTab />;
       case "Físico Intl": return renderFisicoIntl();
       case "Leitura do Dia": return renderLeituraDoDia();
       case "Portfolio": return renderPortfolio();
       case "Bilateral": return <BilateralPanel />;
+      case "Grain Ratios": return <GrainRatiosTab />;
+      case "Livestock Risk": return <LivestockRiskTab />;
       default: return null;
     }
   };
@@ -2884,15 +4883,30 @@ export default function Dashboard() {
         
         {/* Commodities list */}
         <div style={{flex:1,overflowY:"auto",padding:"10px 0"}}>
+          {/* INTEL - Central de Inteligência */}
+          <div onClick={()=>{setViewMode("intel");}} style={{
+            display:"flex",alignItems:"center",gap:10,padding:"10px 16px",cursor:"pointer",
+            background:viewMode==="intel"?"rgba(220,180,50,.12)":"transparent",
+            borderLeft:viewMode==="intel"?"3px solid #DCB432":"3px solid transparent",
+            transition:"all .15s",marginBottom:4,
+          }}>
+            <div style={{width:28,height:28,borderRadius:6,background:"rgba(220,180,50,.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{"\u{1F4CA}"}</div>
+            <div>
+              <div style={{fontSize:12,fontWeight:viewMode==="intel"?800:600,color:viewMode==="intel"?"#DCB432":C.textDim,letterSpacing:1}}>INTEL</div>
+              <div style={{fontSize:8,color:C.textMuted}}>Central de Inteligência</div>
+            </div>
+          </div>
+          <div style={{height:1,background:C.border,margin:"4px 16px 8px"}}/>
           {["Grãos","Softs","Pecuária","Energia","Metais","Macro"].map(grp=>(
             <div key={grp}>
               <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
               {COMMODITIES.filter(c=>c.group===grp).map(c=>{
                 const p=getPrice(c.sym);const ch=getChange(c.sym);const sel=c.sym===selected;
                 return (
-                  <div key={c.sym} onClick={()=>setSelected(c.sym)} style={{
+                  <div key={c.sym} onClick={()=>{setSelected(c.sym);setViewMode("commodity");}} style={{
                     display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 16px",cursor:"pointer",
-                    background:sel?"rgba(59,130,246,.12)":"transparent",borderLeft:sel?`3px solid ${C.blue}`:"3px solid transparent",
+                    background:sel&&viewMode==="commodity"?"rgba(0,200,120,.10)":sel?"rgba(59,130,246,.08)":"transparent",
+                    borderLeft:sel&&viewMode==="commodity"?`3px solid #00C878`:sel?`3px solid ${C.blue}`:"3px solid transparent",
                     transition:"all .15s",
                   }}>
                     <div>
@@ -2900,7 +4914,7 @@ export default function Dashboard() {
                       <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"—"}</div>
+                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"--"}</div>
                       {ch && <div style={{fontSize:9,fontFamily:"monospace",color:ch.pct>=0?C.green:C.red}}>{ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>}
                     </div>
                   </div>
@@ -2925,7 +4939,7 @@ export default function Dashboard() {
         {/* Header */}
         <div style={{padding:"14px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.panel}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{fontSize:16,fontWeight:700}}>{COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
+            <div style={{fontSize:16,fontWeight:700}}>{viewMode==="intel"?"Central de Inteligência":COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
             <Badge label="DADOS REAIS" color={C.green} />
             {pipelineOk && <Badge label="PIPELINE ONLINE" color={C.blue} />}
             <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:12}}>
@@ -2943,26 +4957,39 @@ export default function Dashboard() {
           <div style={{fontSize:11,color:C.textMuted}}>{lastDate}</div>
         </div>
 
-        {/* Tabs */}
-        <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.border}`,background:C.panel,overflowX:"auto"}}>
-          {TABS.map(t=>(
-            <button key={t} onClick={()=>setTab(t)} style={{
-              padding:"12px 18px",fontSize:11,fontWeight:tab===t?700:500,
-              color:tab===t?C.blue:C.textDim,background:"transparent",border:"none",cursor:"pointer",
-              borderBottom:tab===t?`2px solid ${C.blue}`:"2px solid transparent",whiteSpace:"nowrap",
-              transition:"all .15s"
-            }}>{t}</button>
-          ))}
+        {/* Global tabs -- visões macro/cross-asset */}
+        <div style={{display:"flex",gap:0,borderBottom:`1px solid #1E3044`,background:"#0E1A24",overflowX:"auto"}}>
+          {([
+            {label:"Sazonalidade",tab:"Sazonalidade"},{label:"Comparativo",tab:"Comparativo"},
+            {label:"Spreads",tab:"Spreads"},{label:"Físico Intl",tab:"Físico Intl"},
+            {label:"Estoques",tab:"Stocks Watch"},{label:"Energia",tab:"Energia"},
+            {label:"Custo Produção",tab:"Custo Produção"},
+            {label:"Grain Ratios",tab:"Grain Ratios",only:["ZC","ZS","ZW","KE","ZM","ZL"]},
+            {label:"Livestock Risk",tab:"Livestock Risk",only:["LE","GF","HE"]},
+            {label:"Bilateral",tab:"Bilateral"},
+            {label:"Portfolio",tab:"Portfolio"},{label:"Calendario",tab:"Leitura do Dia"},
+          ] as {label:string;tab:Tab;only?:string[]}[]).filter(t=>!t.only||t.only.includes(selected)).map(t=>{
+            const isActive = viewMode==="global" && tab===t.tab;
+            return (
+              <button key={t.label} onClick={()=>{setViewMode("global");setTab(t.tab);}} style={{
+                padding:"9px 16px",fontSize:10,fontWeight:isActive?700:500,
+                color:isActive?"#DCB432":"#8C96A5",background:isActive?"#142332":"transparent",
+                border:"none",cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",
+                borderBottom:isActive?"2px solid #DCB432":"2px solid transparent",
+              }}>{t.label}</button>
+            );
+          })}
         </div>
 
         {/* Content */}
         <div style={{flex:1,overflow:"auto",padding:24}}>
-          {loading ? <LoadingSpinner /> : renderTab()}
+          {loading ? <LoadingSpinner /> : viewMode==="intel" ? renderIntelPage() : viewMode==="commodity" ? renderCommodityView() : renderTab()}
         </div>
       </div>
     </div>
   );
 }
+
 
 
 

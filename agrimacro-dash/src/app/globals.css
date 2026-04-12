@@ -24,3 +24,12 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes stalePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

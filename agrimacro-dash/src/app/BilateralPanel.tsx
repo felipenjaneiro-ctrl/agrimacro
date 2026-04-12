@@ -180,7 +180,7 @@ function LCSCard({ data }: { data: any }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Landed Cost Spread Shanghai</div>
-          <div style={{ fontSize: 10, color: C.textMuted }}>US Gulf vs BR Santos → Shanghai</div>
+          <div style={{ fontSize: 10, color: C.textMuted }}>US Gulf vs BR Santos to Shanghai</div>
         </div>
         <SignalBadge
           text={isBR ? "BR COMPETITIVE" : "US COMPETITIVE"}
@@ -200,8 +200,8 @@ function LCSCard({ data }: { data: any }) {
       </div>
 
       {/* Route bars */}
-      <HBar label="🇺🇸 US Gulf → Shanghai" value={data.us_landed} maxValue={maxBar} color={C.gold} />
-      <HBar label="🇧🇷 BR Santos → Shanghai" value={data.br_landed} maxValue={maxBar} color={C.green} />
+      <HBar label="US US Gulf to Shanghai" value={data.us_landed} maxValue={maxBar} color={C.gold} />
+      <HBar label="BR BR Santos to Shanghai" value={data.br_landed} maxValue={maxBar} color={C.green} />
 
       {/* Component breakdown */}
       <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 10, color: C.textMuted }}>
@@ -250,7 +250,7 @@ function ERTCard({ data }: { data: any }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Export Race — Soybeans</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Export Race -- Soybeans</div>
           <div style={{ fontSize: 10, color: C.textMuted }}>BR vs US | MY {data.marketing_year}</div>
         </div>
         <SignalBadge
@@ -264,7 +264,7 @@ function ERTCard({ data }: { data: any }) {
         {/* US bar */}
         <div style={{ marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-            <span style={{ color: C.textMuted }}>🇺🇸 US</span>
+            <span style={{ color: C.textMuted }}>US US</span>
             <span style={{ color: C.text }}>{data.us_ytd_mmt.toFixed(1)} / {(data.us_pace_pct > 0 ? data.us_ytd_mmt / data.us_pace_pct * 100 : 50).toFixed(0)} MMT</span>
           </div>
           <div style={{ background: C.border, borderRadius: 4, height: 18, overflow: "hidden", position: "relative" }}>
@@ -279,7 +279,7 @@ function ERTCard({ data }: { data: any }) {
         {/* BR bar */}
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-            <span style={{ color: C.textMuted }}>🇧🇷 BR</span>
+            <span style={{ color: C.textMuted }}>BR BR</span>
             <span style={{ color: C.text }}>{data.br_ytd_mmt.toFixed(1)} / {(data.br_pace_pct > 0 ? data.br_ytd_mmt / data.br_pace_pct * 100 : 105).toFixed(0)} MMT</span>
           </div>
           <div style={{ background: C.border, borderRadius: 4, height: 18, overflow: "hidden", position: "relative" }}>
@@ -370,7 +370,7 @@ function BCICard({ data }: { data: any }) {
             color: data.bci_trend === "IMPROVING" ? C.green : data.bci_trend === "DETERIORATING" ? C.red : C.textMuted,
             fontWeight: 600 
           }}>
-            {data.bci_trend === "IMPROVING" ? "▲" : data.bci_trend === "DETERIORATING" ? "▼" : "●"} {data.bci_trend}
+            {data.bci_trend === "IMPROVING" ? "^" : data.bci_trend === "DETERIORATING" ? "v" : "*"} {data.bci_trend}
           </span>
         </div>
       )}
@@ -411,19 +411,31 @@ function BCICard({ data }: { data: any }) {
 export default function BilateralPanel() {
   const [data, setData] = useState<BilateralData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [revalidating, setRevalidating] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const fetchData = (isRefresh = false) => {
+    if (isRefresh) setRevalidating(true);
     fetch("/data/processed/bilateral_indicators.json")
       .then((r) => {
         if (!r.ok) throw new Error("bilateral_indicators.json not found");
         return r.json();
       })
-      .then((d) => { setData(d); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
-  }, []);
+      .then((d) => {
+        if (d && typeof d === "object" && Object.keys(d).length > 0) {
+          setData(d);
+          setError("");
+        } else if (!data) {
+          setError("JSON vazio retornado");
+        }
+      })
+      .catch((e) => { if (!data) setError(e.message); })
+      .finally(() => { setLoading(false); setRevalidating(false); });
+  };
 
-  if (loading) {
+  useEffect(() => { fetchData(); }, []);
+
+  if (loading && !data) {
     return (
       <div style={{ padding: 20, color: C.textMuted, fontSize: 12 }}>
         Loading bilateral indicators...
@@ -431,7 +443,7 @@ export default function BilateralPanel() {
     );
   }
 
-  if (error || !data) {
+  if (!data) {
     return (
       <div style={{ padding: 20, color: C.textMuted, fontSize: 12 }}>
         Bilateral indicators not available. Run <code>python generate_bilateral.py</code> first.
@@ -440,7 +452,15 @@ export default function BilateralPanel() {
   }
 
   return (
-    <div>
+    <div style={{ opacity: revalidating ? 0.85 : 1, transition: "opacity .3s" }}>
+      {revalidating && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, padding: "4px 10px",
+          background: "rgba(220,180,50,.08)", border: "1px solid rgba(220,180,50,.25)", borderRadius: 6, width: "fit-content" }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", border: "2px solid #DCB432", borderTopColor: "transparent",
+            animation: "spin .8s linear infinite" }} />
+          <span style={{ fontSize: 10, color: "#DCB432", fontWeight: 600 }}>Atualizando...</span>
+        </div>
+      )}
       {/* Header */}
       <div style={{
         display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -451,11 +471,11 @@ export default function BilateralPanel() {
             Bilateral Intelligence
           </h2>
           <div style={{ fontSize: 10, color: C.textMuted }}>
-            Proprietary indicators — US vs Brazil competitiveness
+            Proprietary indicators -- US vs Brazil competitiveness
           </div>
         </div>
         <div style={{ fontSize: 10, color: C.textMuted }}>
-          {data.date} • {new Date(data.generated_at).toLocaleTimeString()}
+          {data.date} * {new Date(data.generated_at).toLocaleTimeString()}
         </div>
       </div>
 

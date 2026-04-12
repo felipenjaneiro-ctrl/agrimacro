@@ -4,11 +4,21 @@ Collects USDA cash prices for US markets.
 International markets marked as unavailable (no API).
 """
 import json
+import os
 import requests
 from datetime import datetime
 from pathlib import Path
 
-USDA_KEY = "BA43C01C-A885-3616-9774-EFF03A68F06A"
+# Load .env
+_env_file = Path(__file__).parent.parent / ".env"
+if _env_file.exists():
+    for _line in _env_file.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
+USDA_KEY = os.environ.get("USDA_NASS_KEY", "")
 USDA_BASE = "https://quickstats.nass.usda.gov/api/api_GET/"
 
 CASH_MAP = {
@@ -57,6 +67,9 @@ def fetch_cash_prices(commodity, cfg):
 
 
 def collect_physical(price_file=None):
+    if not USDA_KEY:
+        print("  ERROR: USDA_NASS_KEY not found in .env")
+        return {"timestamp": datetime.now().isoformat(), "us_cash": {}, "international": {}, "is_fallback": True, "error": "USDA_NASS_KEY not configured"}
     result = {"timestamp": datetime.now().isoformat(), "us_cash": {}, "international": {}}
 
     futures_prices = {}

@@ -1,10 +1,10 @@
-# ═══════════════════════════════════════════════════════════════
-# AgriMacro AA+QA Engine — SYMBOLS.YML
-# Registro central de todos os símbolos do sistema
-# Nenhum dado entra no relatório se não estiver aqui
-# ═══════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# AgriMacro AA+QA Engine â€” SYMBOLS.YML
+# Registro central de todos os sÃ­mbolos do sistema
+# Nenhum dado entra no relatÃ³rio se nÃ£o estiver aqui
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-# ── CHICAGO (CME/CBOT/ICE via yfinance) ──────────────────────
+# â”€â”€ CHICAGO (CME/CBOT/ICE via yfinance) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 chicago:
 
   ZS:
@@ -58,7 +58,7 @@ chicago:
     category: grains
 
   ZL:
-    display_name: "Óleo de Soja"
+    display_name: "Ã“leo de Soja"
     exchange: CBOT
     contract: continuous
     unit: "c/lb"
@@ -68,7 +68,7 @@ chicago:
     category: grains
 
   KC:
-    display_name: "Café Arábica"
+    display_name: "CafÃ© ArÃ¡bica"
     exchange: ICE
     contract: continuous
     unit: "c/lb"
@@ -78,7 +78,7 @@ chicago:
     category: softs
 
   SB:
-    display_name: "Açúcar #11"
+    display_name: "AÃ§Ãºcar #11"
     exchange: ICE
     contract: continuous
     unit: "c/lb"
@@ -88,7 +88,7 @@ chicago:
     category: softs
 
   CT:
-    display_name: "Algodão"
+    display_name: "AlgodÃ£o"
     exchange: ICE
     contract: continuous
     unit: "c/lb"
@@ -124,7 +124,7 @@ chicago:
     unit: "c/lb"
     conversion: { lb_kg: 0.4536, arroba_kg: 15 }
     source: yfinance
-    range: [80, 220]
+    range: [150, 320]
     category: livestock
 
   GF:
@@ -134,7 +134,7 @@ chicago:
     unit: "c/lb"
     conversion: { lb_kg: 0.4536 }
     source: yfinance
-    range: [100, 320]
+    range: [150, 380]
     category: livestock
 
   HE:
@@ -144,11 +144,11 @@ chicago:
     unit: "c/lb"
     conversion: { lb_kg: 0.4536 }
     source: yfinance
-    range: [30, 130]
+    range: [50, 160]
     category: livestock
 
   CL:
-    display_name: "Petróleo WTI"
+    display_name: "PetrÃ³leo WTI"
     exchange: NYMEX
     contract: continuous
     unit: "USD/bbl"
@@ -158,7 +158,7 @@ chicago:
     category: energy
 
   NG:
-    display_name: "Gás Natural"
+    display_name: "GÃ¡s Natural"
     exchange: NYMEX
     contract: continuous
     unit: "USD/MMBtu"
@@ -194,7 +194,7 @@ chicago:
     unit: "USD/troy_oz"
     conversion: { troy_oz_g: 31.1035 }
     source: yfinance
-    range: [1000, 4000]
+    range: [1500, 6000]
     category: metals
 
   SI:
@@ -204,7 +204,7 @@ chicago:
     unit: "USD/troy_oz"
     conversion: { troy_oz_g: 31.1035 }
     source: yfinance
-    range: [10, 60]
+    range: [20, 120]
     category: metals
 
   DX:
@@ -217,11 +217,11 @@ chicago:
     range: [80, 130]
     category: macro
 
-# ── BRASIL (CEPEA/ESALQ via Notícias Agrícolas) ─────────────
+# â”€â”€ BRASIL (CEPEA/ESALQ via NotÃ­cias AgrÃ­colas) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 brasil:
 
   ZS_BR:
-    display_name: "Soja Brasil (Paranaguá)"
+    display_name: "Soja Brasil (ParanaguÃ¡)"
     exchange: CEPEA
     contract: spot
     unit: "R$/sc60kg"
@@ -241,7 +241,7 @@ brasil:
     category: grains
 
   KC_BR:
-    display_name: "Café Brasil (Arábica)"
+    display_name: "CafÃ© Brasil (ArÃ¡bica)"
     exchange: CEPEA
     contract: spot
     unit: "R$/sc60kg"
@@ -261,7 +261,7 @@ brasil:
     category: livestock
 
   CT_BR:
-    display_name: "Algodão Brasil"
+    display_name: "AlgodÃ£o Brasil"
     exchange: CEPEA
     contract: spot
     unit: "R$/@"
@@ -271,7 +271,7 @@ brasil:
     category: softs
 
   ZW_BR:
-    display_name: "Trigo Brasil (Paraná)"
+    display_name: "Trigo Brasil (ParanÃ¡)"
     exchange: CEPEA
     contract: spot
     unit: "R$/sc60kg"
@@ -281,7 +281,7 @@ brasil:
     category: grains
 
   SB_BR:
-    display_name: "Açúcar Cristal Brasil"
+    display_name: "AÃ§Ãºcar Cristal Brasil"
     exchange: CEPEA
     contract: spot
     unit: "R$/sc50kg"
@@ -310,7 +310,7 @@ brasil:
     range: [1.5, 6.0]
     category: energy
 
-# ── EIA (Energy Information Administration) ──────────────────
+# â”€â”€ EIA (Energy Information Administration) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 eia:
 
   wti_spot:
@@ -349,7 +349,7 @@ eia:
     category: energy
 
   crude_stocks:
-    display_name: "Estoques Petróleo Bruto"
+    display_name: "Estoques PetrÃ³leo Bruto"
     unit: "thousand_bbl"
     source: eia_api
     range: [300000, 600000]
@@ -370,21 +370,21 @@ eia:
     category: energy_stocks
 
   crude_production:
-    display_name: "Produção Petróleo"
+    display_name: "ProduÃ§Ã£o PetrÃ³leo"
     unit: "thousand_bbl_day"
     source: eia_api
     range: [8000, 15000]
     category: energy
 
   refinery_utilization:
-    display_name: "Utilização Refinarias"
+    display_name: "UtilizaÃ§Ã£o Refinarias"
     unit: "percent"
     source: eia_api
     range: [60, 100]
     category: energy
 
   ethanol_production:
-    display_name: "Produção Etanol EUA"
+    display_name: "ProduÃ§Ã£o Etanol EUA"
     unit: "thousand_bbl_day"
     source: eia_api
     range: [500, 1200]
@@ -397,14 +397,14 @@ eia:
     range: [15000, 30000]
     category: energy_stocks
 
-# ── SPREADS (calculados) ─────────────────────────────────────
+# â”€â”€ SPREADS (calculados) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 spreads:
 
   soy_crush:
     display_name: "Esmagamento da Soja"
-    formula: "(ZM×0.022) + (ZL×0.11) - ZS"
+    formula: "(ZMÃ—0.022) + (ZLÃ—0.11) - ZS"
     unit: "c/bu"
-    range: [-100, 400]
+    range: [-2000, 1000]
     components: [ZM, ZL, ZS]
 
   ke_zw:
@@ -415,7 +415,7 @@ spreads:
     components: [KE, ZW]
 
   zl_cl:
-    display_name: "Óleo Soja / Petróleo"
+    display_name: "Ã“leo Soja / PetrÃ³leo"
     formula: "ZL / CL"
     unit: "ratio"
     range: [0.1, 3.0]
@@ -425,7 +425,7 @@ spreads:
     display_name: "Margem do Confinamento"
     formula: "LE - GF - ZC"
     unit: "USD"
-    range: [-500, 200]
+    range: [-800, 400]
     components: [LE, GF, ZC]
 
   zc_zm:
@@ -436,7 +436,7 @@ spreads:
     components: [ZC, ZM]
 
   zc_zs:
-    display_name: "Relação Milho/Soja"
+    display_name: "RelaÃ§Ã£o Milho/Soja"
     formula: "ZC / ZS"
     unit: "ratio"
     range: [0.15, 0.60]
@@ -451,23 +451,23 @@ spreads:
 
   crack:
     display_name: "Crack Spread"
-    formula: "(RB×42) - CL"
+    formula: "(RBÃ—42) - CL"
     unit: "USD/bbl"
     range: [-10, 80]
     components: [RB, CL]
 
   gc_cl:
-    display_name: "Ouro / Petróleo"
+    display_name: "Ouro / PetrÃ³leo"
     formula: "GC / CL"
     unit: "ratio"
     range: [5, 100]
     components: [GC, CL]
 
-# ── MACRO BRASIL ─────────────────────────────────────────────
+# â”€â”€ MACRO BRASIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 macro_br:
 
   BRL_USD:
-    display_name: "Dólar/Real"
+    display_name: "DÃ³lar/Real"
     unit: "BRL"
     source: bcb
     range: [3.0, 8.0]
@@ -487,7 +487,7 @@ macro_br:
     range: [-2.0, 20.0]
     category: inflation
 
-# ── LINGUAGEM (auditoria semântica) ─────────────────────────
+# â”€â”€ LINGUAGEM (auditoria semÃ¢ntica) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 language_audit:
   extreme_words:
     - { word: "disparou", min_change_pct: 2.0 }

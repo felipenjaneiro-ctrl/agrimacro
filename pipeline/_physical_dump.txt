@@ -1,0 +1,51 @@
+def pg_physical(pdf, phys, img_phbr):
+    dbg(pdf); hdr(pdf,"Mercado Fisico â€” Preco a Vista no Brasil e no Mundo",
+                  "Precos reais de venda (CEPEA/ESALQ + origens internacionais)",
+                  "Compare o preco fisico com o futuro para achar oportunidades. Diferenca grande = base forte.")
+    intl=phys.get("international",{})
+    if img_phbr: pdf.drawImage(img_phbr,5,PAGE_H-260,width=PAGE_W-10,height=195,preserveAspectRatio=True,mask="auto")
+    y=PAGE_H-275
+    pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",9)
+    pdf.drawString(M,y,"PRECOS DISPONIVEIS"); y-=14
+    cols4=[M,M+140,M+230,M+310,M+410,M+530]
+    hdrs5=["Origem","Preco","Unidade","Variacao","Fonte","Data"]
+    pdf.setFont("Helvetica-Bold",7); pdf.setFillColor(HexColor(TEXT_MUT))
+    for j,h in enumerate(hdrs5): pdf.drawString(cols4[j],y,h)
+    y-=3; pdf.setStrokeColor(HexColor(BORDER)); pdf.setLineWidth(0.3); pdf.line(M,y,PAGE_W-M,y); y-=10
+    for key,d in intl.items():
+        if y<30: break
+        price=d.get("price","")
+        # SKIP entries without real data
+        if not price or str(price) == "None" or str(price) == "":
+            continue
+        label=d.get("label","").encode("ascii","ignore").decode()
+        if not label: label=key
+        unit=d.get("price_unit","")
+        trend=d.get("trend",""); src=d.get("source",""); per=d.get("period","")
+        # Skip if source says "Sem API" or trend is empty dash
+        if "Sem API" in str(trend) or "Sem API" in str(src):
+            continue
+        # Skip international entries without variation data (confuse more than inform)
+        is_br = "_BR" in key
+        if not is_br and (not trend or str(trend).strip() in ("","â€”","N/A")):
+            continue
+        is_br = "_BR" in key
+        origin_badge(pdf, cols4[0], y, is_brazil=is_br)
+        sym_base = key.replace("_BR","").replace("_US","").replace("_AR","")
+        nm_pt = NM_PROD.get(sym_base, label[:20])
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica",7.5)
+        pdf.drawString(cols4[0]+50,y,nm_pt[:18])
+        pdf.setFillColor(HexColor(TEXT)); pdf.setFont("Helvetica-Bold",7.5)
+        pdf.drawString(cols4[1],y,str(price))
+        pdf.setFont("Helvetica",6.5); pdf.setFillColor(HexColor(TEXT_DIM))
+        pdf.drawString(cols4[2],y,str(unit)[:15])
+        tc=GREEN if str(trend).startswith("+") else (RED if str(trend).startswith("-") else TEXT_MUT)
+        pdf.setFillColor(HexColor(tc)); pdf.setFont("Helvetica-Bold",7)
+        pdf.drawString(cols4[3],y,str(trend))
+        pdf.setFillColor(HexColor(TEXT_DIM)); pdf.setFont("Helvetica",6.5)
+        pdf.drawString(cols4[4],y,str(src)[:30])
+        pdf.drawString(cols4[5],y,str(per)[:12])
+        y-=10
+
+
+# â”€â”€ PAGE 15: CLIMA â”€â”€
