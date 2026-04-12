@@ -146,10 +146,19 @@ interface COTHistoryEntry {
   managed_money_long?:number|null; managed_money_short?:number|null; managed_money_net?:number|null;
   mm_long_pct?:number|null; mm_short_pct?:number|null;
 }
+interface COTDeltaSignal {
+  type:string; label:string; direction:string; probability:number;
+  color:string; icon:string; description:string;
+}
+interface COTDeltaAnalysis {
+  signals:COTDeltaSignal[]; dominant_direction:string; reversal_score:number;
+  cot_index:number; neg_streak:number; pos_streak:number;
+  current_delta:number; prev_delta:number; oi_trend_pct:number; deltas_8w:number[];
+}
 interface COTCommodity {
   ticker:string; name:string;
   legacy?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number};
-  disaggregated?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number};
+  disaggregated?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number;delta_analysis?:COTDeltaAnalysis};
 }
 interface COTData {
   generated_at:string; source:string; year:number;
@@ -1285,6 +1294,8 @@ export default function Dashboard() {
   const [strategyRefineMode, setStrategyRefineMode] = useState(false);
   const [strategyConvoHistory, setStrategyConvoHistory] = useState<{role:string;content:string}[]>([]);
   const [paritiesData, setParitiesData] = useState<any>(null);
+  const [cotDeltaView, setCotDeltaView] = useState<'overview'|'detail'>('overview');
+  const [selectedCotSym, setSelectedCotSym] = useState<string>('');
 
   // Load data
   useEffect(()=>{
@@ -1458,6 +1469,242 @@ export default function Dashboard() {
                 </>;
               })()}
             </div>
+            {/* COT DELTA ANALYSIS */}
+            {(()=>{
+              const da = cotDisagg?.delta_analysis;
+              if (!da) return null;
+              const allComms = cot?.commodities || {};
+
+              const GaugeChart = ({ value, color }: { value: number; color: string }) => {
+                const angle = (value / 100) * 180 - 90;
+                const rad = (angle * Math.PI) / 180;
+                const cx = 100, cy = 100, r = 70;
+                const x = cx + r * Math.cos(rad);
+                const y = cy + r * Math.sin(rad);
+                return (
+                  <svg viewBox="0 0 200 120" style={{width:'100%',maxWidth:200}}>
+                    <path d="M 30 100 A 70 70 0 0 1 170 100"
+                      fill="none" stroke="#1e3a4a" strokeWidth={14}
+                      strokeLinecap="round"/>
+                    <path d={`M 30 100 A 70 70 0 ${value > 50 ? 1 : 0} 1 ${x} ${y}`}
+                      fill="none" stroke={color} strokeWidth={14}
+                      strokeLinecap="round"/>
+                    <text x="100" y="95" textAnchor="middle"
+                      fontSize="22" fontWeight="bold" fill={color}
+                      fontFamily="monospace">
+                      {value}%
+                    </text>
+                    <text x="100" y="112" textAnchor="middle"
+                      fontSize="9" fill="#64748b">
+                      PROB. REVERS\u00c3O
+                    </text>
+                  </svg>
+                );
+              };
+
+              const DeltaBars = ({ deltas }: { deltas: number[] }) => {
+                const maxVal = Math.max(...deltas.map(Math.abs), 1000);
+                const h = 80, w = 240, pad = 8;
+                const barW = (w - pad*2) / deltas.length - 3;
+                const midY = h / 2;
+                return (
+                  <svg viewBox={`0 0 ${w} ${h}`} style={{width:'100%',maxWidth:w}}>
+                    <line x1={pad} y1={midY} x2={w-pad} y2={midY}
+                      stroke="#1e3a4a" strokeWidth={1}
+                      strokeDasharray="3,3"/>
+                    {deltas.map((d, i) => {
+                      const barH = Math.abs(d) / maxVal * (midY - 4);
+                      const xPos = pad + i * (barW + 3);
+                      const isPos = d >= 0;
+                      const yPos = isPos ? midY - barH : midY;
+                      const barColor = isPos ? '#00C878' : '#DC3C3C';
+                      return (
+                        <g key={i}>
+                          <rect x={xPos} y={yPos} width={barW} height={Math.max(barH,1)}
+                            fill={barColor} opacity={0.8} rx={1}/>
+                          <text x={xPos + barW/2}
+                                y={isPos ? yPos - 2 : yPos + barH + 8}
+                                textAnchor="middle" fontSize={6}
+                                fill={barColor} fontFamily="monospace">
+                            {d > 0 ? '+' : ''}{(d/1000).toFixed(0)}k
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                );
+              };
+
+              // Build overview grid data
+              const overviewSyms = Object.entries(allComms)
+                .filter(([,v]) => v.disaggregated?.delta_analysis)
+                .map(([sym, v]) => ({sym, name: v.name, da: v.disaggregated!.delta_analysis!}));
+
+              const detailSym = selectedCotSym || selected;
+              const detailData = allComms[detailSym]?.disaggregated?.delta_analysis;
+
+              return (
+                <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                    <div style={{fontSize:11,fontWeight:700,color:C.textDim}}>
+                      COT DELTA ANALYSIS \u2014 SINAIS DE REVERS\u00c3O
+                    </div>
+                    <div style={{display:'flex',gap:4}}>
+                      {(['overview','detail'] as const).map(v => (
+                        <button key={v} onClick={()=>setCotDeltaView(v)} style={{
+                          padding:'3px 10px',fontSize:9,fontWeight:cotDeltaView===v?700:500,
+                          color:cotDeltaView===v?'#DCB432':'#64748b',
+                          background:cotDeltaView===v?'rgba(220,180,50,.12)':'transparent',
+                          border:`1px solid ${cotDeltaView===v?'#DCB432':'#1e3a4a'}`,
+                          borderRadius:4,cursor:'pointer'
+                        }}>{v === 'overview' ? 'Overview' : 'Detalhe'}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {cotDeltaView === 'overview' ? (
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:10}}>
+                      {overviewSyms.map(({sym,name,da:d}) => {
+                        const sig = d.signals[0];
+                        const dirColor = d.dominant_direction==='BEARISH'?'#DC3C3C':d.dominant_direction==='BULLISH'?'#00C878':'#64748b';
+                        const deltaMax = 50000;
+                        const deltaPct = Math.min(Math.abs(d.current_delta)/deltaMax*100, 100);
+                        const streak = d.neg_streak || d.pos_streak;
+                        return (
+                          <div key={sym} onClick={()=>{setSelectedCotSym(sym);setCotDeltaView('detail');}}
+                            style={{
+                              background:C.panelAlt,border:`1px solid #1e3a4a`,
+                              borderLeft:`3px solid ${dirColor}`,borderRadius:8,
+                              padding:12,cursor:'pointer',transition:'all .15s',
+                            }}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                              <div>
+                                <span style={{fontSize:12,fontWeight:700,color:C.text}}>{sym}</span>
+                                <span style={{fontSize:9,color:C.textMuted,marginLeft:6}}>{name}</span>
+                              </div>
+                              <div style={{fontSize:9,fontWeight:700,color:dirColor}}>
+                                {sig.icon} {d.dominant_direction}
+                              </div>
+                            </div>
+                            <div style={{height:1,background:'#1e3a4a',marginBottom:8}}/>
+                            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                              <span style={{fontSize:10,color:C.textMuted,width:50}}>Delta:</span>
+                              <span style={{fontSize:12,fontWeight:700,fontFamily:'monospace',color:d.current_delta>=0?'#00C878':'#DC3C3C'}}>
+                                {d.current_delta>=0?'+':''}{(d.current_delta/1000).toFixed(1)}K
+                              </span>
+                              <div style={{flex:1,height:6,background:'#1e3a4a',borderRadius:3,position:'relative',overflow:'hidden'}}>
+                                <div style={{
+                                  position:'absolute',
+                                  [d.current_delta>=0?'left':'right']:'50%',
+                                  top:0,height:'100%',borderRadius:3,
+                                  width:`${deltaPct/2}%`,
+                                  background:d.current_delta>=0?'#00C878':'#DC3C3C',opacity:0.8
+                                }}/>
+                              </div>
+                              <span style={{fontSize:9,fontFamily:'monospace',color:dirColor}}>
+                                {d.reversal_score}%
+                              </span>
+                            </div>
+                            {streak > 0 && (
+                              <div style={{fontSize:9,color:C.textMuted,marginBottom:4}}>
+                                {d.neg_streak > 0 ? `Saindo h\u00e1 ${streak} semanas` : `Entrando h\u00e1 ${streak} semanas`}
+                              </div>
+                            )}
+                            <div style={{fontSize:9,fontWeight:600,color:sig.color}}>
+                              {sig.label}
+                            </div>
+                            <div style={{fontSize:8,color:'#64748b',marginTop:2}}>{sig.description}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* Detail view */
+                    detailData ? (
+                      <div style={{background:C.panelAlt,border:`1px solid #1e3a4a`,borderRadius:8,padding:16}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                          <button onClick={()=>setCotDeltaView('overview')} style={{
+                            background:'transparent',border:'1px solid #1e3a4a',borderRadius:4,
+                            color:'#64748b',fontSize:9,padding:'2px 8px',cursor:'pointer'
+                          }}>\u2190 Voltar</button>
+                          <span style={{fontSize:14,fontWeight:700,color:C.text}}>{detailSym}</span>
+                          <span style={{fontSize:10,color:C.textMuted}}>{allComms[detailSym]?.name}</span>
+                          <span style={{fontSize:10,fontWeight:700,marginLeft:'auto',
+                            color:detailData.dominant_direction==='BEARISH'?'#DC3C3C':detailData.dominant_direction==='BULLISH'?'#00C878':'#64748b'
+                          }}>
+                            {detailData.dominant_direction}
+                          </span>
+                        </div>
+
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                          {/* Left: Delta bars + metrics */}
+                          <div>
+                            <div style={{fontSize:9,fontWeight:700,color:C.textMuted,marginBottom:6}}>
+                              DELTA SEMANAL (\u00daltimas {detailData.deltas_8w.length + 1} semanas)
+                            </div>
+                            <DeltaBars deltas={detailData.deltas_8w} />
+                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:12}}>
+                              <div style={{padding:8,background:'#0E1A24',borderRadius:4}}>
+                                <div style={{fontSize:7,color:'#64748b'}}>COT INDEX</div>
+                                <div style={{fontSize:14,fontWeight:700,fontFamily:'monospace',
+                                  color:detailData.cot_index>80||detailData.cot_index<20?'#DC3C3C':'#00C878'
+                                }}>{detailData.cot_index.toFixed(0)}</div>
+                              </div>
+                              <div style={{padding:8,background:'#0E1A24',borderRadius:4}}>
+                                <div style={{fontSize:7,color:'#64748b'}}>OI TREND</div>
+                                <div style={{fontSize:14,fontWeight:700,fontFamily:'monospace',
+                                  color:detailData.oi_trend_pct<0?'#DC3C3C':'#00C878'
+                                }}>{detailData.oi_trend_pct>0?'+':''}{detailData.oi_trend_pct}%</div>
+                              </div>
+                              <div style={{padding:8,background:'#0E1A24',borderRadius:4}}>
+                                <div style={{fontSize:7,color:'#64748b'}}>STREAK</div>
+                                <div style={{fontSize:14,fontWeight:700,fontFamily:'monospace',
+                                  color:detailData.neg_streak>0?'#DC3C3C':'#00C878'
+                                }}>{detailData.neg_streak||detailData.pos_streak}w</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right: Gauge + signals */}
+                          <div>
+                            <div style={{display:'flex',justifyContent:'center',marginBottom:8}}>
+                              <GaugeChart
+                                value={detailData.reversal_score}
+                                color={detailData.dominant_direction==='BEARISH'?'#DC3C3C':detailData.dominant_direction==='BULLISH'?'#00C878':'#64748b'}
+                              />
+                            </div>
+                            <div style={{fontSize:9,fontWeight:700,color:C.textMuted,marginBottom:6}}>
+                              SINAIS ATIVOS
+                            </div>
+                            {detailData.signals.map((sig,i) => (
+                              <div key={i} style={{
+                                padding:8,background:'#0E1A24',borderRadius:4,
+                                borderLeft:`3px solid ${sig.color}`,marginBottom:6
+                              }}>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                  <span style={{fontSize:10,fontWeight:700,color:sig.color}}>
+                                    {sig.icon} {sig.label}
+                                  </span>
+                                  <span style={{fontSize:10,fontFamily:'monospace',color:sig.color}}>
+                                    {sig.probability}%
+                                  </span>
+                                </div>
+                                <div style={{fontSize:8,color:'#64748b',marginTop:3}}>{sig.description}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{color:'#64748b',fontSize:11,fontStyle:'italic'}}>
+                        Selecione uma commodity no overview para ver detalhes.
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })()}
+
             <div style={{marginTop:6,fontSize:8,color:C.textMuted}}>
               CFTC Commitments of Traders | {cotLegacy?.weeks||0}w history | Last: {cotLegacy?.latest?.date||"--"}
             </div>
@@ -4005,6 +4252,23 @@ export default function Dashboard() {
         if(imeaData.safra) imLines.push(`Safra: ${imeaData.safra}`);
         if(imeaData.summary) imLines.push(imeaData.summary);
         if(imLines.length) { sections.push("\n=== CUSTO DE PRODUÇÃO / MARGEM PRODUTOR (IMEA) ==="); sections.push(imLines.join("\n")); }
+      }
+
+      // COT Delta — Sinais de reversão
+      if (cot?.commodities) {
+        const cotSyms = ['ZC','ZS','ZW','ZL','ZM','CL','GF','LE','CC','SB','NG','KC','CT'];
+        const deltaLines: string[] = [];
+        cotSyms.forEach(sym => {
+          const da = cot.commodities[sym]?.disaggregated?.delta_analysis;
+          if (!da) return;
+          const sig = da.signals?.[0];
+          if (!sig || sig.type === 'NEUTRAL') return;
+          deltaLines.push(`${sym}: ${sig.icon} ${sig.label} (${da.dominant_direction}, ${da.reversal_score}% prob) | Delta: ${da.current_delta > 0 ? '+' : ''}${da.current_delta?.toLocaleString()} | ${da.neg_streak || da.pos_streak}sem streak`);
+        });
+        if (deltaLines.length) {
+          sections.push("\n=== COT DELTA \u2014 SINAIS DE REVERS\u00c3O ===");
+          deltaLines.forEach(l => sections.push(l));
+        }
       }
 
       // Paridades e correlações

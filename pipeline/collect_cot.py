@@ -93,6 +93,185 @@ def find_cols(df, patterns):
         if cols: return cols[0]
     return None
 
+def calc_delta_signals(history, window=156):
+    """
+    Calcula sinais de revers\u00e3o baseados em padr\u00f5es COT.
+    history: lista de dicts com date, managed_money_net, open_interest
+    Retorna dict com sinais e probabilidades.
+    """
+    if len(history) < 10:
+        return {}
+
+    recent = history[-8:]
+
+    # Deltas das \u00faltimas 8 semanas
+    deltas = []
+    for i in range(1, len(recent)):
+        prev_mm = recent[i-1].get('managed_money_net') or 0
+        curr_mm = recent[i].get('managed_money_net') or 0
+        deltas.append(curr_mm - prev_mm)
+
+    if not deltas:
+        return {}
+
+    current_delta = deltas[-1]
+    prev_delta = deltas[-2] if len(deltas) >= 2 else 0
+
+    # COT Index (min-max normalization over full window)
+    mm_series = [h.get('managed_money_net') or 0 for h in history[-window:]]
+    mm_min = min(mm_series)
+    mm_max = max(mm_series)
+    mm_last = mm_series[-1]
+    cot_idx = round((mm_last - mm_min) / (mm_max - mm_min) * 100, 1) if mm_max > mm_min else 50.0
+
+    mm_net = recent[-1].get('managed_money_net') or 0
+    oi = recent[-1].get('open_interest') or 0
+
+    # OI trend
+    oi_series = [r.get('open_interest') or 0 for r in recent]
+    oi_trend = (oi_series[-1] - oi_series[-4]) / oi_series[-4] * 100 \
+               if len(oi_series) >= 4 and oi_series[-4] > 0 else 0
+
+    # Contar semanas consecutivas com delta negativo/positivo
+    neg_streak = 0
+    pos_streak = 0
+    for d in reversed(deltas):
+        if d < 0:
+            if pos_streak > 0:
+                break
+            neg_streak += 1
+        elif d > 0:
+            if neg_streak > 0:
+                break
+            pos_streak += 1
+        else:
+            break
+
+    signals = []
+    score_bear = 0
+    score_bull = 0
+
+    # PADR\u00c3O 1: Topo Especulativo
+    if cot_idx >= 85 and current_delta < 0:
+        prob = min(55 + int(cot_idx - 85) * 2 + neg_streak * 5, 82)
+        signals.append({
+            'type': 'TOP_SPECULATIVE',
+            'label': 'Topo Especulativo',
+            'direction': 'BEARISH',
+            'probability': prob,
+            'color': '#DC3C3C',
+            'icon': '\U0001f534',
+            'description': f'COT {cot_idx:.0f}/100 + fundos saindo. '
+                          f'{neg_streak}sem negativas consecutivas.'
+        })
+        score_bear += prob
+
+    # PADR\u00c3O 2: Acelera\u00e7\u00e3o de Sa\u00edda
+    if current_delta < -20000 and prev_delta < -20000 and neg_streak >= 2:
+        prob = min(60 + neg_streak * 5, 80)
+        signals.append({
+            'type': 'ACCELERATION_EXIT',
+            'label': 'Acelera\u00e7\u00e3o de Sa\u00edda',
+            'direction': 'BEARISH',
+            'probability': prob,
+            'color': '#DC3C3C',
+            'icon': '\u26a0\ufe0f',
+            'description': f'Delta {int(current_delta):+,} por '
+                          f'{neg_streak} semanas. Liquida\u00e7\u00e3o acelerada.'
+        })
+        score_bear += prob * 0.8
+
+    # PADR\u00c3O 3: Fundo Especulativo
+    if cot_idx <= 15 and current_delta > 0:
+        prob = min(55 + int(15 - cot_idx) * 2 + pos_streak * 5, 80)
+        signals.append({
+            'type': 'BOTTOM_SPECULATIVE',
+            'label': 'Fundo Especulativo',
+            'direction': 'BULLISH',
+            'probability': prob,
+            'color': '#00C878',
+            'icon': '\U0001f7e2',
+            'description': f'COT {cot_idx:.0f}/100 + fundos comprando. '
+                          f'{pos_streak}sem positivas consecutivas.'
+        })
+        score_bull += prob
+
+    # PADR\u00c3O 4: Short Covering Iminente
+    if cot_idx <= 25 and oi_trend < -3 and current_delta > 0:
+        prob = min(60 + pos_streak * 8, 78)
+        signals.append({
+            'type': 'SHORT_COVERING',
+            'label': 'Short Covering Iminente',
+            'direction': 'BULLISH',
+            'probability': prob,
+            'color': '#00C878',
+            'icon': '\U0001f7e2',
+            'description': f'OI caindo {oi_trend:.1f}% + fundos '
+                          f'encerrando shorts. Spike poss\u00edvel.'
+        })
+        score_bull += prob * 0.9
+
+    # PADR\u00c3O 5: Diverg\u00eancia COT-Pre\u00e7o (bearish)
+    if cot_idx >= 70 and current_delta < -15000:
+        signals.append({
+            'type': 'DIVERGENCE_BEAR',
+            'label': 'Diverg\u00eancia Bearish',
+            'direction': 'BEARISH',
+            'probability': 62,
+            'color': '#DCB432',
+            'icon': '\u26a0\ufe0f',
+            'description': 'Fundos comprados mas saindo. '
+                          'Diverg\u00eancia COT-pre\u00e7o ativa.'
+        })
+        score_bear += 50
+
+    # PADR\u00c3O 6: Momentum Comprador
+    if current_delta > 15000 and prev_delta > 10000 and cot_idx < 80:
+        prob = min(55 + pos_streak * 7, 75)
+        signals.append({
+            'type': 'BULL_MOMENTUM',
+            'label': 'Momentum Comprador',
+            'direction': 'BULLISH',
+            'probability': prob,
+            'color': '#00C878',
+            'icon': '\U0001f4c8',
+            'description': f'Fundos comprando agressivamente. '
+                          f'Delta {int(current_delta):+,}.'
+        })
+        score_bull += prob * 0.7
+
+    # Sem sinal claro
+    if not signals:
+        signals.append({
+            'type': 'NEUTRAL',
+            'label': 'Sem Sinal',
+            'direction': 'NEUTRAL',
+            'probability': 50,
+            'color': '#64748b',
+            'icon': '\u2b1c',
+            'description': 'Posicionamento sem padr\u00e3o de revers\u00e3o claro.'
+        })
+
+    # Score final de revers\u00e3o
+    dominant = 'BEARISH' if score_bear > score_bull else \
+               'BULLISH' if score_bull > score_bear else 'NEUTRAL'
+    reversal_score = int(max(score_bear, score_bull) /
+                        max(score_bear + score_bull, 1) * 100)
+
+    return {
+        'signals': signals,
+        'dominant_direction': dominant,
+        'reversal_score': reversal_score,
+        'cot_index': cot_idx,
+        'neg_streak': neg_streak,
+        'pos_streak': pos_streak,
+        'current_delta': int(current_delta),
+        'prev_delta': int(prev_delta),
+        'oi_trend_pct': round(oi_trend, 2),
+        'deltas_8w': [int(d) for d in deltas]
+    }
+
+
 def process_legacy(df):
     if df is None: return {}
     print("\n  Processando Legacy...")
@@ -181,12 +360,17 @@ def process_disagg(df):
                 hist.append(e)
             except: pass
         if hist:
+            delta_analysis = calc_delta_signals(hist)
             results[tk] = {"ticker":tk,"name":info["name"],"report_type":"disaggregated",
-                "latest":hist[-1],"history":hist,"weeks":len(hist)}
+                "latest":hist[-1],"history":hist,"weeks":len(hist),
+                "delta_analysis": delta_analysis}
             mn = hist[-1].get("managed_money_net")
             pn = hist[-1].get("producer_net")
             if mn is not None:
-                print(f"    {tk:4s} {info['name']:20s} {len(hist):3d}w | MM_Net:{mn:>10,.0f} | Prod_Net:{pn:>10,.0f}")
+                da_dir = delta_analysis.get("dominant_direction", "?")
+                da_score = delta_analysis.get("reversal_score", 0)
+                da_sig = delta_analysis.get("signals", [{}])[0].get("label", "?")
+                print(f"    {tk:4s} {info['name']:20s} {len(hist):3d}w | MM_Net:{mn:>10,.0f} | Prod_Net:{pn:>10,.0f} | {da_dir} {da_score}% {da_sig}")
             else:
                 print(f"    {tk}: parcial")
     return results
