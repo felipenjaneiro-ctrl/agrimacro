@@ -1306,6 +1306,8 @@ export default function Dashboard() {
   const [strategyRefineMode, setStrategyRefineMode] = useState(false);
   const [strategyConvoHistory, setStrategyConvoHistory] = useState<{role:string;content:string}[]>([]);
   const [paritiesData, setParitiesData] = useState<any>(null);
+  const [conabData, setConabData] = useState<any>(null);
+  const [bilateralData, setBilateralData] = useState<any>(null);
   const [cotDeltaView, setCotDeltaView] = useState<'overview'|'detail'>('overview');
   const [selectedCotSym, setSelectedCotSym] = useState<string>('');
 
@@ -1350,6 +1352,8 @@ export default function Dashboard() {
     fetch("/data/processed/physical_br.json").then(r=>r.json()).then(setPhysicalBrData).catch(()=>{});
     fetch("/data/processed/imea_soja.json").then(r=>r.json()).then(setImeaData).catch(()=>{});
     fetch("/data/processed/parities.json").then(r=>r.json()).then(setParitiesData).catch(()=>{});
+    fetch("/data/processed/conab_data.json").then(r=>r.json()).then(setConabData).catch(()=>{});
+    fetch("/data/bilateral/basis_temporal.json").then(r=>r.json()).then(setBilateralData).catch(()=>{});
   }, []);
 
   // IBKR Auto-Refresh
@@ -4347,6 +4351,102 @@ export default function Dashboard() {
           line += ` | ${par.signal}`;
           sections.push(line);
         });
+      }
+
+      // Sazonalidade do símbolo atual
+      if (season && prices) {
+        const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        const curMonth = new Date().getMonth();
+        const symList = [selected, ...['ZC','ZS','ZW','LE','GF','CL','SB','KC'].filter(s => s !== selected)].slice(0, 6);
+        const seasonLines: string[] = [];
+        symList.forEach(sym => {
+          const candles = prices[sym];
+          if (!candles || candles.length < 252) return;
+          const rets: number[] = [];
+          for (let i = 22; i < candles.length; i++) {
+            if (new Date(candles[i].date).getMonth() === curMonth) {
+              const prev = candles[i-22]?.close;
+              if (prev && prev > 0) rets.push((candles[i].close - prev) / prev * 100);
+            }
+          }
+          if (rets.length >= 3) {
+            const avg = rets.reduce((s,v) => s+v, 0) / rets.length;
+            const pctPos = Math.round(rets.filter(r => r > 0).length / rets.length * 100);
+            seasonLines.push(`${sym} em ${months[curMonth]}: m\u00e9dia hist\u00f3rica ${avg > 0 ? '+' : ''}${avg.toFixed(1)}%, positivo em ${pctPos}% dos anos`);
+          }
+        });
+        if (seasonLines.length) {
+          sections.push(`\n=== SAZONALIDADE \u2014 ${months[curMonth].toUpperCase()} ===`);
+          seasonLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // EIA Energy
+      if (eiaData?.series) {
+        const s = eiaData.series as any;
+        const eiaLines: string[] = [];
+        const fields: [string, string][] = [
+          ['wti_spot', 'WTI Spot'],
+          ['natural_gas_spot', 'Henry Hub'],
+          ['diesel_retail', 'Diesel Retail EUA'],
+          ['gasoline_retail', 'Gasolina Retail EUA'],
+          ['ethanol_production', 'Produ\u00e7\u00e3o Etanol'],
+          ['crude_stocks', 'Estoques CL'],
+          ['crude_production', 'Produ\u00e7\u00e3o CL EUA'],
+          ['refinery_utilization', 'Utiliza\u00e7\u00e3o Refinarias'],
+        ];
+        fields.forEach(([key, label]) => {
+          const item = s[key];
+          if (!item?.latest_value) return;
+          const chg = item.wow_change_pct != null
+            ? ` (${item.wow_change_pct > 0 ? '+' : ''}${item.wow_change_pct.toFixed(1)}% sem)`
+            : '';
+          eiaLines.push(`${label}: ${item.latest_value} ${item.unit || ''}${chg}`);
+        });
+        if (eiaLines.length) {
+          sections.push("\n=== ENERGIA (EIA) ===");
+          eiaLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // CONAB Safra Brasil
+      if (conabData?.boletim_info) {
+        const bi = conabData.boletim_info;
+        const cult = bi.principais_culturas || {};
+        const conabLines: string[] = [];
+        if (bi.producao_total_mt) conabLines.push(`Produ\u00e7\u00e3o total BR: ${bi.producao_total_mt} mi t (${bi.safra || ''}, ${bi.levantamento || ''}o lev.)`);
+        for (const [k, v] of Object.entries(cult)) {
+          const c = v as any;
+          if (c?.producao_mt) {
+            conabLines.push(`${k.toUpperCase()}: ${c.producao_mt} mi t | \u00e1rea ${c.area_mha || '?'} mi ha | prod. ${c.produtividade_kg_ha || '?'} kg/ha`);
+          }
+        }
+        if (conabLines.length) {
+          sections.push("\n=== CONAB \u2014 SAFRA BRASIL ===");
+          conabLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // Bilateral (basis temporal)
+      if (bilateralData && typeof bilateralData === 'object') {
+        const biLines: string[] = [];
+        const entries = bilateralData.commodities || bilateralData.data || bilateralData;
+        if (typeof entries === 'object') {
+          Object.entries(entries).forEach(([key, val]: any) => {
+            if (!val || typeof val !== 'object') return;
+            const name = val.name || val.label || key;
+            const signal = val.signal || val.trend || '';
+            const value = val.current_value ?? val.value ?? val.spread;
+            const zscore = val.zscore ?? val.z_score;
+            if (value !== undefined) {
+              biLines.push(`${name}: ${value}${zscore != null ? ` (z=${zscore})` : ''}${signal ? ` \u2014 ${signal}` : ''}`);
+            }
+          });
+        }
+        if (biLines.length) {
+          sections.push("\n=== BILATERAL BR vs EUA ===");
+          biLines.forEach(l => sections.push(l));
+        }
       }
 
       // Analysis request
