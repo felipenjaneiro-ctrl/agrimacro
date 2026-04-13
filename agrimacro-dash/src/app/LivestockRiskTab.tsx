@@ -376,6 +376,7 @@ export default function LivestockRiskTab() {
   const [data, setData] = useState<any>(null);
   const [cotData, setCotData] = useState<any>(null);
   const [psdData, setPsdData] = useState<any>(null);
+  const [weeklyData, setWeeklyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [revalidating, setRevalidating] = useState(false);
   const [genAt, setGenAt] = useState("");
@@ -386,7 +387,8 @@ export default function LivestockRiskTab() {
       fetch("/data/processed/bottleneck.json").then(r => r.json()),
       fetch("/data/processed/cot.json").then(r => r.json()).catch(() => null),
       fetch("/data/processed/livestock_psd.json").then(r => r.json()).catch(() => null),
-    ]).then(([bj, cj, pj]) => {
+      fetch("/data/processed/livestock_weekly.json").then(r => r.json()).catch(() => null),
+    ]).then(([bj, cj, pj, wj]) => {
       const comms = bj.commodities || {};
       if (Object.keys(comms).length > 0) {
         setData(comms);
@@ -394,6 +396,7 @@ export default function LivestockRiskTab() {
       }
       if (cj) setCotData(cj);
       if (pj) setPsdData(pj);
+      if (wj) setWeeklyData(wj);
     }).catch(() => {})
       .finally(() => { setLoading(false); setRevalidating(false); });
   };
@@ -481,6 +484,73 @@ export default function LivestockRiskTab() {
               <PanelCOTDelta cotData={cotData} symbol={sym} />
             </div>
           </div>
+
+          {/* Indicadores Semanais */}
+          {weeklyData?.data && (() => {
+            const wd = weeklyData.data;
+            const symLower = sym.toLowerCase();
+            const cards: {name:string; signal:string; color:string; value:string; detail:string; interp:string}[] = [];
+
+            // Cold Storage
+            const cs = wd[`cold_storage_${symLower}`];
+            if (cs && !cs.is_fallback) {
+              cards.push({
+                name: cs.name || "Cold Storage",
+                signal: cs.signal,
+                color: cs.signal_color || C.textMuted,
+                value: `${cs.current?.toLocaleString()} ${cs.unit || ""}`,
+                detail: `vs 5A: ${cs.deviation_pct >= 0 ? "+" : ""}${cs.deviation_pct}%`,
+                interp: cs.interpretation || "",
+              });
+            }
+
+            // Abate BR (only for LE/GF)
+            if ((sym === "LE" || sym === "GF") && wd.abate_bovinos_br && !wd.abate_bovinos_br.is_fallback) {
+              const ab = wd.abate_bovinos_br;
+              cards.push({
+                name: ab.name || "Abate Bovinos BR",
+                signal: ab.signal,
+                color: ab.signal_color || C.textMuted,
+                value: `${ab.current?.toLocaleString()} ${ab.unit || ""}`,
+                detail: `vs m\u00e9dia: ${ab.deviation_pct >= 0 ? "+" : ""}${ab.deviation_pct}%`,
+                interp: ab.interpretation || "",
+              });
+            }
+
+            // Packer Proxy
+            const pp = wd[`packer_${symLower}`];
+            if (pp) {
+              cards.push({
+                name: pp.name || "Packer Activity",
+                signal: pp.signal,
+                color: pp.signal_color || C.textMuted,
+                value: `$${pp.current_price} (avg20: $${pp.avg_20d})`,
+                detail: `Mom 20d: ${pp.momentum_20d >= 0 ? "+" : ""}${pp.momentum_20d}%`,
+                interp: pp.interpretation || "",
+              });
+            }
+
+            if (cards.length === 0) return null;
+
+            return (
+              <div style={{ ...panelStyle, marginBottom: 16 }}>
+                {panelHdr("INDICADORES SEMANAIS -- " + names[sym])}
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(cards.length, 3)}, 1fr)`, gap: 10, padding: "14px 16px" }}>
+                  {cards.map((c, i) => (
+                    <div key={i} style={{ background: C.panelDark, borderRadius: 6, padding: "10px 12px", borderLeft: "3px solid " + c.color }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: C.text }}>{c.name}</div>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: c.color, background: c.color + "22", padding: "2px 6px", borderRadius: 3 }}>{c.signal}</div>
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>{c.value}</div>
+                      <div style={{ fontSize: 10, color: c.color, fontWeight: 600, marginBottom: 4 }}>{c.detail}</div>
+                      <div style={{ fontSize: 9, color: C.textMuted, lineHeight: 1.4 }}>{c.interp}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {d.strategy && (
             <div style={{ background: C.panel, border: "1px solid " + C.border, borderRadius: 8, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
