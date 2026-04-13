@@ -266,7 +266,7 @@ def collect_ibkr_data(client_id=10):
     except ConnectionError as e:
         print(f"  IBKR connection failed: {e}")
         print(f"  Falling back to Yahoo Finance data")
-        return False
+        return {"status": False, "symbols_collected": set(), "error": str(e)}
 
     # === 1. Get all available contracts for each commodity ===
     print("  [1/4] Discovering contracts...")
@@ -509,7 +509,13 @@ def collect_ibkr_data(client_id=10):
 
     ib.disconnect()
     print("  IBKR collection complete!")
-    return True
+    return {
+        "status": True,
+        "symbols_collected": set(prices_result.keys()),
+        "prices_count": len(prices_result),
+        "contracts_count": len(contract_hist),
+        "positions_count": len(pos_data),
+    }
 
 if __name__ == "__main__":
     collect_ibkr_data()

@@ -93,6 +93,19 @@ def find_cols(df, patterns):
         if cols: return cols[0]
     return None
 
+def calc_cot_index(series, window):
+    """COT Index = (atual - min(janela)) / (max(janela) - min(janela)) * 100"""
+    if not series:
+        return 50.0
+    if len(series) < window:
+        window = len(series)
+    subset = series[-window:]
+    mn, mx = min(subset), max(subset)
+    if mx == mn:
+        return 50.0
+    return round((series[-1] - mn) / (mx - mn) * 100, 1)
+
+
 def calc_delta_signals(history, window=156):
     """
     Calcula sinais de revers\u00e3o baseados em padr\u00f5es COT.
@@ -118,11 +131,8 @@ def calc_delta_signals(history, window=156):
     prev_delta = deltas[-2] if len(deltas) >= 2 else 0
 
     # COT Index (min-max normalization over full window)
-    mm_series = [h.get('managed_money_net') or 0 for h in history[-window:]]
-    mm_min = min(mm_series)
-    mm_max = max(mm_series)
-    mm_last = mm_series[-1]
-    cot_idx = round((mm_last - mm_min) / (mm_max - mm_min) * 100, 1) if mm_max > mm_min else 50.0
+    mm_series = [h.get('managed_money_net') or 0 for h in history]
+    cot_idx = calc_cot_index(mm_series, window)
 
     mm_net = recent[-1].get('managed_money_net') or 0
     oi = recent[-1].get('open_interest') or 0
@@ -361,8 +371,15 @@ def process_disagg(df):
             except: pass
         if hist:
             delta_analysis = calc_delta_signals(hist)
+            # Multi-window COT Index (managed money net)
+            mm_series = [h.get("managed_money_net") or 0 for h in hist]
+            cot_156 = calc_cot_index(mm_series, 156)
+            cot_52 = calc_cot_index(mm_series, 52)
+            cot_26 = calc_cot_index(mm_series, 26)
             results[tk] = {"ticker":tk,"name":info["name"],"report_type":"disaggregated",
                 "latest":hist[-1],"history":hist,"weeks":len(hist),
+                "cot_index": cot_156, "cot_index_52w": cot_52, "cot_index_26w": cot_26,
+                "cot_window": 156,
                 "delta_analysis": delta_analysis}
             mn = hist[-1].get("managed_money_net")
             pn = hist[-1].get("producer_net")

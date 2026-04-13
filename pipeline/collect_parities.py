@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 BASE = Path(__file__).parent.parent
 PRICES = BASE / "agrimacro-dash/public/data/processed/price_history.json"
+FUTURES = BASE / "agrimacro-dash/public/data/processed/futures_contracts.json"
 PHYSICAL = BASE / "agrimacro-dash/public/data/processed/physical_br.json"
 EIA_JSON = BASE / "agrimacro-dash/public/data/processed/eia_data.json"
 OUT = BASE / "agrimacro-dash/public/data/processed/parities.json"
@@ -11,6 +12,24 @@ OUT = BASE / "agrimacro-dash/public/data/processed/parities.json"
 def load_prices():
     with open(PRICES, encoding="utf-8") as f:
         return json.load(f)
+
+def load_futures():
+    try:
+        with open(FUTURES, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def get_new_crop(futures, sym, month_code):
+    """Retorna close do primeiro contrato new-crop (month_code) disponível.
+    Ex: get_new_crop(futures, "ZC", "Z") -> ZCZ26 close
+        get_new_crop(futures, "ZS", "X") -> ZSX26 close
+    """
+    contracts = futures.get("commodities", {}).get(sym, {}).get("contracts", [])
+    for c in contracts:
+        if c.get("month_code") == month_code and c.get("close") and c["close"] > 0:
+            return c["close"], c.get("contract", "")
+    return None, None
 
 def get_last(prices, sym):
     """Retorna último preço de um símbolo."""
@@ -55,17 +74,23 @@ def calc_ratio_series(prices, sym_a, sym_b, divisor_a=1, divisor_b=1):
 
 def main():
     prices = load_prices()
+    futures = load_futures()
 
     parities = {}
     generated_at = datetime.now().isoformat()
 
     # ─────────────────────────────────────────────
     # 1. ZC/ZS RATIO — Decisão de acreagem Corn Belt
-    # ZC em cents/bu ÷ ZS em cents/bu
+    # Usa contratos NEW CROP: ZCZ (milho dezembro) / ZSX (soja novembro)
+    # da curva de futuros em futures_contracts.json
     # Zona crítica: < 2.3 = favorece milho | > 2.5 = favorece soja
     # ─────────────────────────────────────────────
-    zc = get_last(prices, "ZC")
-    zs = get_last(prices, "ZS")
+    zc_nc, zc_label = get_new_crop(futures, "ZC", "Z")  # dezembro
+    zs_nc, zs_label = get_new_crop(futures, "ZS", "X")  # novembro
+    # fallback para front-month se futures indisponível
+    zc = zc_nc or get_last(prices, "ZC")
+    zs = zs_nc or get_last(prices, "ZS")
+    nc_source = "new-crop" if (zc_nc and zs_nc) else "front-month (fallback)"
     if zc and zs:
         ratio = zc / zs
         series, _ = calc_ratio_series(prices, "ZC", "ZS")
@@ -84,8 +109,8 @@ def main():
             color = "#DC3C3C"
 
         parities["zc_zs"] = {
-            "name": "Ratio Milho/Soja",
-            "description": "Define acreagem Corn Belt. <2.3 = plantar milho, >2.5 = plantar soja",
+            "name": "Ratio Milho/Soja (New Crop)",
+            "description": f"Acreagem Corn Belt via {zc_label or 'ZC'}/{zs_label or 'ZS'}. <2.3 = milho, >2.5 = soja",
             "value": round(ratio, 4),
             "unit": "ratio",
             "z_score": z,
@@ -95,7 +120,9 @@ def main():
             "signal_color": color,
             "threshold_low": 2.30,
             "threshold_high": 2.50,
-            "category": "acreagem"
+            "category": "acreagem",
+            "source": nc_source,
+            "contracts": {"corn": zc_label, "soy": zs_label}
         }
 
     # ─────────────────────────────────────────────
@@ -178,7 +205,12 @@ def main():
             "signal_color": color,
             "threshold_low": -5.0,
             "threshold_high": 5.0,
-            "category": "energia"
+            "category": "energia",
+            "lag_months": 6,
+            "lag_note": (
+                "CL alto hoje \u2192 ureia/am\u00f4nia sobe em 6-12 meses "
+                "\u2192 custo plantio aumenta na safra seguinte."
+            )
         }
 
     # ─────────────────────────────────────────────
@@ -252,37 +284,85 @@ def main():
         brl = None
 
     if brl and zs:
-        # BRL fraco = exportação BR mais competitiva
-        # Índice: ZS em BRL vs média histórica
-        zs_brl = zs * brl / 100
+        # ── Basis real: FOB Paranagu\u00e1 vs Chicago ──
+        # Carrega pre\u00e7o f\u00edsico BR (R$/saca 60kg)
+        fob_paranagua_brl = None
+        try:
+            with open(PHYSICAL, encoding="utf-8") as f:
+                phys_br = json.load(f)
+            fob_paranagua_brl = phys_br.get("products", {}).get("ZS_BR", {}).get("price")
+        except Exception:
+            pass
 
-        bars_zs = get_bars(prices, "ZS")
-        zs_brl_series = [b["close"] * brl / 100 for b in bars_zs[-52:]]
-        z = zscore(zs_brl_series)
+        # Chicago em USD/bu (ZS em cents/bu)
+        zs_chicago_usd = zs / 100
 
-        if brl > 5.20:
-            signal = "BRL FRACO \u2014 BR muito competitivo"
-            color = "#00C878"
-        elif brl > 4.80:
-            signal = "BRL NEUTRO"
-            color = "#DCB432"
+        if fob_paranagua_brl and brl > 0:
+            # 1 saca 60kg = 60/27.216 = 2.2046 bushels
+            BU_PER_SACA = 60 / 27.216
+            fob_paranagua_usd = (fob_paranagua_brl / brl) / BU_PER_SACA
+
+            basis = fob_paranagua_usd - zs_chicago_usd
+
+            if basis < -0.50:
+                signal = "BRASIL MUITO COMPETITIVO"
+                color = "#00C878"
+            elif basis < -0.10:
+                signal = "BRASIL COMPETITIVO"
+                color = "#00C878"
+            elif basis <= 0.10:
+                signal = "PARIDADE"
+                color = "#DCB432"
+            else:
+                signal = "BRASIL CARO"
+                color = "#DC3C3C"
+
+            parities["brl_competitiveness"] = {
+                "name": "Competitividade BR vs Chicago (Basis Real)",
+                "description": "FOB Paranagu\u00e1 convertido vs ZS CBOT. Negativo = Brasil mais barato",
+                "value": round(basis, 4),
+                "unit": "USD/bu (FOB Paranagu\u00e1 - Chicago)",
+                "fob_paranagua_brl": round(fob_paranagua_brl, 2),
+                "fob_paranagua_usd": round(fob_paranagua_usd, 4),
+                "zs_chicago_usd": round(zs_chicago_usd, 4),
+                "brl_usd": round(brl, 4),
+                "z_score": 0.0,
+                "signal": signal,
+                "signal_color": color,
+                "category": "macro",
+                "interpretation": f"FOB Paranagu\u00e1 {'abaixo' if basis < 0 else 'acima'} de Chicago em {abs(basis):.4f} USD/bu"
+            }
         else:
-            signal = "BRL FORTE \u2014 BR menos competitivo"
-            color = "#DC3C3C"
+            # Fallback: sem f\u00edsico BR, manter indicador cambial simples
+            zs_brl = zs * brl / 100
+            bars_zs = get_bars(prices, "ZS")
+            zs_brl_series = [b["close"] * brl / 100 for b in bars_zs[-52:]]
+            z = zscore(zs_brl_series)
 
-        parities["brl_competitiveness"] = {
-            "name": "Competitividade BR (BRL/USD \u00d7 ZS)",
-            "description": "BRL fraco = exporta\u00e7\u00e3o brasileira mais barata em USD",
-            "value": round(brl, 4),
-            "unit": "BRL/USD",
-            "zs_em_brl": round(zs_brl, 2),
-            "z_score": z,
-            "signal": signal,
-            "signal_color": color,
-            "threshold_low": 4.80,
-            "threshold_high": 5.20,
-            "category": "macro"
-        }
+            if brl > 5.20:
+                signal = "BRL FRACO \u2014 BR competitivo"
+                color = "#00C878"
+            elif brl > 4.80:
+                signal = "BRL NEUTRO"
+                color = "#DCB432"
+            else:
+                signal = "BRL FORTE \u2014 BR menos competitivo"
+                color = "#DC3C3C"
+
+            parities["brl_competitiveness"] = {
+                "name": "Competitividade BR (BRL/USD \u00d7 ZS)",
+                "description": "Fallback cambial \u2014 f\u00edsico BR indispon\u00edvel",
+                "value": round(brl, 4),
+                "unit": "BRL/USD",
+                "zs_em_brl": round(zs_brl, 2),
+                "z_score": z,
+                "signal": signal,
+                "signal_color": color,
+                "threshold_low": 4.80,
+                "threshold_high": 5.20,
+                "category": "macro",
+                "is_fallback": True
+            }
 
     # ─────────────────────────────────────────────
     # 6. ZM/ZS — Valor relativo Farelo/Soja
@@ -487,42 +567,52 @@ def main():
         }
 
     # ─────────────────────────────────────────────
-    # 10. LE/ZC RATIO — Boi Gordo / Milho (Confinamento)
-    # milho caro vs boi = confinamento no prejuízo
+    # 10. LE/ZC RATIO — Cattle/Corn Ratio (padr\u00e3o do setor)
+    # LE (cents/lb \u2248 $/cwt) \u00f7 ZC ($/bu)
+    # Breakeven hist\u00f3rico: 28-32 bu/cwt
     # ─────────────────────────────────────────────
-    le = get_last(prices, "LE")   # cents/lb
+    le = get_last(prices, "LE")   # cents/lb \u2248 $/cwt
     zc = get_last(prices, "ZC")   # cents/bu
     if le and zc:
-        le_per_cwt = le  # cents/lb ≈ $/cwt
-        ratio = le_per_cwt / (zc / 100)  # $/cwt ÷ $/bu
+        cattle_corn_ratio = le / (zc / 100)  # $/cwt \u00f7 $/bu = bu/cwt
         series_ratio, _ = calc_ratio_series(prices, "LE", "ZC", divisor_a=1, divisor_b=0.01)
         z = zscore(series_ratio)
         t7 = trend(series_ratio, 7)
         t30 = trend(series_ratio, 30)
 
-        if ratio > 30:
-            signal = "BOI CARO \u2014 Confinamento lucrativo"
+        if cattle_corn_ratio > 38:
+            signal = "EXCELENTE \u2014 Confinamento muito lucrativo"
             color = "#00C878"
-        elif ratio > 22:
-            signal = "EQUILIBRADO"
+        elif cattle_corn_ratio > 32:
+            signal = "LUCRATIVO \u2014 Expans\u00e3o de rebanho esperada"
+            color = "#00C878"
+        elif cattle_corn_ratio > 28:
+            signal = "BREAKEVEN \u2014 Margem apertada"
             color = "#DCB432"
         else:
-            signal = "MILHO CARO \u2014 Confinamento no preju\u00edzo"
+            signal = "PREJU\u00cdZO \u2014 Abate precoce prov\u00e1vel"
             color = "#DC3C3C"
 
         parities["le_zc_ratio"] = {
-            "name": "Boi Gordo / Milho (Confinamento)",
-            "description": "Lucratividade do confinamento. Alto = vale confinar. Baixo = preju\u00edzo, abate precoce previsto.",
-            "value": round(ratio, 2),
-            "unit": "$/cwt por $/bu",
+            "name": "Cattle/Corn Ratio (Padr\u00e3o Setor)",
+            "description": "Quantos bu de milho 1 cwt de boi compra. Breakeven hist\u00f3rico: 28-32 bu/cwt.",
+            "value": round(cattle_corn_ratio, 2),
+            "unit": "bu de milho por cwt de boi",
             "z_score": z,
             "trend_7d": t7,
             "trend_30d": t30,
             "signal": signal,
             "signal_color": color,
-            "threshold_low": 22.0,
-            "threshold_high": 30.0,
-            "category": "pecuaria"
+            "breakeven": 28.0,
+            "threshold_low": 28.0,
+            "threshold_high": 38.0,
+            "category": "pecuaria",
+            "industry_note": "Breakeven hist\u00f3rico: 28-32 bu/cwt",
+            "lag_months": 12,
+            "lag_note": (
+                "Ratio baixo hoje \u2192 menos bezerros engordando "
+                "\u2192 menor oferta LE em 12-18 meses."
+            )
         }
 
     # ─────────────────────────────────────────────
@@ -573,41 +663,51 @@ def main():
         }
 
     # ─────────────────────────────────────────────
-    # 12. HE/ZC RATIO — Suíno vs Milho
-    # Lucratividade da produção de suínos
+    # 12. HE/ZC RATIO — Hog/Corn Ratio (padr\u00e3o do setor)
+    # FCR su\u00edno real: 3.5-4 kg ra\u00e7\u00e3o/kg ganho
+    # Breakeven hist\u00f3rico: 12-14 bu/cwt
     # ─────────────────────────────────────────────
-    he = get_last(prices, "HE")   # cents/lb
+    he = get_last(prices, "HE")   # cents/lb \u2248 $/cwt
     if he and zc:
-        he_per_cwt = he
-        ratio_he = he_per_cwt / (zc / 100)
+        hog_corn_ratio = he / (zc / 100)  # $/cwt \u00f7 $/bu = bu/cwt
         series_ratio_he, _ = calc_ratio_series(prices, "HE", "ZC", divisor_a=1, divisor_b=0.01)
         z = zscore(series_ratio_he)
         t7 = trend(series_ratio_he, 7)
         t30 = trend(series_ratio_he, 30)
 
-        if ratio_he > 20:
-            signal = "SU\u00cdNO CARO \u2014 Produ\u00e7\u00e3o lucrativa"
+        if hog_corn_ratio > 20:
+            signal = "EXCELENTE \u2014 Produ\u00e7\u00e3o muito lucrativa"
             color = "#00C878"
-        elif ratio_he > 14:
-            signal = "EQUILIBRADO"
+        elif hog_corn_ratio > 16:
+            signal = "LUCRATIVO"
+            color = "#00C878"
+        elif hog_corn_ratio > 12:
+            signal = "BREAKEVEN \u2014 Margem apertada"
             color = "#DCB432"
         else:
-            signal = "MILHO CARO \u2014 Produ\u00e7\u00e3o pressionada"
+            signal = "PREJU\u00cdZO \u2014 Redu\u00e7\u00e3o de produ\u00e7\u00e3o prov\u00e1vel"
             color = "#DC3C3C"
 
         parities["he_zc_ratio"] = {
-            "name": "Su\u00edno / Milho (Produ\u00e7\u00e3o HE)",
-            "description": "Lucratividade da produ\u00e7\u00e3o de su\u00ednos. Su\u00edno precisa de ~3x o peso em milho para produzir 1lb de carne.",
-            "value": round(ratio_he, 2),
-            "unit": "$/cwt por $/bu",
+            "name": "Hog/Corn Ratio (Padr\u00e3o Setor)",
+            "description": "Quantos bu de milho 1 cwt de su\u00edno compra. FCR real: 3.5-4x. Breakeven: 12-14 bu/cwt.",
+            "value": round(hog_corn_ratio, 2),
+            "unit": "bu de milho por cwt de su\u00edno",
             "z_score": z,
             "trend_7d": t7,
             "trend_30d": t30,
             "signal": signal,
             "signal_color": color,
-            "threshold_low": 14.0,
+            "breakeven": 12.0,
+            "threshold_low": 12.0,
             "threshold_high": 20.0,
-            "category": "pecuaria"
+            "category": "pecuaria",
+            "industry_note": "FCR su\u00edno: ~3.5-4x. Breakeven: 12-14 bu/cwt",
+            "lag_months": 9,
+            "lag_note": (
+                "Ratio baixo hoje \u2192 produtores reduzem plantel "
+                "\u2192 menor oferta HE em 9-12 meses."
+            )
         }
 
     # Salvar

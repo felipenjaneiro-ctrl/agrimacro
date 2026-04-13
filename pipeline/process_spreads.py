@@ -3,10 +3,69 @@ AgriMacro v3.0 - Spreads Processor
 Calculates key commodity spreads with z-scores and regime detection
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import statistics
 from utils import calculate_crush_spread
+
+FUTURES_PATH = Path(__file__).parent.parent / "agrimacro-dash" / "public" / "data" / "processed" / "futures_contracts.json"
+
+# Month code → month number mapping
+MONTH_CODES = {"F":1,"G":2,"H":3,"J":4,"K":5,"M":6,"N":7,"Q":8,"U":9,"V":10,"X":11,"Z":12}
+
+
+def load_futures():
+    """Load futures_contracts.json for forward curve access."""
+    try:
+        with open(FUTURES_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def get_futures_price(futures_data, sym, months_ahead):
+    """Return close of the contract closest to (today + months_ahead months).
+
+    Scans the forward curve in futures_contracts.json and picks the contract
+    whose expiry is nearest to the target date, only considering contracts
+    that expire after today.
+    """
+    contracts = futures_data.get("commodities", {}).get(sym, {}).get("contracts", [])
+    if not contracts:
+        return None, None
+
+    now = datetime.now()
+    target = now + timedelta(days=30 * months_ahead)
+
+    best_close = None
+    best_label = None
+    best_diff = float("inf")
+
+    for c in contracts:
+        close = c.get("close")
+        if not close or close <= 0:
+            continue
+        # Parse expiry from month_code + year
+        mc = c.get("month_code", "")
+        yr = c.get("year", "")
+        if mc not in MONTH_CODES or not yr:
+            continue
+        try:
+            exp_month = MONTH_CODES[mc]
+            exp_year = int(yr)
+            # Use 15th of the month as approximate expiry
+            exp_date = datetime(exp_year, exp_month, 15)
+            if exp_date <= now:
+                continue
+            diff = abs((exp_date - target).days)
+            if diff < best_diff:
+                best_diff = diff
+                best_close = float(close)
+                best_label = c.get("contract", f"{sym}{mc}{yr[-2:]}")
+        except Exception:
+            continue
+
+    return best_close, best_label
 
 # Spread definitions
 SPREADS = {
@@ -36,10 +95,10 @@ SPREADS = {
     },
     "feedlot": {
         "name": "Feedlot Margin",
-        "formula": "LE*6 - GF - ZC*0.5",  # Simplified feedlot margin
+        "formula": "LE*10 - GF*7.5 - (ZC/100)*50",  # 1000lb steer, 750lb calf, 50bu corn
         "components": ["LE", "GF", "ZC"],
-        "unit": "USD/cwt",
-        "description": "Margem do confinamento. Positiva = lucro para confinadores.",
+        "unit": "USD/head",
+        "description": "Margem do confinamento por cabe\u00e7a (1000lb). Positiva = lucro para confinadores.",
         "category": "pecuaria",
     },
     "zc_zm": {
@@ -206,8 +265,8 @@ def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
             elif spread_key == "zl_cl":
                 val = values["ZL"] / values["CL"] if values["CL"] > 0 else 0
             elif spread_key == "feedlot":
-                # Simplified: (cattle price * 6) - feeder cost - feed cost
-                val = values["LE"] * 6 - values["GF"] - values["ZC"] * 0.5
+                # 1000lb steer (10 cwt) out, 750lb calf (7.5 cwt) in, 50 bu corn
+                val = values["LE"] * 10 - values["GF"] * 7.5 - (values["ZC"] / 100) * 50
             elif spread_key == "zc_zm":
                 val = values["ZC"] / values["ZM"] if values["ZM"] > 0 else 0
             elif spread_key == "zc_zs":
@@ -285,21 +344,147 @@ def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
         "history": spread_values[-60:]  # Last 60 days for charting
     }
 
+def apply_feedlot_cycle(spread_data, futures_data):
+    """Override feedlot current value with cycle-corrected forward prices.
+
+    Real feedlot cycle:
+      - Buy calf TODAY:         GF contract +1 month
+      - Feed for 150-180 days:  ZC contract +4 months
+      - Sell finished cattle:   LE contract +6 months
+
+    Formula: LE_exit * 10 - GF_entry * 7.5 - ZC_feed * 50
+    (1000 lb steer out, 750 lb calf in, ~50 bu corn consumed)
+    """
+    gf_entry, gf_label = get_futures_price(futures_data, "GF", 1)
+    zc_feed, zc_label = get_futures_price(futures_data, "ZC", 4)
+    le_exit, le_label = get_futures_price(futures_data, "LE", 6)
+
+    if not all([gf_entry, zc_feed, le_exit]):
+        return  # keep front-month fallback
+
+    # LE, GF in USD/cwt; ZC in cents/bu → convert to USD/bu (/100)
+    # 1000 lb steer = 10 cwt out, 750 lb calf = 7.5 cwt in, 50 bu corn
+    feedlot_margin = (le_exit * 10) - (gf_entry * 7.5) - (zc_feed / 100 * 50)
+
+    spread_data["current"] = round(feedlot_margin, 2)
+    spread_data["contracts"] = {
+        "gf": f"GF +1m @ {gf_entry:.2f} ({gf_label})",
+        "zc": f"ZC +4m @ {zc_feed:.2f} ({zc_label})",
+        "le": f"LE +6m @ {le_exit:.2f} ({le_label})",
+    }
+    spread_data["method"] = "cycle_corrected"
+    # Recalculate z-score with the new current value
+    if spread_data.get("std_1y") and spread_data["std_1y"] > 0:
+        spread_data["zscore_1y"] = round(
+            (feedlot_margin - spread_data["mean_1y"]) / spread_data["std_1y"], 2
+        )
+
+
+def apply_crush_forward(spread_data, futures_data):
+    """Add forward crush margin (+2 months) alongside the spot value.
+
+    Industry locks in crush 30-60 days ahead, so the +2m forward
+    better reflects real-world margins.  Uses same CME Board Crush
+    formula: (ZM*44/2000) + (ZL*11/100) - (ZS/100).
+    """
+    zs_price, zs_label = get_futures_price(futures_data, "ZS", 2)
+    zm_price, zm_label = get_futures_price(futures_data, "ZM", 2)
+    zl_price, zl_label = get_futures_price(futures_data, "ZL", 2)
+
+    if not all([zs_price, zm_price, zl_price]):
+        return
+
+    crush_fwd = (zm_price * 44 / 2000) + (zl_price * 11 / 100) - (zs_price / 100)
+
+    spread_data["value_forward"] = round(crush_fwd, 4)
+    spread_data["contracts"] = {
+        "zs": f"ZS +2m @ {zs_price:.2f} ({zs_label})",
+        "zm": f"ZM +2m @ {zm_price:.2f} ({zm_label})",
+        "zl": f"ZL +2m @ {zl_price:.2f} ({zl_label})",
+    }
+    spread_data["method"] = "forward_2m"
+
+
+def apply_zlcl_term_structure(spread_data, futures_data):
+    """Add forward ZL/CL ratios at 3m and 6m to detect contango/backwardation divergence."""
+    zl_3m, zl_3m_label = get_futures_price(futures_data, "ZL", 3)
+    cl_3m, cl_3m_label = get_futures_price(futures_data, "CL", 3)
+    zl_6m, zl_6m_label = get_futures_price(futures_data, "ZL", 6)
+    cl_6m, cl_6m_label = get_futures_price(futures_data, "CL", 6)
+
+    spot = spread_data.get("current")
+
+    if zl_3m and cl_3m and cl_3m > 0:
+        ratio_3m = zl_3m / cl_3m
+        spread_data["value_3m"] = round(ratio_3m, 4)
+        spread_data["contracts_3m"] = {
+            "zl": f"ZL +3m @ {zl_3m:.2f} ({zl_3m_label})",
+            "cl": f"CL +3m @ {cl_3m:.2f} ({cl_3m_label})",
+        }
+        if spot and spot > 0:
+            diff = ratio_3m - spot
+            spread_data["term_structure"] = round(diff, 4)
+            if diff > 0.02:
+                spread_data["term_note"] = "Paridade biodiesel melhorando no forward"
+            elif diff < -0.02:
+                spread_data["term_note"] = "Paridade biodiesel piorando no forward"
+            else:
+                spread_data["term_note"] = "Curva est\u00e1vel"
+
+    if zl_6m and cl_6m and cl_6m > 0:
+        spread_data["value_6m"] = round(zl_6m / cl_6m, 4)
+        spread_data["contracts_6m"] = {
+            "zl": f"ZL +6m @ {zl_6m:.2f} ({zl_6m_label})",
+            "cl": f"CL +6m @ {cl_6m:.2f} ({cl_6m_label})",
+        }
+
+
 def process_spreads(price_file: Path) -> dict:
     """Process all spreads"""
     with open(price_file) as f:
         prices = json.load(f)
-    
+
+    futures_data = load_futures()
+
     result = {
         "timestamp": datetime.now().isoformat(),
         "spreads": {}
     }
-    
+
     for spread_key, spread_def in SPREADS.items():
         spread_data = calculate_spread(prices, spread_key, spread_def)
         if spread_data:
             result["spreads"][spread_key] = spread_data
-    
+
+    # Apply forward-curve overrides
+    if futures_data:
+        if "feedlot" in result["spreads"]:
+            apply_feedlot_cycle(result["spreads"]["feedlot"], futures_data)
+        if "soy_crush" in result["spreads"]:
+            apply_crush_forward(result["spreads"]["soy_crush"], futures_data)
+        if "zl_cl" in result["spreads"]:
+            apply_zlcl_term_structure(result["spreads"]["zl_cl"], futures_data)
+
+    # Lag metadata (supply-chain delay between signal and market impact)
+    if "feedlot" in result["spreads"]:
+        result["spreads"]["feedlot"]["lag_months"] = 6
+        result["spreads"]["feedlot"]["lag_note"] = (
+            "Impacto na oferta bovina em 12-18 meses. "
+            "Crush negativo hoje \u2192 menos abate em 2027 Q1."
+        )
+    if "cattle_crush" in result["spreads"]:
+        result["spreads"]["cattle_crush"]["lag_months"] = 12
+        result["spreads"]["cattle_crush"]["lag_note"] = (
+            "Margem de confinamento impacta decis\u00e3o de engorda. "
+            "Margem baixa hoje \u2192 menor oferta LE em 12-18 meses."
+        )
+    if "soy_crush" in result["spreads"]:
+        result["spreads"]["soy_crush"]["lag_months"] = 1
+        result["spreads"]["soy_crush"]["lag_note"] = (
+            "Margem de esmagamento impacta demanda de ZS em 30-60 dias. "
+            "Crush alto \u2192 ind\u00fastria compra mais soja."
+        )
+
     return result
 
 if __name__ == "__main__":

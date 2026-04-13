@@ -4,6 +4,7 @@ import LivestockRiskTab from "./LivestockRiskTab";
 import CostOfProductionTab from "./CostOfProductionTab";
 import SyncedChartPanel from "./SyncedChartPanel";
 import CorrelationMap from "./CorrelationMap";
+import CommodityTab from "./CommodityTab";
 import { useState, useEffect, useRef } from "react";
 
 /* ---------------------------------------------------------------------------
@@ -188,7 +189,7 @@ interface FuturesData {
   commodities:Record<string,FuturesCommodity>;
 }
 
-type Tab = "Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk"|"Paridades";
+type Tab = "Visão Geral"|"Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk"|"Paridades";
 
 // -- Color Theme ------------------------------------------------------------
 const C = {
@@ -225,7 +226,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
+const TABS:Tab[] = ["Visão Geral","Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
 
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
@@ -1244,7 +1245,7 @@ export default function Dashboard() {
   const [physIntl,setPhysIntl] = useState<any>(null);
   const [selected,setSelected] = useState("ZC");
   const [stockSelected,setStockSelected] = useState<string>("ZC");
-  const [tab,setTab] = useState<Tab>("Gráfico + COT");
+  const [tab,setTab] = useState<Tab>("Visão Geral");
   const [viewMode,setViewMode] = useState<"commodity"|"global"|"intel">("commodity");
   const [loading,setLoading] = useState(true);
   const [errors,setErrors] = useState<string[]>([]);
@@ -5543,6 +5544,7 @@ export default function Dashboard() {
 
   const renderTab = () => {
     switch(tab) {
+      case "Visão Geral": return <CommodityTab selected={selected} prices={prices} psdData={psdData} cot={cot} season={season} spreads={spreads} physicalBr={physicalBrData} parities={paritiesData} stocks={stocks} />;
       case "Gráfico + COT": return renderGraficoCOT();
       case "Comparativo": return renderComparativo();
       case "Spreads": return renderSpreads();
@@ -5638,7 +5640,7 @@ export default function Dashboard() {
                 const tooltipText = badgeLabel + (deltaVal ? ` | \u0394${deltaVal > 0 ? '+' : ''}${(deltaVal/1000).toFixed(0)}K` : '');
 
                 return (
-                  <div key={c.sym} onClick={()=>{setSelected(c.sym);setViewMode("commodity");}} style={{
+                  <div key={c.sym} onClick={()=>{setSelected(c.sym);setViewMode("commodity");setTab("Visão Geral");}} style={{
                     display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 16px",cursor:"pointer",
                     background:sel&&viewMode==="commodity"?"rgba(0,200,120,.10)":sel?"rgba(59,130,246,.08)":"transparent",
                     borderLeft:sel&&viewMode==="commodity"?`3px solid #00C878`:sel?`3px solid ${C.blue}`:"3px solid transparent",
@@ -5708,6 +5710,7 @@ export default function Dashboard() {
         {/* Global tabs -- visões macro/cross-asset */}
         <div style={{display:"flex",gap:0,borderBottom:`1px solid #1E3044`,background:"#0E1A24",overflowX:"auto"}}>
           {([
+            {label:"Visão Geral",tab:"Visão Geral"},
             {label:"Sazonalidade",tab:"Sazonalidade"},{label:"Comparativo",tab:"Comparativo"},
             {label:"Spreads",tab:"Spreads"},{label:"Físico Intl",tab:"Físico Intl"},
             {label:"Estoques",tab:"Stocks Watch"},{label:"Energia",tab:"Energia"},
@@ -5717,9 +5720,9 @@ export default function Dashboard() {
             {label:"Paridades",tab:"Paridades"},
             {label:"Portfolio",tab:"Portfolio"},{label:"Livestock Risk",tab:"Livestock Risk"},{label:"Calendario",tab:"Leitura do Dia"},
           ] as {label:string;tab:Tab;only?:string[]}[]).filter(t=>!t.only||t.only.includes(selected)).map(t=>{
-            const isActive = viewMode==="global" && tab===t.tab;
+            const isActive = (t.tab==="Visão Geral" ? viewMode==="commodity" && tab==="Visão Geral" : viewMode==="global" && tab===t.tab);
             return (
-              <button key={t.label} onClick={()=>{setViewMode("global");setTab(t.tab);}} style={{
+              <button key={t.label} onClick={()=>{setViewMode(t.tab==="Visão Geral"?"commodity":"global");setTab(t.tab);}} style={{
                 padding:"9px 16px",fontSize:10,fontWeight:isActive?700:500,
                 color:isActive?"#DCB432":"#8C96A5",background:isActive?"#142332":"transparent",
                 border:"none",cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",
@@ -5731,7 +5734,7 @@ export default function Dashboard() {
 
         {/* Content */}
         <div style={{flex:1,overflow:"auto",padding:24}}>
-          {loading ? <LoadingSpinner /> : viewMode==="intel" ? renderIntelPage() : viewMode==="commodity" ? renderCommodityView() : renderTab()}
+          {loading ? <LoadingSpinner /> : viewMode==="intel" ? renderIntelPage() : viewMode==="commodity" ? (tab==="Visão Geral" ? renderTab() : renderCommodityView()) : renderTab()}
         </div>
       </div>
     </div>

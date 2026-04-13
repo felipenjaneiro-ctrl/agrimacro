@@ -67,6 +67,64 @@ def collect_all_prices() -> dict:
         time.sleep(0.5)
     return result
 
+
+def main(skip_symbols: set = None):
+    """
+    Coleta precos via Yahoo Finance como fallback.
+    skip_symbols: conjunto de simbolos ja coletados pelo IBKR
+    que NAO serao sobrescritos pelo Yahoo.
+    """
+    import json
+    from pathlib import Path
+
+    skip_symbols = skip_symbols or set()
+
+    ph_path = Path(__file__).parent.parent / "agrimacro-dash" / "public" / "data" / "processed" / "price_history.json"
+    raw_path = Path(__file__).parent.parent / "agrimacro-dash" / "public" / "data" / "raw" / "price_history.json"
+
+    # Carregar price_history.json existente (pode ter dados do IBKR)
+    existing = {}
+    if ph_path.exists():
+        try:
+            with open(ph_path, encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+
+    # Coletar do Yahoo apenas gaps
+    yahoo_data = {}
+    for sym, info in COMMODITIES.items():
+        if sym in skip_symbols:
+            print(f"  [SKIP] {sym} -- ja coletado pelo IBKR")
+            continue
+        print(f"  Collecting {sym} ({info['name']}) from Yahoo...")
+        data = fetch_yahoo(info["yahoo"])
+        if data:
+            yahoo_data[sym] = data
+            print(f"    OK: {len(data)} candles")
+        else:
+            print(f"    FAILED: No data from Yahoo")
+        time.sleep(0.5)
+
+    # Merge: IBKR tem prioridade sobre Yahoo
+    merged = dict(existing)
+    for sym, data in yahoo_data.items():
+        if sym not in skip_symbols:
+            merged[sym] = data
+
+    # Salvar processed
+    with open(ph_path, "w", encoding="utf-8") as f:
+        json.dump(merged, f, indent=1)
+
+    # Salvar raw tambem
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(raw_path, "w", encoding="utf-8") as f:
+        json.dump(merged, f)
+
+    print(f"  Yahoo fallback: {len(yahoo_data)} coletados, {len(skip_symbols)} pulados (IBKR)")
+    return yahoo_data
+
+
 if __name__ == "__main__":
     prices = collect_all_prices()
     print(f"\nCollected {len(prices)} commodities")

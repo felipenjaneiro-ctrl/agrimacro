@@ -1,11 +1,12 @@
 """
-AgriMacro v3.2 - Pipeline Runner (25 Steps)
+AgriMacro v3.3 - Pipeline Runner (31 Steps)
 Orchestrates all data collection, processing, and content generation.
 
 Steps:
-  CORE (1-8): Prices, COT, Seasonality, Spreads, Stocks, Physical US, Physical Intl, Daily Reading
-  OPTIONAL (9-19): BCB/IBGE, EIA, USDA FAS, News Agro, Weather/Clima, Crop Progress, Macro Indicators, Google Trends, FedWatch, Correlations, Grok Email
-  GENERATION (20-25): Calendar, Daily Report, Intel Synthesis, PDF Report, Video Script, Video MP4
+  PRICES (1-3): IBKR (primary), Yahoo (fallback), Price Validation
+  CORE (4-11): COT, Seasonality, Spreads, Parities, Stocks, Physical US, Physical Intl, Daily Reading
+  OPTIONAL (12-25): BCB/IBGE, EIA, USDA FAS, Livestock PSD/Weekly, Bilateral, News, Weather, Crop Progress, Macro, Google Trends, FedWatch, Correlations, Grok
+  GENERATION (26-31): Calendar, Daily Report, Grain Ratios, Intel Synthesis, PDF Report, Video Script, Video MP4
 """
 import os
 import sys
@@ -35,18 +36,27 @@ def main():
     reports_path.mkdir(parents=True, exist_ok=True)
 
     results = {}
-    total_steps = 29
+    total_steps = 31
 
     # =========================================================
-    # CORE STEPS (1-8)
+    # CORE STEPS (1-10)
     # =========================================================
 
-    log(f"Step 1/{total_steps}: Collecting prices from Yahoo Finance...")
+    # --- COLETA DE PRECOS -------------------------------------------
+    ibkr_symbols = set()
+
+    # Step 1: IBKR (FONTE PRIMARIA)
+    log(f"Step 1/{total_steps}: Coletando precos via IBKR (fonte primaria)...")
     try:
-        from collect_prices import collect_all_prices
         from collect_ibkr import collect_ibkr_data
-        ibkr_ok = collect_ibkr_data()
+        ibkr_result = collect_ibkr_data()
+        if isinstance(ibkr_result, dict):
+            ibkr_symbols = ibkr_result.get("symbols_collected", set())
+            ibkr_ok = ibkr_result.get("status", False)
+        else:
+            ibkr_ok = bool(ibkr_result)
         if ibkr_ok:
+            log(f"IBKR: {len(ibkr_symbols)} simbolos coletados", "OK")
             try:
                 _gp = json.load(open(proc_path / "ibkr_greeks.json"))
                 _pg = _gp.get("portfolio_greeks", {})
@@ -54,17 +64,46 @@ def main():
             except Exception:
                 pass
         else:
-            print("  IBKR unavailable, using Yahoo Finance...")
-        prices = collect_all_prices()
-        with open(raw_path / "price_history.json", "w") as f:
-            json.dump(prices, f)
-        results["prices"] = {"status": "OK", "count": len(prices)}
-        log(f"Prices collected: {len(prices)} commodities", "OK")
+            log("IBKR offline -- continuando com Yahoo", "WARN")
+        results["prices_ibkr"] = {"status": "OK" if ibkr_ok else "WARN", "symbols": len(ibkr_symbols)}
     except Exception as e:
-        results["prices"] = {"status": "ERROR", "error": str(e)}
-        log(f"Prices failed: {e}", "ERR")
+        log(f"IBKR offline -- continuando com Yahoo: {e}", "WARN")
+        results["prices_ibkr"] = {"status": "WARN", "error": str(e)}
 
-    log(f"Step 2/{total_steps}: Collecting COT from CFTC...")
+    # Step 2: Yahoo Finance (FALLBACK para gaps)
+    gaps = 19 - len(ibkr_symbols)
+    log(f"Step 2/{total_steps}: Yahoo Finance (fallback para {gaps} gaps)...")
+    try:
+        from collect_prices import main as collect_prices_main
+        collect_prices_main(skip_symbols=ibkr_symbols)
+        log("Yahoo: gaps preenchidos", "OK")
+        results["prices_yahoo"] = {"status": "OK"}
+    except Exception as e:
+        log(f"Yahoo falhou: {e}", "WARN")
+        results["prices_yahoo"] = {"status": "WARN", "error": str(e)}
+
+    # Step 3: VALIDACAO OBRIGATORIA (sempre roda)
+    log(f"Step 3/{total_steps}: Validando integridade dos precos...")
+    try:
+        from validate_prices import validate_and_fix
+        val = validate_and_fix()
+        blocked = [
+            s for s, v in val.get("details", {}).items()
+            if v.get("is_suspicious")
+        ]
+        if blocked:
+            log(f"DADOS SUSPEITOS DETECTADOS E BLOQUEADOS: {blocked}", "WARN")
+        else:
+            log("Todos os precos validados -- zero suspeitos", "OK")
+        results["price_validation"] = {
+            "status": "WARN" if blocked else "OK",
+            "blocked": blocked
+        }
+    except Exception as e:
+        log(f"Validacao falhou (CRITICO): {e}", "ERR")
+        results["price_validation"] = {"status": "ERR", "error": str(e)}
+
+    log(f"Step 4/{total_steps}: Collecting COT from CFTC...")
     try:
         from collect_cot import collect_cot_data
         cot = collect_cot_data()
@@ -76,7 +115,7 @@ def main():
         results["cot"] = {"status": "ERROR", "error": str(e)}
         log(f"COT failed: {e}", "ERR")
 
-    log(f"Step 3/{total_steps}: Processing seasonality...")
+    log(f"Step 5/{total_steps}: Processing seasonality...")
     try:
         from process_seasonality import process_seasonality
         season = process_seasonality(raw_path / "price_history.json")
@@ -88,7 +127,7 @@ def main():
         results["seasonality"] = {"status": "ERROR", "error": str(e)}
         log(f"Seasonality failed: {e}", "ERR")
 
-    log(f"Step 4/{total_steps}: Processing spreads...")
+    log(f"Step 6/{total_steps}: Processing spreads...")
     try:
         from process_spreads import process_spreads
         spreads = process_spreads(raw_path / "price_history.json")
@@ -101,7 +140,7 @@ def main():
         log(f"Spreads failed: {e}", "ERR")
 
     # Step 5: Collect parities and correlations
-    log(f"Step 5/{total_steps}: Calculating market parities...")
+    log(f"Step 7/{total_steps}: Calculating market parities...")
     try:
         from collect_parities import main as collect_parities
         collect_parities()
@@ -111,7 +150,7 @@ def main():
         results["parities"] = {"status": "WARN", "error": str(e)}
         log(f"Parities failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 6/{total_steps}: Processing stocks watch...")
+    log(f"Step 8/{total_steps}: Processing stocks watch...")
     try:
         from process_stocks import process_stocks_watch
         stocks = process_stocks_watch(proc_path / "seasonality.json")
@@ -123,7 +162,7 @@ def main():
         results["stocks"] = {"status": "ERROR", "error": str(e)}
         log(f"Stocks watch failed: {e}", "ERR")
 
-    log(f"Step 7/{total_steps}: Collecting physical market prices...")
+    log(f"Step 9/{total_steps}: Collecting physical market prices...")
     try:
         from collect_physical import collect_physical
         physical = collect_physical(str(raw_path / "price_history.json"))
@@ -135,7 +174,7 @@ def main():
         results["physical"] = {"status": "ERROR", "error": str(e)}
         log(f"Physical prices failed: {e}", "ERR")
 
-    log(f"Step 8/{total_steps}: Collecting international physical prices...")
+    log(f"Step 10/{total_steps}: Collecting international physical prices...")
     try:
         from collect_physical_intl import collect_physical_intl
         phys_intl = collect_physical_intl()
@@ -147,7 +186,7 @@ def main():
         results["physical_intl"] = {"status": "ERROR", "error": str(e)}
         log(f"Intl physical failed: {e}", "ERR")
 
-    log(f"Step 9/{total_steps}: Generating daily reading...")
+    log(f"Step 11/{total_steps}: Generating daily reading...")
     try:
         from generate_reading import save_reading
         reading = save_reading(proc_path)
@@ -161,7 +200,7 @@ def main():
     # OPTIONAL STEPS (9-13) - NEVER block the pipeline
     # =========================================================
 
-    log(f"Step 10/{total_steps}: Collecting BCB, IBGE, CONAB data...")
+    log(f"Step 12/{total_steps}: Collecting BCB, IBGE, CONAB data...")
     try:
         from collect_new_sources import collect_bcb
         collect_bcb()
@@ -177,7 +216,7 @@ def main():
         results["bcb_ibge"] = {"status": "WARN", "error": str(e)}
         log(f"IBGE/CONAB failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 11/{total_steps}: Collecting EIA energy data...")
+    log(f"Step 13/{total_steps}: Collecting EIA energy data...")
     try:
         from collect_eia import main as collect_eia
         collect_eia()
@@ -187,7 +226,7 @@ def main():
         results["eia"] = {"status": "WARN", "error": str(e)}
         log(f"EIA failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 12/{total_steps}: Collecting USDA FAS data...")
+    log(f"Step 14/{total_steps}: Collecting USDA FAS data...")
     try:
         from collect_usda_psd_csv import main as collect_fas
         collect_fas()
@@ -197,7 +236,7 @@ def main():
         results["usda_fas"] = {"status": "WARN", "error": str(e)}
         log(f"USDA FAS failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 13/{total_steps}: Collecting livestock PSD data...")
+    log(f"Step 15/{total_steps}: Collecting livestock PSD data...")
     try:
         from collect_livestock_psd import main as collect_livestock_psd
         collect_livestock_psd()
@@ -207,7 +246,7 @@ def main():
         results["livestock_psd"] = {"status": "WARN", "error": str(e)}
         log(f"Livestock PSD failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 14/{total_steps}: Collecting livestock weekly indicators...")
+    log(f"Step 16/{total_steps}: Collecting livestock weekly indicators...")
     try:
         from collect_livestock_weekly import main as collect_livestock_weekly
         collect_livestock_weekly()
@@ -217,7 +256,7 @@ def main():
         results["livestock_weekly"] = {"status": "WARN", "error": str(e)}
         log(f"Livestock weekly failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 15/{total_steps}: Generating bilateral indicators...")
+    log(f"Step 17/{total_steps}: Generating bilateral indicators...")
     try:
         from generate_bilateral import main as generate_bilateral
         generate_bilateral()
@@ -227,7 +266,7 @@ def main():
         results["bilateral"] = {"status": "WARN", "error": str(e)}
         log(f"Bilateral failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 16/{total_steps}: Collecting news & FRED macro...")
+    log(f"Step 18/{total_steps}: Collecting news & FRED macro...")
     try:
         from collect_news import main as collect_news
         collect_news()
@@ -237,7 +276,7 @@ def main():
         results["news"] = {"status": "WARN", "error": str(e)}
         log(f"News failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 17/{total_steps}: Collecting agricultural weather...")
+    log(f"Step 19/{total_steps}: Collecting agricultural weather...")
     try:
         from collect_weather import main as collect_weather
         collect_weather()
@@ -247,7 +286,7 @@ def main():
         results["weather"] = {"status": "WARN", "error": str(e)}
         log(f"Weather failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 18/{total_steps}: Collecting USDA crop progress...")
+    log(f"Step 20/{total_steps}: Collecting USDA crop progress...")
     try:
         from collect_crop_progress import main as collect_crop_progress
         collect_crop_progress()
@@ -257,7 +296,7 @@ def main():
         results["crop_progress"] = {"status": "WARN", "error": str(e)}
         log(f"Crop progress failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 19/{total_steps}: Collecting macro indicators (S&P500, VIX, 10Y)...")
+    log(f"Step 21/{total_steps}: Collecting macro indicators (S&P500, VIX, 10Y)...")
     try:
         from collect_macro_indicators import main as collect_macro
         collect_macro()
@@ -267,7 +306,7 @@ def main():
         results["macro_indicators"] = {"status": "WARN", "error": str(e)}
         log(f"Macro indicators failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 20/{total_steps}: Collecting Google Trends...")
+    log(f"Step 22/{total_steps}: Collecting Google Trends...")
     try:
         from collect_google_trends import main as collect_gtrends
         collect_gtrends()
@@ -277,7 +316,7 @@ def main():
         results["google_trends"] = {"status": "WARN", "error": str(e)}
         log(f"Google Trends failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 21/{total_steps}: Collecting FedWatch probabilities...")
+    log(f"Step 23/{total_steps}: Collecting FedWatch probabilities...")
     try:
         from collect_fedwatch import main as collect_fedwatch
         collect_fedwatch()
@@ -287,7 +326,7 @@ def main():
         results["fedwatch"] = {"status": "WARN", "error": str(e)}
         log(f"FedWatch failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 22/{total_steps}: Computing correlation matrix & causal chains...")
+    log(f"Step 24/{total_steps}: Computing correlation matrix & causal chains...")
     try:
         from collect_correlations import main as collect_correlations
         collect_correlations()
@@ -297,7 +336,7 @@ def main():
         results["correlations"] = {"status": "WARN", "error": str(e)}
         log(f"Correlations failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 23/{total_steps}: Collecting Grok emails...")
+    log(f"Step 25/{total_steps}: Collecting Grok emails...")
     try:
         from collect_grok_email import main as collect_grok
         collect_grok()
@@ -311,7 +350,7 @@ def main():
     # GENERATION STEPS (20-25)
     # =========================================================
 
-    log(f"Step 24/{total_steps}: Generating calendar...")
+    log(f"Step 26/{total_steps}: Generating calendar...")
     try:
         from collect_calendar import main as generate_calendar
         generate_calendar()
@@ -321,7 +360,7 @@ def main():
         results["calendar"] = {"status": "WARN", "error": str(e)}
         log(f"Calendar failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 25/{total_steps}: Generating daily report...")
+    log(f"Step 27/{total_steps}: Generating daily report...")
     try:
         from generate_report import main as generate_report
         generate_report()
@@ -342,7 +381,7 @@ def main():
     except Exception as _e: print(f"    grain_ratios ERR: {_e}")
     # ------------------------------------
 
-    log(f"Step 26/{total_steps}: Generating intel synthesis...")
+    log(f"Step 28/{total_steps}: Generating intel synthesis...")
     try:
         from generate_intel_synthesis import main as generate_synthesis
         generate_synthesis()
@@ -352,7 +391,7 @@ def main():
         results["intel_synthesis"] = {"status": "WARN", "error": str(e)}
         log(f"Intel synthesis failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 27/{total_steps}: Generating PDF report...")
+    log(f"Step 29/{total_steps}: Generating PDF report...")
     try:
         from generate_report_pdf import build_pdf
         build_pdf()
@@ -362,7 +401,7 @@ def main():
         results["pdf"] = {"status": "ERROR", "error": str(e)}
         log(f"PDF generation failed: {e}", "ERR")
 
-    log(f"Step 28/{total_steps}: Generating video script...")
+    log(f"Step 30/{total_steps}: Generating video script...")
     try:
         from generate_video_script import main as generate_video
         generate_video()
@@ -372,7 +411,7 @@ def main():
         results["video_script"] = {"status": "ERROR", "error": str(e)}
         log(f"Video script failed: {e}", "ERR")
 
-    log(f"Step 29/{total_steps}: Generating video MP4...")
+    log(f"Step 31/{total_steps}: Generating video MP4...")
     try:
         from step18_video_generator import main as generate_video_mp4
         generate_video_mp4()
