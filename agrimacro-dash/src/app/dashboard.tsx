@@ -1436,11 +1436,16 @@ export default function Dashboard() {
       ) : (
         <DataPlaceholder title="Sem dados de preço" detail={`${selected} não encontrado em price_history.json`} />
       )}
-      <div style={{marginTop:12}}>
+      <div style={{marginTop:16}}>
         {hasCOT(selected) ? (
           <>
-            <div style={{fontSize:11,fontWeight:700,color:C.textDim,padding:"8px 0 4px",borderTop:`1px solid ${C.border}`}}>
-              COT -- LEGACY (Commercial vs Non-Commercial)
+            <div style={{display:'flex',alignItems:'center',gap:8,padding:"10px 0 6px",borderTop:`2px solid #1E3044`,marginTop:4}}>
+              <div style={{width:3,height:16,borderRadius:2,background:'#DCB432'}}/>
+              <span style={{fontSize:13,fontWeight:700,color:'#DCB432',letterSpacing:0.3}}>COT POSITIONING</span>
+              <span style={{fontSize:9,color:C.textMuted}}>CFTC Commitments of Traders</span>
+            </div>
+            <div style={{fontSize:11,fontWeight:700,color:C.textDim,padding:"6px 0 4px"}}>
+              LEGACY (Commercial vs Non-Commercial)
             </div>
             {cotLegacy?.history?.length ? (
               <COTChart history={cotLegacy.history} type="legacy" />
@@ -1560,10 +1565,12 @@ export default function Dashboard() {
               const detailData = allComms[detailSym]?.disaggregated?.delta_analysis;
 
               return (
-                <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+                <div style={{marginTop:16,borderTop:`2px solid #1E3044`,paddingTop:12}}>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                    <div style={{fontSize:11,fontWeight:700,color:C.textDim}}>
-                      COT DELTA ANALYSIS \u2014 SINAIS DE REVERS\u00c3O
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{width:3,height:16,borderRadius:2,background:'#DC3C3C'}}/>
+                      <span style={{fontSize:12,fontWeight:700,color:'#e2e8f0'}}>COT DELTA ANALYSIS</span>
+                      <span style={{fontSize:9,color:C.textMuted}}>Sinais de Revers\u00e3o</span>
                     </div>
                     <div style={{display:'flex',gap:4}}>
                       {(['overview','detail'] as const).map(v => (
@@ -2447,20 +2454,20 @@ export default function Dashboard() {
 
         {/* Summary cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
-          <div style={{background:C.redBg,borderRadius:8,padding:16,border:`1px solid ${C.redBorder}`,textAlign:"center"}}>
-            <div style={{fontSize:28,fontWeight:800,color:C.red}}>{aperto.length}</div>
-            <div style={{fontSize:11,color:C.red,fontWeight:600}}>ALERTA</div>
-            <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Aperto ou extremo</div>
+          <div style={{background:C.redBg,borderRadius:8,padding:14,border:`1px solid ${C.redBorder}`,textAlign:"center",borderLeft:'3px solid #DC3C3C'}}>
+            <div style={{fontSize:26,fontWeight:800,color:'#DC3C3C',fontFamily:'monospace'}}>{aperto.length}</div>
+            <div style={{fontSize:10,color:'#DC3C3C',fontWeight:600}}>APERTO</div>
+            <div style={{fontSize:8,color:C.textMuted,marginTop:2}}>Estoque baixo ou em queda</div>
           </div>
-          <div style={{background:C.amberBg,borderRadius:8,padding:16,border:`1px solid ${C.amberBorder}`,textAlign:"center"}}>
-            <div style={{fontSize:28,fontWeight:800,color:C.amber}}>{neutro.length}</div>
-            <div style={{fontSize:11,color:C.amber,fontWeight:600}}>NEUTRO</div>
-            <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Equilibrado</div>
+          <div style={{background:C.amberBg,borderRadius:8,padding:14,border:`1px solid ${C.amberBorder}`,textAlign:"center",borderLeft:'3px solid #DCB432'}}>
+            <div style={{fontSize:26,fontWeight:800,color:'#DCB432',fontFamily:'monospace'}}>{neutro.length}</div>
+            <div style={{fontSize:10,color:'#DCB432',fontWeight:600}}>NEUTRO</div>
+            <div style={{fontSize:8,color:C.textMuted,marginTop:2}}>Equil\u00edbrio oferta/demanda</div>
           </div>
-          <div style={{background:C.greenBg,borderRadius:8,padding:16,border:`1px solid ${C.greenBorder}`,textAlign:"center"}}>
-            <div style={{fontSize:28,fontWeight:800,color:C.green}}>{excesso.length}</div>
-            <div style={{fontSize:11,color:C.green,fontWeight:600}}>ATENCAO</div>
-            <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Acima media ou excesso</div>
+          <div style={{background:C.greenBg,borderRadius:8,padding:14,border:`1px solid ${C.greenBorder}`,textAlign:"center",borderLeft:'3px solid #00C878'}}>
+            <div style={{fontSize:26,fontWeight:800,color:'#00C878',fontFamily:'monospace'}}>{excesso.length}</div>
+            <div style={{fontSize:10,color:'#00C878',fontWeight:600}}>EXCESSO</div>
+            <div style={{fontSize:8,color:C.textMuted,marginTop:2}}>Estoque acima da m\u00e9dia</div>
           </div>
         </div>
 
@@ -5488,7 +5495,7 @@ export default function Dashboard() {
       <div style={{width:220,minHeight:"100vh",background:C.panel,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column"}}>
         <div style={{padding:"18px 16px 10px",borderBottom:`1px solid ${C.border}`}}>
           <div style={{fontSize:16,fontWeight:800,letterSpacing:1.5,color:C.text}}>AGRIMACRO</div>
-          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,marginTop:3}}>COMMODITIES DASHBOARD v3.2</div>
+          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,marginTop:3}}>COMMODITIES DASHBOARD v3.3</div>
         </div>
         
         {/* Commodities list */}
@@ -5520,7 +5527,7 @@ export default function Dashboard() {
           <div style={{height:1,background:C.border,margin:"4px 16px 8px"}}/>
           {["Grãos","Softs","Pecuária","Energia","Metais","Macro"].map(grp=>(
             <div key={grp}>
-              <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
+              <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:'#DCB432',letterSpacing:1.2,textTransform:"uppercase",borderTop:grp!=="Gr\u00e3os"?`1px solid ${C.border}`:'none',marginTop:grp!=="Gr\u00e3os"?4:0}}>{grp}</div>
               {COMMODITIES.filter(c=>c.group===grp).map(c=>{
                 const p=getPrice(c.sym);const ch=getChange(c.sym);const sel=c.sym===selected;
                 const cotComm = cot?.commodities?.[c.sym];
@@ -5593,55 +5600,67 @@ export default function Dashboard() {
         </div>
         
         {/* Pipeline status */}
-        <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,fontSize:9}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:pipelineOk?C.green:C.red}}/>
-            <span style={{color:C.textMuted}}>{pipelineOk?"Pipeline Online":"Dados Parciais"}</span>
+        <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,fontSize:9}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:pipelineOk?'#00C878':'#DC3C3C',boxShadow:pipelineOk?'0 0 4px #00C878':'0 0 4px #DC3C3C'}}/>
+            <span style={{color:pipelineOk?'#00C878':'#DC3C3C',fontWeight:600}}>{pipelineOk?"Online":"Parcial"}</span>
           </div>
-          <div style={{color:C.textMuted}}>Última atualização: {lastDate}</div>
+          <div style={{color:C.textMuted}}>{lastDate}</div>
+          {errors.length > 0 && <div style={{color:'#DC3C3C',marginTop:2}}>{errors.length} fonte(s) com erro</div>}
         </div>
       </div>
 
       {/* Main content */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {/* Header */}
-        <div style={{padding:"14px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.panel}}>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{fontSize:16,fontWeight:700}}>{viewMode==="intel"?"Central de Inteligência":COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
+        <div style={{padding:"10px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.panel}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:16,fontWeight:700}}>{viewMode==="intel"?"Central de Intelig\u00eancia":COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
             <Badge label="DADOS REAIS" color={C.green} />
-            {pipelineOk && <Badge label="PIPELINE ONLINE" color={C.blue} />}
-            <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:12}}>
-              <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:ibkrRefreshing?"#555":C.blue,color:"#fff",border:"none",borderRadius:4,cursor:ibkrRefreshing?"wait":"pointer",letterSpacing:0.5}}>
-                {ibkrRefreshing?"? Atualizando...":"IBKR Refresh"}
-              </button>
-              <span style={{fontSize:10,color:C.textMuted}}>IBKR: {ibkrTime}</span>
-              <button onClick={refreshPipeline} disabled={pipeRefresh} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:pipeRefresh?"#555":"#e94560",color:"#fff",border:"none",borderRadius:4,cursor:pipeRefresh?"wait":"pointer",letterSpacing:0.5,marginLeft:8}}>
-                {pipeRefresh?"? Rodando...":"Atualizar Pipeline"}
-              </button>
-              {pipeMsg && <span style={{fontSize:9,color:C.textMuted,marginLeft:4}}>{pipeMsg}</span>}
-              <a href="/api/latest-pdf" target="_blank" rel="noopener noreferrer" style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#a855f7",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",letterSpacing:0.5,textDecoration:"none",marginLeft:8}}>PDF Report</a>
-            </div>
+            {pipelineOk && <Badge label="PIPELINE OK" color={C.blue} />}
           </div>
-          <div style={{fontSize:11,color:C.textMuted}}>{lastDate}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"4px 10px",fontSize:9,fontWeight:600,background:ibkrRefreshing?"#333":C.blue,color:"#fff",border:"none",borderRadius:4,cursor:ibkrRefreshing?"wait":"pointer"}}>
+              {ibkrRefreshing?"Atualizando...":"IBKR"}
+            </button>
+            <span style={{fontSize:9,color:C.textMuted}}>{ibkrTime}</span>
+            <div style={{width:1,height:14,background:'#1E3044',margin:'0 4px'}}/>
+            <button onClick={refreshPipeline} disabled={pipeRefresh} style={{padding:"4px 10px",fontSize:9,fontWeight:600,background:pipeRefresh?"#333":"#e94560",color:"#fff",border:"none",borderRadius:4,cursor:pipeRefresh?"wait":"pointer"}}>
+              {pipeRefresh?"Rodando...":"Pipeline"}
+            </button>
+            {pipeMsg && <span style={{fontSize:8,color:C.textMuted}}>{pipeMsg}</span>}
+            <div style={{width:1,height:14,background:'#1E3044',margin:'0 4px'}}/>
+            <a href="/api/latest-pdf" target="_blank" rel="noopener noreferrer" style={{padding:"4px 10px",fontSize:9,fontWeight:600,background:"#a855f7",color:"#fff",border:"none",borderRadius:4,textDecoration:"none"}}>PDF</a>
+            <span style={{fontSize:9,color:C.textMuted,marginLeft:4}}>{lastDate}</span>
+          </div>
         </div>
 
-        {/* Global tabs -- visões macro/cross-asset */}
-        <div style={{display:"flex",gap:0,borderBottom:`1px solid #1E3044`,background:"#0E1A24",overflowX:"auto"}}>
+        {/* Global tabs -- grouped by category */}
+        <div style={{display:"flex",gap:0,borderBottom:`1px solid #1E3044`,background:"#0E1A24",overflowX:"auto",alignItems:"center"}}>
           {([
-            {label:"Sazonalidade",tab:"Sazonalidade"},{label:"Comparativo",tab:"Comparativo"},
-            {label:"Spreads",tab:"Spreads"},{label:"Físico Intl",tab:"Físico Intl"},
-            {label:"Estoques",tab:"Stocks Watch"},{label:"Energia",tab:"Energia"},
-            {label:"Custo Produção",tab:"Custo Produção"},
+            {label:"Sazonalidade",tab:"Sazonalidade"},
+            {label:"Comparativo",tab:"Comparativo"},
+            {label:"sep1",tab:"" as Tab,sep:true},
+            {label:"Estoques",tab:"Stocks Watch"},
+            {label:"Spreads",tab:"Spreads"},
             {label:"Grain Ratios",tab:"Grain Ratios",only:["ZC","ZS","ZW","KE","ZM","ZL"]},
-            {label:"Livestock Risk",tab:"Livestock Risk",only:["LE","GF","HE"]},
-            {label:"Bilateral",tab:"Bilateral"},
             {label:"Paridades",tab:"Paridades"},
-            {label:"Portfolio",tab:"Portfolio"},{label:"Calendario",tab:"Leitura do Dia"},
-          ] as {label:string;tab:Tab;only?:string[]}[]).filter(t=>!t.only||t.only.includes(selected)).map(t=>{
+            {label:"sep2",tab:"" as Tab,sep:true},
+            {label:"F\u00edsico Intl",tab:"Físico Intl"},
+            {label:"Energia",tab:"Energia"},
+            {label:"Bilateral",tab:"Bilateral"},
+            {label:"sep3",tab:"" as Tab,sep:true},
+            {label:"Portfolio",tab:"Portfolio"},
+            {label:"Livestock Risk",tab:"Livestock Risk",only:["LE","GF","HE"]},
+            {label:"sep4",tab:"" as Tab,sep:true},
+            {label:"Custo Produ\u00e7\u00e3o",tab:"Custo Produção"},
+            {label:"Calend\u00e1rio",tab:"Leitura do Dia"},
+          ] as {label:string;tab:Tab;only?:string[];sep?:boolean}[]).filter(t=>t.sep||!t.only||t.only.includes(selected)).map(t=>{
+            if (t.sep) return <div key={t.label} style={{width:1,height:16,background:'#1E3044',margin:'0 2px',flexShrink:0}}/>;
             const isActive = viewMode==="global" && tab===t.tab;
             return (
               <button key={t.label} onClick={()=>{setViewMode("global");setTab(t.tab);}} style={{
-                padding:"9px 16px",fontSize:10,fontWeight:isActive?700:500,
+                padding:"9px 14px",fontSize:10,fontWeight:isActive?700:500,
                 color:isActive?"#DCB432":"#8C96A5",background:isActive?"#142332":"transparent",
                 border:"none",cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",
                 borderBottom:isActive?"2px solid #DCB432":"2px solid transparent",
