@@ -241,25 +241,76 @@ const EXPLANATIONS: Record<string, { title: string; text: string }[]> = {
   ],
 };
 
+function PanelCOTDelta({ cotData, symbol }: { cotData: any; symbol: string }) {
+  const da = cotData?.commodities?.[symbol]?.disaggregated?.delta_analysis;
+  if (!da) return <div style={{ color: C.textMuted, padding: 20, fontSize: 10 }}>COT Delta indispon\u00edvel para {symbol}</div>;
+  const sig = da.signals?.[0];
+  const dirColor = da.dominant_direction === "BULLISH" ? C.green : da.dominant_direction === "BEARISH" ? C.red : C.textMuted;
+  const deltas = da.deltas_8w || [];
+  const maxD = Math.max(...deltas.map((d: number) => Math.abs(d)), 1);
+  return (
+    <div style={{ padding: "14px 16px", boxSizing: "border-box" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ background: C.panelDark, borderRadius: 6, padding: "6px 10px", textAlign: "center", minWidth: 80 }}>
+          <div style={{ fontSize: 9, color: C.textMuted }}>COT Index</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: da.cot_index >= 70 ? C.green : da.cot_index <= 30 ? C.red : C.gold }}>{da.cot_index?.toFixed(1) ?? "N/A"}</div>
+        </div>
+        <div style={{ background: C.panelDark, borderRadius: 6, padding: "6px 10px", textAlign: "center", minWidth: 80 }}>
+          <div style={{ fontSize: 9, color: C.textMuted }}>Delta Semanal</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: da.current_delta >= 0 ? C.green : C.red }}>{da.current_delta >= 0 ? "+" : ""}{da.current_delta?.toLocaleString() ?? "N/A"}</div>
+        </div>
+        <div style={{ background: C.panelDark, borderRadius: 6, padding: "6px 10px", textAlign: "center", minWidth: 80 }}>
+          <div style={{ fontSize: 9, color: C.textMuted }}>OI Trend</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: (da.oi_trend_pct || 0) >= 0 ? C.green : C.red }}>{da.oi_trend_pct != null ? (da.oi_trend_pct >= 0 ? "+" : "") + da.oi_trend_pct.toFixed(1) + "%" : "N/A"}</div>
+        </div>
+        <div style={{ background: C.panelDark, borderRadius: 6, padding: "6px 10px", textAlign: "center", minWidth: 80 }}>
+          <div style={{ fontSize: 9, color: C.textMuted }}>Reversal Score</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{da.reversal_score ?? 0}</div>
+        </div>
+      </div>
+      {sig && (
+        <div style={{ padding: "8px 12px", borderRadius: 6, marginBottom: 10, background: (sig.color || dirColor) + "22", border: "1px solid " + (sig.color || dirColor) }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: sig.color || dirColor }}>{sig.label || sig.type}</div>
+          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>{sig.description}</div>
+        </div>
+      )}
+      <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 4 }}>Deltas \u00FAltimas {deltas.length} semanas (Managed Money Net Change)</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 2, height: 50 }}>
+        {deltas.map((d: number, i: number) => {
+          const h = Math.max(Math.abs(d) / maxD * 40, 2);
+          const isLast = i === deltas.length - 1;
+          return (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
+              <div style={{ width: "100%", maxWidth: 20, height: h, background: d >= 0 ? C.green : C.red, borderRadius: 2, opacity: isLast ? 1 : 0.6, border: isLast ? "1px solid " + C.gold : "none" }} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function LivestockRiskTab() {
   const [sym, setSym] = useState<"LE" | "GF" | "HE">("LE");
   const [data, setData] = useState<any>(null);
+  const [cotData, setCotData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [revalidating, setRevalidating] = useState(false);
   const [genAt, setGenAt] = useState("");
 
   const fetchData = (isRefresh = false) => {
     if (isRefresh) setRevalidating(true);
-    fetch("/data/processed/bottleneck.json")
-      .then(r => r.json())
-      .then(j => {
-        const comms = j.commodities || {};
-        if (Object.keys(comms).length > 0) {
-          setData(comms);
-          setGenAt(j.generated_at || "");
-        }
-      })
-      .catch(() => {})
+    Promise.all([
+      fetch("/data/processed/bottleneck.json").then(r => r.json()),
+      fetch("/data/processed/cot.json").then(r => r.json()).catch(() => null),
+    ]).then(([bj, cj]) => {
+      const comms = bj.commodities || {};
+      if (Object.keys(comms).length > 0) {
+        setData(comms);
+        setGenAt(bj.generated_at || "");
+      }
+      if (cj) setCotData(cj);
+    }).catch(() => {})
       .finally(() => { setLoading(false); setRevalidating(false); });
   };
 
@@ -317,7 +368,7 @@ export default function LivestockRiskTab() {
 
       {d && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "340px 280px", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "340px 280px", gap: 12, marginBottom: 12 }}>
             <div style={panelStyle}>
               {panelHdr("CURRENT STATE -- " + names[sym] + " -- " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))}
               <div style={{ flex: 1, overflow: "auto" }}><PanelCurrentState d={d} /></div>
@@ -334,6 +385,11 @@ export default function LivestockRiskTab() {
               {panelHdr("FRAMEWORK DE ACAO -- Fases e Triggers")}
               <div style={{ flex: 1, overflow: "auto" }}><PanelFramework d={d} /></div>
             </div>
+          </div>
+
+          <div style={{ ...panelStyle, marginBottom: 16 }}>
+            {panelHdr("COT DELTA -- " + names[sym] + " (CFTC Disaggregated Managed Money)")}
+            <PanelCOTDelta cotData={cotData} symbol={sym} />
           </div>
 
           {d.strategy && (

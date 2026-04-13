@@ -251,6 +251,37 @@ def compute_score(month, ret_6m, ret_3m, ret_12m, symbol, _prices_override=None)
     factors.append({"name": "Decel. Mom 3m ({:+.1f}%)".format(pct3),
                     "value": round(dec, 2),
                     "direction": "positive" if dec >= 0 else "negative"})
+
+    # Fator 5 — Cattle Crush (somente para LE)
+    if symbol == "LE":
+        crush_score = 0.0
+        crush_z = 0.0
+        try:
+            import json as _json
+            _spreads_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                'public', 'data', 'processed', 'spreads.json'
+            )
+            with open(_spreads_path) as _f:
+                _sp = _json.load(_f)
+            _crush = _sp.get('spreads', {}).get('cattle_crush', {})
+            crush_z = _crush.get('zscore_1y', 0)
+            if crush_z >= 1.5:
+                crush_score = 1.0
+            elif crush_z >= 0.5:
+                crush_score = 0.5
+            elif crush_z <= -1.5:
+                crush_score = -1.0
+            elif crush_z <= -0.5:
+                crush_score = -0.5
+        except Exception:
+            pass
+        score += crush_score
+        _crush_desc = "Confinamento lucrativo" if crush_score > 0 else "Confinamento no prejuizo" if crush_score < 0 else "Neutro"
+        factors.append({"name": "Cattle Crush (z={:.2f})".format(crush_z),
+                        "value": round(crush_score, 2),
+                        "direction": "positive" if crush_score >= 0 else "negative"})
+
     return round(score, 2), factors
 
 def get_regime(s):

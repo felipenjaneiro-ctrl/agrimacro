@@ -486,6 +486,130 @@ def main():
             "category": "insumos"
         }
 
+    # ─────────────────────────────────────────────
+    # 10. LE/ZC RATIO — Boi Gordo / Milho (Confinamento)
+    # milho caro vs boi = confinamento no prejuízo
+    # ─────────────────────────────────────────────
+    le = get_last(prices, "LE")   # cents/lb
+    zc = get_last(prices, "ZC")   # cents/bu
+    if le and zc:
+        le_per_cwt = le  # cents/lb ≈ $/cwt
+        ratio = le_per_cwt / (zc / 100)  # $/cwt ÷ $/bu
+        series_ratio, _ = calc_ratio_series(prices, "LE", "ZC", divisor_a=1, divisor_b=0.01)
+        z = zscore(series_ratio)
+        t7 = trend(series_ratio, 7)
+        t30 = trend(series_ratio, 30)
+
+        if ratio > 30:
+            signal = "BOI CARO \u2014 Confinamento lucrativo"
+            color = "#00C878"
+        elif ratio > 22:
+            signal = "EQUILIBRADO"
+            color = "#DCB432"
+        else:
+            signal = "MILHO CARO \u2014 Confinamento no preju\u00edzo"
+            color = "#DC3C3C"
+
+        parities["le_zc_ratio"] = {
+            "name": "Boi Gordo / Milho (Confinamento)",
+            "description": "Lucratividade do confinamento. Alto = vale confinar. Baixo = preju\u00edzo, abate precoce previsto.",
+            "value": round(ratio, 2),
+            "unit": "$/cwt por $/bu",
+            "z_score": z,
+            "trend_7d": t7,
+            "trend_30d": t30,
+            "signal": signal,
+            "signal_color": color,
+            "threshold_low": 22.0,
+            "threshold_high": 30.0,
+            "category": "pecuaria"
+        }
+
+    # ─────────────────────────────────────────────
+    # 11. GF/LE SPREAD — Feeder vs Live Cattle
+    # Diferença entre bezerro e boi gordo
+    # Alto = recria cara (menos animais entrando)
+    # ─────────────────────────────────────────────
+    gf = get_last(prices, "GF")   # cents/lb
+    if gf and le:
+        spread = gf - le  # cents/lb
+        bars_gf = get_bars(prices, "GF")
+        bars_le2 = get_bars(prices, "LE")
+        dates_gf = {b["date"]: b["close"] for b in bars_gf}
+        dates_le2 = {b["date"]: b["close"] for b in bars_le2}
+        common = sorted(set(dates_gf) & set(dates_le2))
+        spread_series = [dates_gf[d] - dates_le2[d] for d in common]
+
+        z = zscore(spread_series)
+        t7 = trend(spread_series, 7)
+        t30 = trend(spread_series, 30)
+
+        if spread > 130:
+            signal = "RECRIA MUITO CARA \u2014 Contra\u00e7\u00e3o de rebanho"
+            color = "#DC3C3C"
+        elif spread > 100:
+            signal = "RECRIA CARA \u2014 Vigil\u00e2ncia"
+            color = "#DCB432"
+        elif spread > 60:
+            signal = "SPREAD NORMAL"
+            color = "#64748b"
+        else:
+            signal = "RECRIA BARATA \u2014 Expans\u00e3o poss\u00edvel"
+            color = "#00C878"
+
+        parities["gf_le_spread"] = {
+            "name": "Feeder vs Live Cattle (Ciclo de Recria)",
+            "description": "Diferen\u00e7a de pre\u00e7o entre bezerro (GF) e boi gordo (LE). Alto = recria cara = menos animais entrando no ciclo = alta futura de LE.",
+            "value": round(spread, 2),
+            "unit": "cents/lb",
+            "z_score": z,
+            "trend_7d": t7,
+            "trend_30d": t30,
+            "signal": signal,
+            "signal_color": color,
+            "threshold_low": 60.0,
+            "threshold_high": 130.0,
+            "category": "pecuaria"
+        }
+
+    # ─────────────────────────────────────────────
+    # 12. HE/ZC RATIO — Suíno vs Milho
+    # Lucratividade da produção de suínos
+    # ─────────────────────────────────────────────
+    he = get_last(prices, "HE")   # cents/lb
+    if he and zc:
+        he_per_cwt = he
+        ratio_he = he_per_cwt / (zc / 100)
+        series_ratio_he, _ = calc_ratio_series(prices, "HE", "ZC", divisor_a=1, divisor_b=0.01)
+        z = zscore(series_ratio_he)
+        t7 = trend(series_ratio_he, 7)
+        t30 = trend(series_ratio_he, 30)
+
+        if ratio_he > 20:
+            signal = "SU\u00cdNO CARO \u2014 Produ\u00e7\u00e3o lucrativa"
+            color = "#00C878"
+        elif ratio_he > 14:
+            signal = "EQUILIBRADO"
+            color = "#DCB432"
+        else:
+            signal = "MILHO CARO \u2014 Produ\u00e7\u00e3o pressionada"
+            color = "#DC3C3C"
+
+        parities["he_zc_ratio"] = {
+            "name": "Su\u00edno / Milho (Produ\u00e7\u00e3o HE)",
+            "description": "Lucratividade da produ\u00e7\u00e3o de su\u00ednos. Su\u00edno precisa de ~3x o peso em milho para produzir 1lb de carne.",
+            "value": round(ratio_he, 2),
+            "unit": "$/cwt por $/bu",
+            "z_score": z,
+            "trend_7d": t7,
+            "trend_30d": t30,
+            "signal": signal,
+            "signal_color": color,
+            "threshold_low": 14.0,
+            "threshold_high": 20.0,
+            "category": "pecuaria"
+        }
+
     # Salvar
     output = {
         "generated_at": generated_at,
