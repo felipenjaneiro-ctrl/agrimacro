@@ -147,7 +147,7 @@ def fetch_packer_proxy():
             prices = json.load(f)
 
         result = {}
-        for sym, label in [("LE", "Live Cattle"), ("HE", "Lean Hogs")]:
+        for sym, label in [("LE", "Live Cattle"), ("GF", "Feeder Cattle"), ("HE", "Lean Hogs")]:
             bars = prices.get(sym, {})
             if isinstance(bars, dict):
                 bars = bars.get("bars", [])

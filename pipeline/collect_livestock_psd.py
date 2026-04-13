@@ -15,7 +15,7 @@ BULK_URL = "https://apps.fas.usda.gov/psdonline/downloads/psd_livestock_csv.zip"
 COMMODITIES = {
     "0111000": {"sym": "LE", "name": "Beef & Veal"},
     "0113000": {"sym": "HE", "name": "Pork"},
-    "0114200": {"sym": "PO", "name": "Poultry (Broiler)"},
+    "0115000": {"sym": "PO", "name": "Poultry (Chicken)"},
 }
 
 # Attribute IDs relevantes

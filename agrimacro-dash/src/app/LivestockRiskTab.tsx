@@ -226,18 +226,27 @@ const EXPLANATIONS: Record<string, { title: string; text: string }[]> = {
     { title: "2. CURRENT STATE", text: "Score de -3 a +3 combinando 4 fatores: (1) Sazonalidade do mes atual, (2) Momentum 6m -- rallies acima de 15% em 6 meses tendem a ser seguidos de fraqueza pois o mercado fica cheio de especuladores com lucro, (3) Distancia do high 12m -- preco proximo das maximas aumenta risco de realizacao, (4) Desaceleracao do momentum -- 3m desacelerando vs 6m sinaliza exaustao. Trigger ativa quando mom 6m >15% E 3m desacelera." },
     { title: "3. COT PROXY", text: "Proxy do posicionamento dos fundos (Managed Money, CFTC) usando momentum como indicador. Crowded Long: mom 6m>10% e 3m>5% -- fundos provavelmente com posicao maxima, -0.85% medio fwd 3m (56% neg, n=63). Momentum Exhaustion: rally 6m forte mas 3m desacelera abaixo de 40% do ritmo -- sinal mais forte, -2.24% medio fwd 3m (61% neg, n=54). Trend Break: queda >2% apos rally (71% neg, n=7)." },
     { title: "4. FRAMEWORK DE ACAO", text: "Estrategia em 4 fases: Azul=fase atual de monitoramento. Ambar=janela de compra de protecao (puts) antes do pior periodo sazonal. Vermelho=trigger de urgencia que acelera o hedge quando os dois criterios sao atendidos simultaneamente. Vermelho escuro=janela historica de maximo risco onde Q3 entregou -5.86% de retorno medio fwd 3m nos regimes Bearish/Very Bearish." },
+    { title: "5. OFERTA GLOBAL", text: "Dados USDA PSD de producao, importacoes e exportacoes para EUA, Brasil e China. Mostra quem domina o mercado global de beef e se o deficit domestico esta sendo suprido por importacoes. EUA com producao em queda = menos oferta = suporte altista para LE." },
+    { title: "6. COT DELTA", text: "Analise semanal do Commitments of Traders (CFTC Disaggregated): quanto os fundos especulativos (Managed Money) estao comprando ou vendendo. Delta negativo por 2+ semanas = sinal precoce de reversao baixista. COT Index acima de 85 ou abaixo de 15 indica extremo." },
+    { title: "7. INDICADORES SEMANAIS", text: "Cold Storage (estoques congelados EUA via USDA PSD), Abate Bovinos Brasil (IBGE SIDRA) e Packer Activity (momentum 20 dias). Cold Storage baixo + Packer forte = demanda real consumindo estoques, cenario bullish." },
   ],
   GF: [
     { title: "1. SAZONALIDADE", text: "Dados ISU AgDM Tabela 3 -- Iowa 500-600lb Steers $/cwt (2004-2024, 20 anos). GF tem sazonalidade similar ao LE com lag de 30-60 dias: os precos de reposicao respondem ao gado gordo com defasagem natural do ciclo de producao. O spread LE/GF e um termometro importante de tensao no mercado de recria." },
     { title: "2. CURRENT STATE", text: "Mesmo modelo de score 4 fatores do LE. GF historicamente tem volatilidade percentual maior que LE, especialmente em ciclos de liquidacao de rebanho. Drawdowns de 40-45% ocorreram em 2014-2016. O custo de recria (ratio milho/GF) e um fator estrutural monitorado nos alertas mas nao embutido no score matematico." },
     { title: "3. COT PROXY", text: "GF tem menor liquidez que LE, entao fundos especulativos representam proporcao maior do open interest e o posicionamento pode ser mais volatil. Os thresholds de momentum seguem o mesmo criterio do LE. O sinal de Trend Break After Rally e especialmente relevante em GF dado seus drawdowns historicos mais profundos." },
     { title: "4. FRAMEWORK DE ACAO", text: "GF oferece oportunidade de arbitragem de spread vs LE quando um mercado cai mais rapido que o outro. A janela de risco Jul-Set reflete a pressao sazonal de animais mais pesados chegando ao mercado de abate. Quando LE cai mais de 3% em 1 mes e GF ainda esta estavel, o spread e uma oportunidade de posicionamento." },
+    { title: "5. OFERTA GLOBAL", text: "Dados de Beef (LE) do USDA PSD -- GF nao tem PSD separado pois e subproduto do ciclo bovino. A producao de beef em queda nos EUA implica menos bezerros entrando no sistema, o que pressiona GF para cima. Brasil dominante nas exportacoes reduz pressao de oferta no mercado domestico americano." },
+    { title: "6. COT DELTA", text: "GF tem menor liquidez que LE no mercado de futuros. Movimentos de fundos especulativos tem impacto proporcionalmente maior. Delta semanal forte em GF com OI crescente confirma convicao direcional. COT Index extremo (>85 ou <15) tende a preceder reversoes mais abruptas que em LE." },
+    { title: "7. INDICADORES SEMANAIS", text: "Cold Storage e Packer Activity usam dados de LE (beef) como proxy. Abate Bovinos Brasil mostra tendencia de oferta global. GF reage com lag de 30-60 dias a mudancas no mercado de LE." },
   ],
   HE: [
     { title: "1. SAZONALIDADE", text: "Lean Hogs tem sazonalidade INVERSA ao gado bovino -- um ponto critico para quem vem do mercado de cattle. Pico de preco: Mai-Jun quando producao ainda e baixa mas demanda de verao (BBQ season) sobe. Piso sazonal: Set-Out quando a oferta atinge o maximo anual do ciclo. Dados ISU AgDM Tabela 4, 2004-2024." },
     { title: "2. CURRENT STATE", text: "O modelo de score para HE usa mapa sazonal invertido: Q1/Q2 positivos, Q3/Q4 negativos. A sazonalidade de Fev-Abr e favoravel (score +0.5 a +1.0 so por sazonalidade). Momentum e COT seguem a mesma logica do LE/GF mas no contexto do ciclo inverso -- um rally forte em HE durante Q2 (pico) deve ser tratado como sinal de exaustao iminente." },
     { title: "3. COT PROXY", text: "Para HE, Crowded Long em termos de momentum frequentemente coincide com o pico sazonal de Mai-Jun, criando o cenario de maior risco historico. Fatores externos como demanda da China (maior importador) e doencas como PED/PRRS podem criar movimentos abruptos que superam completamente o sinal sazonal -- por isso os alertas estruturais sao criticos." },
     { title: "4. FRAMEWORK DE ACAO", text: "Estrategia oposta ao LE: o periodo favoravel para comprar protecao e ANTES do pico de preco de verao (Abr-Mai), quando as opcoes ainda estao baratas. O risco maximo de queda e Set-Out. O spread hog/corn (margem de producao) e o principal indicador fundamental: quando a margem esta negativa, produtores reducao oferta, suportando o preco. Quando positiva, incentiva expansao." },
+    { title: "5. OFERTA GLOBAL", text: "Dados USDA PSD de producao de suinos para EUA, Brasil e China. China e o maior produtor (59.500 1000MT) e importador mundial. Surtos de PSA (Peste Suina Africana) na China causaram deficit global em 2019-2021. Brasil e o 4o maior exportador." },
+    { title: "6. COT DELTA", text: "Lean Hogs tem volatilidade de posicionamento maior que cattle. Fundos especulativos frequentemente montam posicoes grandes antes do pico sazonal de verao (Mai-Jun) e desfazem em Set-Out. Delta negativo persistente apos o pico sazonal confirma pressao baixista." },
+    { title: "7. INDICADORES SEMANAIS", text: "Cold Storage Pork mostra estoques congelados nos EUA. Packer Activity mostra momentum de demanda dos frigorificos. Cold Storage alto + Packer fraco = oferta nao sendo absorvida, cenario bearish." },
   ],
 };
 
@@ -245,6 +254,8 @@ function PanelOfertaGlobal({ psdData, symbol }: { psdData: any; symbol: string }
   const psdSym = symbol === "GF" ? "LE" : symbol;  // GF uses beef data
   const d = psdData?.commodities?.[psdSym];
   if (!d) return <div style={{ color: C.textMuted, padding: 20, fontSize: 10 }}>Dados PSD indispon\u00edveis. Rode: python pipeline/collect_livestock_psd.py</div>;
+
+  const isGfProxy = symbol === "GF";
 
   const regions: {key: string; label: string; flag: string}[] = [
     { key: "usa", label: "EUA", flag: "\ud83c\uddfa\ud83c\uddf8" },
@@ -318,6 +329,11 @@ function PanelOfertaGlobal({ psdData, symbol }: { psdData: any; symbol: string }
           Brasil exporta <span style={{ color: C.green, fontWeight: 700 }}>{(brExp / usExp * 100).toFixed(0)}%</span> do volume dos EUA em {d.name} | Unidade: 1000 MT CWE
         </div>
       )}
+      {isGfProxy && (
+        <div style={{ fontSize: 9, color: C.textMuted, fontStyle: "italic", marginTop: 6, textAlign: "center" }}>
+          * Dados de Beef (LE) — GF n\u00e3o tem PSD separado no USDA
+        </div>
+      )}
     </div>
   );
 }
@@ -326,7 +342,7 @@ function PanelCOTDelta({ cotData, symbol }: { cotData: any; symbol: string }) {
   const da = cotData?.commodities?.[symbol]?.disaggregated?.delta_analysis;
   if (!da) return <div style={{ color: C.textMuted, padding: 20, fontSize: 10 }}>COT Delta indispon\u00edvel para {symbol}</div>;
   const sig = da.signals?.[0];
-  const dirColor = da.dominant_direction === "BULLISH" ? C.green : da.dominant_direction === "BEARISH" ? C.red : C.textMuted;
+  const dirColor = da.dominant_direction === "BULLISH" ? C.green : da.dominant_direction === "BEARISH" ? C.red : C.gold;
   const deltas = da.deltas_8w || [];
   const maxD = Math.max(...deltas.map((d: number) => Math.abs(d)), 1);
   return (
@@ -455,7 +471,7 @@ export default function LivestockRiskTab() {
 
       {d && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "340px 280px", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "auto auto", gap: 12, marginBottom: 12 }}>
             <div style={panelStyle}>
               {panelHdr("CURRENT STATE -- " + names[sym] + " -- " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))}
               <div style={{ flex: 1, overflow: "auto" }}><PanelCurrentState d={d} /></div>
@@ -489,10 +505,11 @@ export default function LivestockRiskTab() {
           {weeklyData?.data && (() => {
             const wd = weeklyData.data;
             const symLower = sym.toLowerCase();
+            const wSym = sym === "GF" ? "le" : symLower;
             const cards: {name:string; signal:string; color:string; value:string; detail:string; interp:string}[] = [];
 
             // Cold Storage
-            const cs = wd[`cold_storage_${symLower}`];
+            const cs = wd[`cold_storage_${wSym}`];
             if (cs && !cs.is_fallback) {
               cards.push({
                 name: cs.name || "Cold Storage",
@@ -518,7 +535,7 @@ export default function LivestockRiskTab() {
             }
 
             // Packer Proxy
-            const pp = wd[`packer_${symLower}`];
+            const pp = wd[`packer_${wSym}`];
             if (pp) {
               cards.push({
                 name: pp.name || "Packer Activity",
@@ -605,11 +622,11 @@ export default function LivestockRiskTab() {
               COMO LER ESTE DASHBOARD -- {names[sym].toUpperCase()}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-              {(EXPLANATIONS[sym] || []).map((ex, i) => (
+              {(EXPLANATIONS[sym] || []).map((ex, i, arr) => (
                 <div key={i} style={{
                   padding: "14px 18px",
                   borderRight: i % 2 === 0 ? "1px solid " + C.border : "none",
-                  borderBottom: i < 2 ? "1px solid " + C.border : "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid " + C.border : "none",
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: C.gold, marginBottom: 6 }}>{ex.title}</div>
                   <div style={{ fontSize: 11, color: C.textMuted, lineHeight: 1.65 }}>{ex.text}</div>

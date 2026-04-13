@@ -4460,6 +4460,11 @@ export default function Dashboard() {
         Object.entries(syms).forEach(([sym, name]) => {
           const d = livestockPsdData.commodities[sym];
           if (!d) return;
+          const hasSummary = ['usa','brazil','china'].some(region => {
+            const s = d[region]?.summaries;
+            return s && Object.keys(s).length > 0;
+          });
+          if (!hasSummary) return;
           psdLines.push(`${name} (${sym}):`);
           const usaS = d.usa?.summaries || {};
           if (usaS.production) psdLines.push(`  EUA produção: ${usaS.production.current} 1000MT (${usaS.production.deviation_pct>0?"+":""}${usaS.production.deviation_pct}% vs 5A)`);
@@ -5366,12 +5371,14 @@ export default function Dashboard() {
 
     const catLabels: Record<string, string> = {
       acreagem: '\u{1F33E} Acreagem & Plantio',
+      crush: '\u{1F527} Crush & Processamento',
       energia: '\u26A1 Energia & Biodiesel',
       macro: '\u{1F30D} Macro & C\u00e2mbio',
-      crush: '\u{1F527} Crush & Processamento',
+      pecuaria: '\u{1F404} Pecu\u00e1ria',
       softs: '\u{1F36C} Softs Brasileiros',
       insumos: '\u{1F9EA} Insumos & Fertilizantes',
     };
+    const catOrder = ['acreagem','crush','energia','macro','pecuaria','softs','insumos'];
 
     return (
       <div style={{padding:16}}>
@@ -5383,7 +5390,7 @@ export default function Dashboard() {
           plantio, produ\u00e7\u00e3o e exporta\u00e7\u00e3o. Atualizado diariamente.
         </div>
 
-        {Object.entries(categories).map(([cat, items]) => (
+        {[...catOrder, ...Object.keys(categories).filter(c => !catOrder.includes(c))].filter(cat => categories[cat]?.length).map(cat => { const items = categories[cat]; return (
           <div key={cat} style={{marginBottom:24}}>
             <div style={{
               fontSize:11, fontWeight:700, color:'#94a3b8',
@@ -5478,6 +5485,23 @@ export default function Dashboard() {
                       {par.signal}
                     </div>
 
+                    {par.threshold_low != null && par.threshold_high != null && (() => {
+                      const range = par.threshold_high - par.threshold_low;
+                      const pos = range > 0 ? Math.min(Math.max((par.value - par.threshold_low) / range * 100, 0), 100) : 50;
+                      return (
+                        <div style={{marginTop:4}}>
+                          <div style={{fontSize:8,color:'#475569',marginBottom:2,display:'flex',justifyContent:'space-between'}}>
+                            <span>{par.threshold_low}</span>
+                            <span style={{color:'#64748b'}}>range operacional</span>
+                            <span>{par.threshold_high}</span>
+                          </div>
+                          <div style={{height:2,background:'#1e3a4a',borderRadius:1,position:'relative'}}>
+                            <div style={{position:'absolute',left:`${pos}%`,top:-2,width:4,height:6,background:par.signal_color||'#DCB432',borderRadius:1,transform:'translateX(-50%)'}}/>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {(par.trend_7d !== undefined) && (
                       <div style={{
                         fontSize:9, color:'#64748b', marginTop:6,
@@ -5506,7 +5530,7 @@ export default function Dashboard() {
               })}
             </div>
           </div>
-        ))}
+        ); })}
 
         <div style={{fontSize:9, color:'#475569', marginTop:16}}>
           Atualizado: {data.generated_at?.slice(0,19).replace('T',' ')}
@@ -5700,7 +5724,7 @@ export default function Dashboard() {
                 color:isActive?"#DCB432":"#8C96A5",background:isActive?"#142332":"transparent",
                 border:"none",cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",
                 borderBottom:isActive?"2px solid #DCB432":"2px solid transparent",
-              }}>{t.label}</button>
+              }}>{t.label}{t.tab==="Livestock Risk"&&(()=>{const ci=cot?.commodities?.LE?.disaggregated?.delta_analysis?.cot_index;return ci!=null&&(ci>=85||ci<=15)?<span style={{fontSize:8,marginLeft:3,background:"#DCB432",color:"#0E1A24",borderRadius:4,padding:"1px 4px",fontWeight:700}}>{"\u{1F404}"}</span>:null;})()}</button>
             );
           })}
         </div>
