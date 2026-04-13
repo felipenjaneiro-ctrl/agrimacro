@@ -35,7 +35,7 @@ def main():
     reports_path.mkdir(parents=True, exist_ok=True)
 
     results = {}
-    total_steps = 28
+    total_steps = 29
 
     # =========================================================
     # CORE STEPS (1-8)
@@ -217,7 +217,17 @@ def main():
         results["livestock_weekly"] = {"status": "WARN", "error": str(e)}
         log(f"Livestock weekly failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 15/{total_steps}: Collecting news & FRED macro...")
+    log(f"Step 15/{total_steps}: Generating bilateral indicators...")
+    try:
+        from generate_bilateral import main as generate_bilateral
+        generate_bilateral()
+        results["bilateral"] = {"status": "OK"}
+        log("Bilateral indicators generated", "OK")
+    except Exception as e:
+        results["bilateral"] = {"status": "WARN", "error": str(e)}
+        log(f"Bilateral failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 16/{total_steps}: Collecting news & FRED macro...")
     try:
         from collect_news import main as collect_news
         collect_news()
@@ -227,7 +237,7 @@ def main():
         results["news"] = {"status": "WARN", "error": str(e)}
         log(f"News failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 16/{total_steps}: Collecting agricultural weather...")
+    log(f"Step 17/{total_steps}: Collecting agricultural weather...")
     try:
         from collect_weather import main as collect_weather
         collect_weather()
@@ -237,7 +247,7 @@ def main():
         results["weather"] = {"status": "WARN", "error": str(e)}
         log(f"Weather failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 17/{total_steps}: Collecting USDA crop progress...")
+    log(f"Step 18/{total_steps}: Collecting USDA crop progress...")
     try:
         from collect_crop_progress import main as collect_crop_progress
         collect_crop_progress()
@@ -247,7 +257,7 @@ def main():
         results["crop_progress"] = {"status": "WARN", "error": str(e)}
         log(f"Crop progress failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 18/{total_steps}: Collecting macro indicators (S&P500, VIX, 10Y)...")
+    log(f"Step 19/{total_steps}: Collecting macro indicators (S&P500, VIX, 10Y)...")
     try:
         from collect_macro_indicators import main as collect_macro
         collect_macro()
@@ -257,7 +267,7 @@ def main():
         results["macro_indicators"] = {"status": "WARN", "error": str(e)}
         log(f"Macro indicators failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 19/{total_steps}: Collecting Google Trends...")
+    log(f"Step 20/{total_steps}: Collecting Google Trends...")
     try:
         from collect_google_trends import main as collect_gtrends
         collect_gtrends()
@@ -267,7 +277,7 @@ def main():
         results["google_trends"] = {"status": "WARN", "error": str(e)}
         log(f"Google Trends failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 20/{total_steps}: Collecting FedWatch probabilities...")
+    log(f"Step 21/{total_steps}: Collecting FedWatch probabilities...")
     try:
         from collect_fedwatch import main as collect_fedwatch
         collect_fedwatch()
@@ -277,7 +287,7 @@ def main():
         results["fedwatch"] = {"status": "WARN", "error": str(e)}
         log(f"FedWatch failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 21/{total_steps}: Computing correlation matrix & causal chains...")
+    log(f"Step 22/{total_steps}: Computing correlation matrix & causal chains...")
     try:
         from collect_correlations import main as collect_correlations
         collect_correlations()
@@ -287,7 +297,7 @@ def main():
         results["correlations"] = {"status": "WARN", "error": str(e)}
         log(f"Correlations failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 22/{total_steps}: Collecting Grok emails...")
+    log(f"Step 23/{total_steps}: Collecting Grok emails...")
     try:
         from collect_grok_email import main as collect_grok
         collect_grok()
@@ -301,7 +311,7 @@ def main():
     # GENERATION STEPS (20-25)
     # =========================================================
 
-    log(f"Step 23/{total_steps}: Generating calendar...")
+    log(f"Step 24/{total_steps}: Generating calendar...")
     try:
         from collect_calendar import main as generate_calendar
         generate_calendar()
@@ -311,7 +321,7 @@ def main():
         results["calendar"] = {"status": "WARN", "error": str(e)}
         log(f"Calendar failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 24/{total_steps}: Generating daily report...")
+    log(f"Step 25/{total_steps}: Generating daily report...")
     try:
         from generate_report import main as generate_report
         generate_report()
@@ -332,7 +342,7 @@ def main():
     except Exception as _e: print(f"    grain_ratios ERR: {_e}")
     # ------------------------------------
 
-    log(f"Step 25/{total_steps}: Generating intel synthesis...")
+    log(f"Step 26/{total_steps}: Generating intel synthesis...")
     try:
         from generate_intel_synthesis import main as generate_synthesis
         generate_synthesis()
@@ -342,7 +352,7 @@ def main():
         results["intel_synthesis"] = {"status": "WARN", "error": str(e)}
         log(f"Intel synthesis failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 26/{total_steps}: Generating PDF report...")
+    log(f"Step 27/{total_steps}: Generating PDF report...")
     try:
         from generate_report_pdf import build_pdf
         build_pdf()
@@ -352,7 +362,7 @@ def main():
         results["pdf"] = {"status": "ERROR", "error": str(e)}
         log(f"PDF generation failed: {e}", "ERR")
 
-    log(f"Step 27/{total_steps}: Generating video script...")
+    log(f"Step 28/{total_steps}: Generating video script...")
     try:
         from generate_video_script import main as generate_video
         generate_video()
@@ -362,7 +372,7 @@ def main():
         results["video_script"] = {"status": "ERROR", "error": str(e)}
         log(f"Video script failed: {e}", "ERR")
 
-    log(f"Step 28/{total_steps}: Generating video MP4...")
+    log(f"Step 29/{total_steps}: Generating video MP4...")
     try:
         from step18_video_generator import main as generate_video_mp4
         generate_video_mp4()
