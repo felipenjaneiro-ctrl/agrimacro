@@ -70,6 +70,17 @@ def main():
         log(f"IBKR offline -- continuando com Yahoo: {e}", "WARN")
         results["prices_ibkr"] = {"status": "WARN", "error": str(e)}
 
+    # Step 1b: Options Chain (OPTIONAL -- falha nao bloqueia)
+    try:
+        from ib_insync import util as _ib_util
+        from collect_options_chain import main as collect_chain
+        _ib_util.run(collect_chain())
+        log("Options chain coletada", "OK")
+        results["options_chain"] = {"status": "OK"}
+    except Exception as e:
+        log(f"Options chain falhou (nao critico): {e}", "WARN")
+        results["options_chain"] = {"status": "WARN", "error": str(e)}
+
     # Step 2: Yahoo Finance (FALLBACK para gaps)
     gaps = 19 - len(ibkr_symbols)
     log(f"Step 2/{total_steps}: Yahoo Finance (fallback para {gaps} gaps)...")

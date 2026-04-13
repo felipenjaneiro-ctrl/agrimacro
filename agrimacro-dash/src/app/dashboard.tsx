@@ -5,6 +5,7 @@ import CostOfProductionTab from "./CostOfProductionTab";
 import SyncedChartPanel from "./SyncedChartPanel";
 import CorrelationMap from "./CorrelationMap";
 import CommodityTab from "./CommodityTab";
+import PortfolioPage from "./PortfolioPage";
 import { useState, useEffect, useRef } from "react";
 
 /* ---------------------------------------------------------------------------
@@ -1265,6 +1266,7 @@ export default function Dashboard() {
   const [grData, setGrData] = useState<any>(null);
   const [payoffUnd, setPayoffUnd] = useState("CL");
   const [payoffExpiry, setPayoffExpiry] = useState("all");
+  const [optionsChain, setOptionsChain] = useState<any>(null);
   const [psdData, setPsdData] = useState<any>(null);
   const [physicalBrData, setPhysicalBrData] = useState<any>(null);
   const [imeaData, setImeaData] = useState<any>(null);
@@ -1333,6 +1335,7 @@ export default function Dashboard() {
       fetch("/data/processed/news.json").then(r=>r.json()).then(setNews).catch(()=>console.warn("No news")),
       fetch("/data/processed/ibkr_portfolio.json").then(r=>r.json()).then(d=>{setPortfolio(d);setLastIbkrRefresh(d.generated_at||d.export_timestamp||new Date().toISOString());}).catch(()=>console.warn("No IBKR data")),
       fetch("/api/ibkr-greeks").then(r=>r.json()).then(d=>{if(d?.portfolio_greeks) setGreeksData(d);}).catch(()=>{}),
+      fetch("/data/processed/options_chain.json").then(r=>r.json()).then(setOptionsChain).catch(()=>console.warn("No options chain")),
       fetch("/data/processed/weather_agro.json").then(r=>r.json()).then(setWeatherData).catch(()=>console.warn("No weather data")),
       fetch("/data/processed/bcb_data.json").then(r=>r.json()).then(setBcbData).catch(()=>console.warn("No BCB data")),
       fetch("/data/processed/macro_indicators.json").then(r=>r.json()).then(setMacroIndicators).catch(()=>console.warn("No macro indicators")),
@@ -5554,7 +5557,7 @@ export default function Dashboard() {
       case "Custo Produção": return <CostOfProductionTab />;
       case "Físico Intl": return renderFisicoIntl();
       case "Leitura do Dia": return renderLeituraDoDia();
-      case "Portfolio": return renderPortfolio();
+      case "Portfolio": return <PortfolioPage portfolio={portfolio} greeks={greeksData} optionsChain={optionsChain} prices={prices} />;
       case "Bilateral": return <BilateralPanel />;
       case "Grain Ratios": return <GrainRatiosTab />;
       case "Livestock Risk": return <LivestockRiskTab />;
