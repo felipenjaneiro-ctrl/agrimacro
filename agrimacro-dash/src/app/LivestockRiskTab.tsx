@@ -241,6 +241,87 @@ const EXPLANATIONS: Record<string, { title: string; text: string }[]> = {
   ],
 };
 
+function PanelOfertaGlobal({ psdData, symbol }: { psdData: any; symbol: string }) {
+  const psdSym = symbol === "GF" ? "LE" : symbol;  // GF uses beef data
+  const d = psdData?.commodities?.[psdSym];
+  if (!d) return <div style={{ color: C.textMuted, padding: 20, fontSize: 10 }}>Dados PSD indispon\u00edveis. Rode: python pipeline/collect_livestock_psd.py</div>;
+
+  const regions: {key: string; label: string; flag: string}[] = [
+    { key: "usa", label: "EUA", flag: "\ud83c\uddfa\ud83c\uddf8" },
+    { key: "brazil", label: "Brasil", flag: "\ud83c\udde7\ud83c\uddf7" },
+    { key: "china", label: "China", flag: "\ud83c\udde8\ud83c\uddf3" },
+  ];
+  const attrs: {key: string; label: string}[] = [
+    { key: "production", label: "Produ\u00e7\u00e3o" },
+    { key: "exports", label: "Exporta\u00e7\u00f5es" },
+    { key: "imports", label: "Importa\u00e7\u00f5es" },
+    { key: "ending_stocks", label: "Estoque Final" },
+    { key: "consumption", label: "Consumo" },
+  ];
+
+  // Competitiveness: Brazil exports vs US exports
+  const brExp = d.brazil?.summaries?.exports?.current;
+  const usExp = d.usa?.summaries?.exports?.current;
+
+  return (
+    <div style={{ padding: "14px 16px", boxSizing: "border-box" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+        {regions.map(r => {
+          const summ = d[r.key]?.summaries;
+          if (!summ) return (
+            <div key={r.key} style={{ background: C.panelDark, borderRadius: 6, padding: "8px 10px" }}>
+              <div style={{ fontSize: 10, color: C.textMuted }}>{r.flag} {r.label}: sem dados</div>
+            </div>
+          );
+          return (
+            <div key={r.key} style={{ background: C.panelDark, borderRadius: 6, padding: "8px 10px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.text, marginBottom: 6 }}>{r.flag} {r.label}</div>
+              {attrs.map(a => {
+                const s = summ[a.key];
+                if (!s) return null;
+                const dev = s.deviation_pct || 0;
+                const devColor = Math.abs(dev) < 3 ? C.textMuted : dev > 0 ? C.green : C.red;
+                return (
+                  <div key={a.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 9, marginBottom: 3 }}>
+                    <span style={{ color: C.textMuted }}>{a.label}</span>
+                    <span>
+                      <span style={{ color: C.text, fontWeight: 600 }}>{s.current?.toLocaleString()}</span>
+                      <span style={{ color: devColor, marginLeft: 4, fontWeight: 600 }}>({dev >= 0 ? "+" : ""}{dev}%)</span>
+                    </span>
+                  </div>
+                );
+              })}
+              {/* Mini sparkline for production history */}
+              {summ.production?.history && (() => {
+                const hist = summ.production.history;
+                const vals = hist.map((h: any) => h.value);
+                const mn = Math.min(...vals);
+                const mx = Math.max(...vals);
+                const rng = mx - mn || 1;
+                return (
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 1, height: 20, marginTop: 4 }}>
+                    {vals.map((v: number, i: number) => (
+                      <div key={i} style={{
+                        flex: 1, background: i === vals.length - 1 ? C.gold : C.blue,
+                        height: Math.max(((v - mn) / rng) * 18, 2), borderRadius: 1, opacity: i === vals.length - 1 ? 1 : 0.5,
+                      }} />
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          );
+        })}
+      </div>
+      {brExp != null && usExp != null && usExp > 0 && (
+        <div style={{ fontSize: 10, color: C.textMuted, textAlign: "center", padding: "4px 8px", background: C.panelDark, borderRadius: 4 }}>
+          Brasil exporta <span style={{ color: C.green, fontWeight: 700 }}>{(brExp / usExp * 100).toFixed(0)}%</span> do volume dos EUA em {d.name} | Unidade: 1000 MT CWE
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PanelCOTDelta({ cotData, symbol }: { cotData: any; symbol: string }) {
   const da = cotData?.commodities?.[symbol]?.disaggregated?.delta_analysis;
   if (!da) return <div style={{ color: C.textMuted, padding: 20, fontSize: 10 }}>COT Delta indispon\u00edvel para {symbol}</div>;
@@ -294,6 +375,7 @@ export default function LivestockRiskTab() {
   const [sym, setSym] = useState<"LE" | "GF" | "HE">("LE");
   const [data, setData] = useState<any>(null);
   const [cotData, setCotData] = useState<any>(null);
+  const [psdData, setPsdData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [revalidating, setRevalidating] = useState(false);
   const [genAt, setGenAt] = useState("");
@@ -303,13 +385,15 @@ export default function LivestockRiskTab() {
     Promise.all([
       fetch("/data/processed/bottleneck.json").then(r => r.json()),
       fetch("/data/processed/cot.json").then(r => r.json()).catch(() => null),
-    ]).then(([bj, cj]) => {
+      fetch("/data/processed/livestock_psd.json").then(r => r.json()).catch(() => null),
+    ]).then(([bj, cj, pj]) => {
       const comms = bj.commodities || {};
       if (Object.keys(comms).length > 0) {
         setData(comms);
         setGenAt(bj.generated_at || "");
       }
       if (cj) setCotData(cj);
+      if (pj) setPsdData(pj);
     }).catch(() => {})
       .finally(() => { setLoading(false); setRevalidating(false); });
   };
@@ -387,9 +471,15 @@ export default function LivestockRiskTab() {
             </div>
           </div>
 
-          <div style={{ ...panelStyle, marginBottom: 16 }}>
-            {panelHdr("COT DELTA -- " + names[sym] + " (CFTC Disaggregated Managed Money)")}
-            <PanelCOTDelta cotData={cotData} symbol={sym} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={panelStyle}>
+              {panelHdr("OFERTA GLOBAL -- " + names[sym] + " (USDA PSD)")}
+              <PanelOfertaGlobal psdData={psdData} symbol={sym} />
+            </div>
+            <div style={panelStyle}>
+              {panelHdr("COT DELTA -- " + names[sym] + " (CFTC Disaggregated Managed Money)")}
+              <PanelCOTDelta cotData={cotData} symbol={sym} />
+            </div>
           </div>
 
           {d.strategy && (
