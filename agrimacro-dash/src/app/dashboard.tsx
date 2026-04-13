@@ -99,6 +99,7 @@ interface SpreadInfo {
   name:string; unit:string; current:number; zscore_1y:number; percentile:number;
   regime:string; points:number; description?:string; trend?:string; trend_pct?:number;
   mean_1y?:number; std_1y?:number;
+  category?:string; interpretation?:string; signal_now?:string; watch_if?:string;
   history?:{date:string;value:number}[];
 }
 interface SpreadsData { timestamp:string; spreads:Record<string,SpreadInfo>; }
@@ -224,7 +225,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Grain Ratios","Livestock Risk"];
+const TABS:Tab[] = ["Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
 
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
@@ -234,6 +235,7 @@ const SEASON_COLORS:Record<string,string> = {
 const SPREAD_NAMES:Record<string,string> = {
   soy_crush:"Soy Crush Margin",ke_zw:"KC-CBOT Wheat",zl_cl:"Soy Oil / Crude",
   feedlot:"Feedlot Margin",zc_zm:"Corn / Meal",zc_zs:"Corn / Soy Ratio",
+  cattle_crush:"Cattle Crush Margin",feed_wheat:"Feed Wheat Ratio",
 };
 
 const SPREAD_DETAILS:Record<string,{whatIsIt:string;whyMatters:string}> = {
@@ -265,11 +267,21 @@ const SPREAD_DETAILS:Record<string,{whatIsIt:string;whyMatters:string}> = {
 
 const SPREAD_FRIENDLY_NAMES:Record<string,string> = {
   soy_crush:"Margem de Esmagamento (Soja)",
-  ke_zw:"Prêmio Trigo Duro vs Mole (KC-CBOT)",
-  zl_cl:"Óleo de Soja vs Petróleo",
+  ke_zw:"Pr\u00eamio Trigo Duro vs Mole (KC-CBOT)",
+  zl_cl:"\u00d3leo de Soja vs Petr\u00f3leo (Biodiesel)",
   feedlot:"Margem de Confinamento (Feedlot)",
-  zc_zm:"Milho vs Farelo (Ração Animal)",
-  zc_zs:"Soja vs Milho (Decisão de Plantio)",
+  zc_zm:"Milho vs Farelo (Ra\u00e7\u00e3o Animal)",
+  zc_zs:"Soja vs Milho (Decis\u00e3o de Plantio)",
+  cattle_crush:"Margem Bruta Confinamento (Cattle Crush)",
+  feed_wheat:"Trigo vs Milho na Ra\u00e7\u00e3o (Feed Wheat)",
+};
+
+const SPREAD_CATEGORY_LABELS:Record<string,string> = {
+  graos:"\u{1F33E} Gr\u00e3os & Oleaginosas",
+  pecuaria:"\u{1F404} Pecu\u00e1ria",
+  energia:"\u26A1 Energia & Biodiesel",
+  basis:"\u{1F30D} Basis Internacional",
+  outros:"Outros",
 };
 
 function getAlertLevel(sp:{regime:string;zscore_1y:number;percentile:number;key?:string}):"ok"|"atencao"|"alerta" {
@@ -1970,168 +1982,146 @@ export default function Dashboard() {
       const renderSpreads = () => {
     const alertCounts = {alerta:0,atencao:0,ok:0};
     spreadList.forEach(sp=>{const al=getAlertLevel({...sp,key:sp.key});alertCounts[al]++;});
-    const sorted=[...spreadList].sort((a,b)=>{
-      const ord={alerta:0,atencao:1,ok:2};
-      return (ord[getAlertLevel({...a,key:a.key})]??2)-(ord[getAlertLevel({...b,key:b.key})]??2);
+
+    // Group by category
+    const categories: Record<string, any[]> = {};
+    spreadList.forEach(sp => {
+      const cat = sp.category || 'outros';
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(sp);
     });
+    // Sort within each category: alerts first
+    const catOrder = ['graos','pecuaria','energia','basis','outros'];
+    Object.values(categories).forEach(arr => arr.sort((a:any,b:any) => {
+      const ord:any = {alerta:0,atencao:1,ok:2};
+      return (ord[getAlertLevel({...a,key:a.key})]??2)-(ord[getAlertLevel({...b,key:b.key})]??2);
+    }));
 
     return (
     <div>
-      <SectionTitle>Relações de Preço -- O que está caro ou barato?</SectionTitle>
-      <div style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,maxWidth:750}}>
-        Estas relações comparam preços entre commodities ligadas entre si.
-        Quando uma relação sai do normal, pode indicar oportunidade ou risco.
-        <strong style={{color:C.textDim}}> Vermelho = atenção. Verde = tranquilo.</strong>
+      <SectionTitle>Rela\u00e7\u00f5es de Pre\u00e7o -- Spreads & Margens</SectionTitle>
+      <div style={{fontSize:12,color:C.textMuted,marginBottom:16,lineHeight:1.6,maxWidth:750,borderLeft:'3px solid #DCB432',paddingLeft:10}}>
+        Spreads comparam pre\u00e7os entre commodities ligadas. Clique para expandir e ver o que cada um significa, o sinal atual e o que monitorar.
       </div>
 
-      {/* Summary cards */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
-        <div style={{background:alertCounts.alerta>0?"rgba(239,68,68,0.06)":"rgba(34,197,94,0.04)",
-          border:`1px solid ${alertCounts.alerta>0?"rgba(239,68,68,0.2)":"rgba(34,197,94,0.15)"}`,
-          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
-          <div style={{fontSize:32,fontWeight:800,color:alertCounts.alerta>0?"#f87171":"#4ade80",fontFamily:"monospace"}}>{alertCounts.alerta}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>Pede atenção</div>
+      {/* Summary */}
+      <div style={{display:"flex",gap:12,marginBottom:20}}>
+        <div style={{background:"rgba(220,60,60,.08)",border:"1px solid rgba(220,60,60,.2)",borderRadius:8,padding:"10px 20px",textAlign:"center",flex:1}}>
+          <div style={{fontSize:24,fontWeight:800,color:"#DC3C3C",fontFamily:"monospace"}}>{alertCounts.alerta}</div>
+          <div style={{fontSize:10,fontWeight:600,color:"#DC3C3C"}}>Extremo</div>
         </div>
-        <div style={{background:"rgba(245,158,11,0.04)",border:"1px solid rgba(245,158,11,0.15)",
-          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
-          <div style={{fontSize:32,fontWeight:800,color:"#fbbf24",fontFamily:"monospace"}}>{alertCounts.atencao}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>Fique atento</div>
+        <div style={{background:"rgba(220,180,50,.08)",border:"1px solid rgba(220,180,50,.2)",borderRadius:8,padding:"10px 20px",textAlign:"center",flex:1}}>
+          <div style={{fontSize:24,fontWeight:800,color:"#DCB432",fontFamily:"monospace"}}>{alertCounts.atencao}</div>
+          <div style={{fontSize:10,fontWeight:600,color:"#DCB432"}}>Aten\u00e7\u00e3o</div>
         </div>
-        <div style={{background:"rgba(34,197,94,0.04)",border:"1px solid rgba(34,197,94,0.12)",
-          borderRadius:12,padding:"16px 20px",textAlign:"center"}}>
-          <div style={{fontSize:32,fontWeight:800,color:"#4ade80",fontFamily:"monospace"}}>{alertCounts.ok}</div>
-          <div style={{fontSize:12,fontWeight:600,color:C.textDim}}>? Sem preocupação</div>
+        <div style={{background:"rgba(0,200,120,.06)",border:"1px solid rgba(0,200,120,.15)",borderRadius:8,padding:"10px 20px",textAlign:"center",flex:1}}>
+          <div style={{fontSize:24,fontWeight:800,color:"#00C878",fontFamily:"monospace"}}>{alertCounts.ok}</div>
+          <div style={{fontSize:10,fontWeight:600,color:"#00C878"}}>Normal</div>
         </div>
       </div>
 
-      {spreadList.length>0 ? (
-        <div style={{display:"grid",gap:14}}>
-          {sorted.map(sp=>{
-            const alert=getAlertLevel({...sp,key:sp.key});
-            const borderColor=alert==="alerta"?"#ef4444":alert==="atencao"?"#f59e0b":"rgba(59,130,246,0.3)";
-            const bgTint=alert==="alerta"?"rgba(239,68,68,0.02)":alert==="atencao"?"rgba(245,158,11,0.02)":"transparent";
-            const details=SPREAD_DETAILS[sp.key]||{whatIsIt:"",whyMatters:""};
-            const friendlyName=SPREAD_FRIENDLY_NAMES[sp.key]||SPREAD_NAMES[sp.key]||sp.name;
-            const verdict=getVerdict({...sp,key:sp.key});
-            const zone=getThermometerZone(sp.percentile);
-            const trendPct=sp.trend_pct||0;
-            const trendColor=Math.abs(trendPct)<3?"#94a3b8":trendPct>0?"#10b981":"#ef4444";
-            const trendWord=Math.abs(trendPct)<3?"estável":trendPct>0?"subindo":"caindo";
-            const trendArrow=Math.abs(trendPct)<3?"?":trendPct>0?"?":"?";
-            const alertBadge=alert==="alerta"
-              ?{icon:"[!]",label:"Atenção!",bg:"rgba(239,68,68,0.1)",border:"rgba(239,68,68,0.35)",color:"#f87171"}
-              :alert==="atencao"
-              ?{icon:"[!]",label:"Fique atento",bg:"rgba(245,158,11,0.08)",border:"rgba(245,158,11,0.3)",color:"#fbbf24"}
-              :{icon:"[OK]",label:"Sem preocupação",bg:"rgba(34,197,94,0.08)",border:"rgba(34,197,94,0.25)",color:"#4ade80"};
-
-            const thermSegments=[
-              {start:0,end:25,color:"#22c55e"},
-              {start:25,end:40,color:"#4ade80"},
-              {start:40,end:60,color:"#94a3b8"},
-              {start:60,end:75,color:"#fbbf24"},
-              {start:75,end:100,color:"#ef4444"},
-            ];
-            const markerPos=Math.min(98,Math.max(2,sp.percentile));
-
+      {spreadList.length > 0 ? (
+        <div>
+          {catOrder.filter(cat => categories[cat]?.length).map(cat => {
+            const items = categories[cat];
+            const catAlerts = items.filter((sp:any) => getAlertLevel({...sp,key:sp.key}) === 'alerta').length;
             return (
-              <div key={sp.key} style={{background:bgTint,borderRadius:"0 12px 12px 0",padding:"20px 24px",
-                border:`1px solid ${C.border}`,borderLeft:`4px solid ${borderColor}`}}>
-                {/* Header */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-                  <h3 style={{margin:0,fontSize:17,fontWeight:700,color:C.text,lineHeight:1.3}}>{friendlyName}</h3>
-                  <span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 14px",borderRadius:20,
-                    background:alertBadge.bg,border:`1px solid ${alertBadge.border}`}}>
-                    <span style={{fontSize:13}}>{alertBadge.icon}</span>
-                    <span style={{fontSize:11,fontWeight:700,color:alertBadge.color}}>{alertBadge.label}</span>
+              <div key={cat} style={{marginBottom:24}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                  <span style={{fontSize:12,fontWeight:700,color:'#94a3b8',letterSpacing:'0.08em',textTransform:'uppercase'}}>
+                    {SPREAD_CATEGORY_LABELS[cat] || cat}
                   </span>
+                  {catAlerts > 0 && <span style={{background:'#DC3C3C',color:'#fff',fontSize:8,fontWeight:700,borderRadius:8,padding:'1px 6px'}}>{catAlerts}</span>}
                 </div>
 
-                {/* 3-column layout */}
-                <div style={{display:"grid",gridTemplateColumns:"180px 1fr 240px",gap:24,alignItems:"center",marginBottom:14}}>
-                  {/* Value */}
-                  <div>
-                    <div style={{fontSize:9,color:C.textMuted,marginBottom:4,fontWeight:600,letterSpacing:1}}>VALOR ATUAL</div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-                      <span style={{fontSize:28,fontWeight:800,fontFamily:"monospace",color:C.text,letterSpacing:-1}}>
-                        {sp.current.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:4})}
-                      </span>
-                      <span style={{fontSize:11,color:C.textMuted}}>{sp.unit}</span>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6}}>
-                      <span style={{fontSize:14,color:trendColor}}>{trendArrow}</span>
-                      <span style={{fontSize:12,color:trendColor,fontWeight:600}}>
-                        {trendWord} ({trendPct>0?"+":""}{trendPct.toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
+                {items.map((sp:any) => {
+                  const zs = sp.zscore_1y || 0;
+                  const zColor = Math.abs(zs) >= 2.5 ? '#DC3C3C' : Math.abs(zs) >= 1.5 ? '#DCB432' : '#00C878';
+                  const regimeLabel = Math.abs(zs) >= 2.5 ? 'EXTREMO' : Math.abs(zs) >= 1.5 ? 'ATEN\u00c7\u00c3O' : Math.abs(zs) >= 0.5 ? 'NORMAL' : 'NEUTRO';
+                  const tp = sp.trend_pct || 0;
+                  const trendArrow = tp > 1 ? '\u2191' : tp < -1 ? '\u2193' : '\u2192';
+                  const friendlyName = SPREAD_FRIENDLY_NAMES[sp.key] || SPREAD_NAMES[sp.key] || sp.name;
+                  const interpretation = sp.interpretation || SPREAD_DETAILS[sp.key]?.whatIsIt || '';
+                  const watchIf = sp.watch_if || '';
+                  const signalNow = sp.signal_now || '';
 
-                  {/* Thermometer */}
-                  <div>
-                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>COMPARADO AO ÚLTIMO ANO</div>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <span style={{fontSize:13,fontWeight:700,color:zone.color}}>{zone.text}</span>
-                      <span style={{fontSize:11,color:C.textMuted,fontFamily:"monospace"}}>posição: {sp.percentile}%</span>
-                      <span style={{marginLeft:8,fontSize:10,fontWeight:700,fontFamily:"monospace",color:Math.abs(sp.zscore_1y||0)>2?"#DC3C3C":Math.abs(sp.zscore_1y||0)>1?"#DCB432":"#00C878"}}>z={(sp.zscore_1y||0)>0?"+"+(sp.zscore_1y||0).toFixed(2):(sp.zscore_1y||0).toFixed(2)}</span>
-                    </div>
-                    <div style={{position:"relative",height:20,borderRadius:10,overflow:"hidden",display:"flex"}}>
-                      {thermSegments.map((seg,i)=>(
-                        <div key={i} style={{flex:seg.end-seg.start,background:seg.color+"20",
-                          borderRight:i<thermSegments.length-1?"1px solid rgba(0,0,0,0.3)":"none"}} />
-                      ))}
-                      <div style={{position:"absolute",top:-3,bottom:-3,
-                        left:`calc(${markerPos}% - 4px)`,width:8,borderRadius:4,
-                        background:zone.color,boxShadow:`0 0 10px ${zone.color}90, 0 0 20px ${zone.color}40`,
-                        transition:"left 0.6s ease"}} />
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:10,color:"rgba(255,255,255,0.25)"}}>
-                      <span>Barato</span><span>Médio</span><span>Caro</span>
-                    </div>
-                  </div>
+                  return (
+                    <details key={sp.key} style={{marginBottom:10}}>
+                      <summary style={{listStyle:'none',cursor:'pointer'}}>
+                        <div style={{
+                          background:'#0E1A24',border:`1px solid ${zColor}33`,borderLeft:`3px solid ${zColor}`,
+                          borderRadius:8,padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'
+                        }}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:12,fontWeight:700,color:'#e2e8f0',marginBottom:3}}>{friendlyName}</div>
+                            <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                              <span style={{fontSize:18,fontWeight:700,fontFamily:'monospace',color:zColor}}>
+                                {typeof sp.current === 'number' ? sp.current.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4}) : sp.current}
+                              </span>
+                              <span style={{fontSize:10,color:'#64748b'}}>{sp.unit}</span>
+                              <span style={{fontSize:10,color:zColor,fontFamily:'monospace'}}>z={zs > 0 ? '+' : ''}{zs.toFixed(2)}</span>
+                              <span style={{fontSize:9,fontWeight:700,background:zColor+'22',color:zColor,padding:'2px 6px',borderRadius:4}}>{regimeLabel}</span>
+                              <span style={{fontSize:10,color:'#94a3b8'}}>{trendArrow} {Math.abs(tp).toFixed(1)}% (7d)</span>
+                            </div>
+                          </div>
+                          <div style={{fontSize:10,color:'#475569',marginLeft:8}}>\u25BC</div>
+                        </div>
+                      </summary>
 
-                  {/* Sparkline */}
-                  <div>
-                    <div style={{fontSize:9,color:C.textMuted,marginBottom:6,fontWeight:600,letterSpacing:1}}>TENDÊNCIA (20 DIAS)</div>
-                    {sp.history && sp.history.length>0 ? (
-                      <SpreadChart history={sp.history} regime={sp.regime} />
-                    ) : <div style={{color:C.textMuted,fontSize:11}}>Sem histórico</div>}
-                  </div>
-                </div>
-
-                {/* Gaussiana */}
-                {(()=>{
-                  if(!sp.mean_1y || !sp.std_1y || sp.current==null) return null;
-                  const svg = buildGaussianSVG(sp.current, sp.mean_1y, sp.std_1y, sp.name, " "+(sp.unit||""), 320, 100);
-                  if(!svg) return null;
-                  return <div style={{marginBottom:12}} dangerouslySetInnerHTML={{__html:svg}}/>;
-                })()}
-
-                {/* Verdict */}
-                <div style={{padding:"10px 14px",borderRadius:8,marginBottom:10,
-                  background:alert==="alerta"?"rgba(239,68,68,0.06)":alert==="atencao"?"rgba(245,158,11,0.06)":"rgba(255,255,255,0.02)",
-                  border:`1px solid ${alert==="alerta"?"rgba(239,68,68,0.15)":alert==="atencao"?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.05)"}`}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.textDim,marginBottom:4,letterSpacing:0.5}}>RESUMO</div>
-                  <div style={{fontSize:13,color:C.textDim,lineHeight:1.5}}>{verdict}</div>
-                </div>
-
-                {/* Expandable explanation */}
-                {details.whatIsIt && (
-                  <details style={{cursor:"pointer"}}>
-                    <summary style={{fontSize:12,color:C.textMuted,padding:"4px 0",listStyle:"none",display:"flex",alignItems:"center",gap:4}}>
-                      <span style={{fontSize:10}}>?</span> O que é isso? Como me afeta?
-                    </summary>
-                    <div style={{marginTop:8,padding:14,borderRadius:8,
-                      background:"rgba(59,130,246,0.05)",border:"1px solid rgba(59,130,246,0.12)"}}>
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#60a5fa",marginBottom:4,letterSpacing:0.5}}>O QUE É</div>
-                        <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whatIsIt}</div>
+                      {/* Z-score bar */}
+                      <div style={{height:3,background:'#1e3a4a',marginTop:-1}}>
+                        <div style={{height:'100%',background:zColor,
+                          width:`${Math.min(Math.abs(zs)/3*100,100)}%`,
+                          marginLeft:zs < 0 ? `${Math.max(50 - Math.abs(zs)/3*50,0)}%` : '50%',
+                          transition:'width 0.3s'}}/>
                       </div>
-                      <div>
-                        <div style={{fontSize:10,fontWeight:700,color:"#fbbf24",marginBottom:4,letterSpacing:0.5}}>POR QUE ME INTERESSA</div>
-                        <div style={{fontSize:12,color:C.textDim,lineHeight:1.6}}>{details.whyMatters}</div>
+
+                      {/* Expanded content */}
+                      <div style={{background:'#0E1A24',border:'1px solid #1e3a4a',borderTop:'none',borderRadius:'0 0 8px 8px',padding:'14px 16px'}}>
+                        {/* Gaussiana + Sparkline */}
+                        <div style={{display:'flex',gap:16,marginBottom:12,flexWrap:'wrap'}}>
+                          {sp.mean_1y && sp.std_1y && sp.current != null && (()=>{
+                            const svg = buildGaussianSVG(sp.current, sp.mean_1y, sp.std_1y, sp.name, " "+(sp.unit||""), 320, 100);
+                            return svg ? <div dangerouslySetInnerHTML={{__html:svg}}/> : null;
+                          })()}
+                          {sp.history?.length > 0 && (
+                            <div style={{flex:1,minWidth:200}}>
+                              <div style={{fontSize:9,color:'#64748b',fontWeight:700,marginBottom:4}}>TEND\u00caNCIA (20 DIAS)</div>
+                              <SpreadChart history={sp.history} regime={sp.regime} />
+                            </div>
+                          )}
+                        </div>
+
+                        {interpretation && (
+                          <div style={{marginBottom:10}}>
+                            <div style={{fontSize:9,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>
+                              {"\u{1F4AC}"} O que significa
+                            </div>
+                            <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.6}}>{interpretation}</div>
+                          </div>
+                        )}
+
+                        {signalNow && (
+                          <div style={{marginBottom:10,padding:'8px 10px',background:zColor+'11',borderRadius:6,borderLeft:`2px solid ${zColor}`}}>
+                            <div style={{fontSize:9,fontWeight:700,color:zColor,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:3}}>
+                              {"\u{1F4CD}"} Agora
+                            </div>
+                            <div style={{fontSize:11,color:'#e2e8f0',lineHeight:1.5}}>{signalNow}</div>
+                          </div>
+                        )}
+
+                        {watchIf && (
+                          <div>
+                            <div style={{fontSize:9,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>
+                              {"\u{1F441}"} Monitore se
+                            </div>
+                            <div style={{fontSize:11,color:'#64748b',lineHeight:1.5}}>{watchIf}</div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </details>
-                )}
+                    </details>
+                  );
+                })}
               </div>
             );
           })}
@@ -2139,17 +2129,6 @@ export default function Dashboard() {
       ) : (
         <DataPlaceholder title="Sem dados de spreads" detail="Execute o pipeline para calcular spreads" />
       )}
-
-      {/* Help footer */}
-      <div style={{marginTop:28,padding:"16px 20px",borderRadius:12,
-        background:"rgba(255,255,255,0.02)",border:`1px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:10}}>Como ler esta página</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20,fontSize:12,color:C.textMuted,lineHeight:1.6}}>
-          <div><strong style={{color:C.textDim}}>Barra "Caro/Barato"</strong><br/>Mostra onde o preço está comparado ao último ano. Bolinha na ponta vermelha = caro. Na verde = barato.</div>
-          <div><strong style={{color:C.textDim}}>Gráfico de tendência</strong><br/>Mostra pra onde o preço está indo nos últimos 20 dias. Seta ? = subindo, ? = caindo.</div>
-          <div><strong style={{color:C.textDim}}>Clique "O que é isso?"</strong><br/>Cada relação tem uma explicação simples do que significa e por que interessa ao produtor rural.</div>
-        </div>
-      </div>
     </div>
     );
   };
@@ -2199,178 +2178,265 @@ export default function Dashboard() {
 
   // -- Tab: Stocks Watch --------------------------------------------------
   const renderStocksWatch = () => {
-    const realStocks = stocksList.filter(s=>s.data_available?.stock_real);
-    const aperto = stocksList.filter(s=>s.state.includes("APERTO")||s.state==="PRECO_ELEVADO"||s.state==="PRECO_DEPRIMIDO");
-    const excesso = stocksList.filter(s=>s.state.includes("EXCESSO")||s.state==="PRECO_ACIMA_MEDIA"||s.state==="PRECO_ABAIXO_MEDIA");
-    const neutro = stocksList.filter(s=>s.state==="NEUTRO"||s.state==="PRECO_NEUTRO");
-    const selStock = stocks?.commodities?.[stockSelected];
+    const STOCKS_ORDER = ['ZC','ZS','ZW','KE','ZM','ZL','LE','GF','HE','SB','KC','CT','CC','OJ','CL','NG','GC','SI'];
+    const allStockSymbols = Array.from(new Set([
+      ...Object.keys(psdData?.commodities || {}),
+      ...Object.keys(stocks?.commodities || {})
+    ]));
+    const orderedSymbols = [
+      ...STOCKS_ORDER.filter(s => allStockSymbols.includes(s)),
+      ...allStockSymbols.filter(s => !STOCKS_ORDER.includes(s))
+    ];
+
+    const getStockData = (sym: string) => {
+      const psd = psdData?.commodities?.[sym];
+      const sw = stocks?.commodities?.[sym];
+      if (psd) {
+        const dev = psd.avg_5y && psd.avg_5y > 0 ? ((psd.current - psd.avg_5y) / psd.avg_5y * 100) : 0;
+        return {
+          symbol: sym,
+          stock_current: psd.current,
+          stock_avg: psd.avg_5y,
+          stock_unit: psd.unit || '(1000 MT)',
+          deviation: psd.deviation ?? dev,
+          year: psd.year,
+          history: psd.history || [],
+          source: 'PSD' as const,
+          state: sw?.state || (dev > 30 ? 'ACIMA_MEDIA' : dev < -20 ? 'ABAIXO_MEDIA' : 'NEUTRO'),
+          factors: sw?.factors || [],
+          data_available: { stock_real: true },
+          price: sw?.price,
+          price_vs_avg: sw?.price_vs_avg
+        };
+      }
+      if (sw) {
+        return { ...sw, source: 'PROXY' as const, history: [] as any[], deviation: 0 };
+      }
+      return null;
+    };
+
+    const allStockData = orderedSymbols.map(s => getStockData(s)).filter(Boolean) as any[];
+    const realStocks = allStockData.filter(s => s.data_available?.stock_real || s.source === 'PSD');
+    const aperto = allStockData.filter(s=>s.state?.includes("APERTO")||s.state==="PRECO_ELEVADO"||s.state==="PRECO_DEPRIMIDO"||s.state==="ABAIXO_MEDIA");
+    const excesso = allStockData.filter(s=>s.state?.includes("EXCESSO")||s.state==="PRECO_ACIMA_MEDIA"||s.state==="ACIMA_MEDIA");
+    const neutro = allStockData.filter(s=>s.state==="NEUTRO"||s.state==="PRECO_NEUTRO");
+
+    const selStockData = getStockData(stockSelected);
     const selNm = COMMODITIES.find(c=>c.sym===stockSelected)?.name||stockSelected;
+
+    // Group separators for commodity selector
+    const groupBoundaries = new Set(['ZL','HE','OJ','SI'].filter(s => orderedSymbols.includes(s)));
 
     return (
       <div>
-        <SectionTitle>Estoques -- USDA QuickStats + Análise de Preço</SectionTitle>
+        <SectionTitle>Estoques -- USDA PSD + QuickStats</SectionTitle>
 
         {/* -- GRAFICO PRINCIPAL - TOPO -- */}
         {realStocks.length > 0 && (
           <div style={{marginBottom:24}}>
-            {/* Commodity selector */}
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-              {realStocks.map(st=>{
-                const nm=COMMODITIES.find(c=>c.sym===st.symbol)?.name||st.symbol;
-                const isSel=stockSelected===st.symbol;
+            {/* Commodity selector with group separators */}
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+              {orderedSymbols.map((sym,i)=>{
+                const d = getStockData(sym);
+                if (!d) return null;
+                const nm=COMMODITIES.find(c=>c.sym===sym)?.name||sym;
+                const isSel=stockSelected===sym;
+                const isPsd = d.source === 'PSD';
+                const showSep = i > 0 && groupBoundaries.has(orderedSymbols[i-1]);
                 return (
-                  <button key={st.symbol} onClick={()=>setStockSelected(st.symbol)} style={{
-                    padding:"6px 14px",fontSize:10,fontWeight:isSel?700:500,borderRadius:4,cursor:"pointer",
-                    background:isSel?"rgba(59,130,246,.15)":"transparent",
-                    color:isSel?C.blue:C.textMuted,border:`1px solid ${isSel?C.blue:C.border}`,
-                    transition:"all .15s"
-                  }}>{st.symbol} <span style={{fontSize:9,color:isSel?C.blue:C.textMuted}}>({nm})</span></button>
+                  <span key={sym}>
+                    {showSep && <div style={{width:1,height:20,background:'#1e3a4a',margin:'0 4px'}}/>}
+                    <button onClick={()=>setStockSelected(sym)} style={{
+                      padding:"5px 12px",fontSize:10,fontWeight:isSel?700:500,borderRadius:4,cursor:"pointer",
+                      background:isSel?"rgba(59,130,246,.15)":"transparent",
+                      color:isSel?C.blue:isPsd?C.textDim:C.textMuted,border:`1px solid ${isSel?C.blue:C.border}`,
+                      transition:"all .15s",opacity:isPsd?1:0.7
+                    }}>{sym} <span style={{fontSize:9,color:isSel?C.blue:C.textMuted}}>({nm})</span></button>
+                  </span>
                 );
               })}
             </div>
 
-            {/* Stock chart */}
+            {/* Stock chart — PSD bar chart by year */}
             {(()=>{
-              if(!selStock?.stock_history?.length) return <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:11}}>Sem histórico de estoque para {stockSelected}</div>;
-              const hist=selStock.stock_history;
-              const avg=selStock.stock_avg||0;
+              if (!selStockData) return <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:11}}>Sem dados para {stockSelected}</div>;
 
-              // Normalize periods and deduplicate
-              const normalize=(p:string)=>p.replace("FIRST OF ","").replace("END OF ","").slice(0,3);
-              const deduped:Record<string,{year:number;period:string;value:number}>={};
-              hist.forEach((h:any)=>{
-                if(h.period==="YEAR") return;
-                const key=h.year+"-"+normalize(h.period);
-                if(!deduped[key]||h.value>deduped[key].value) deduped[key]={year:h.year,period:normalize(h.period),value:h.value};
-              });
-              const clean=Object.values(deduped);
-              if(!clean.length) return null;
+              // PSD history: [{year, value}]
+              const psdHist = selStockData.history as {year:number;value:number}[];
+              const hasPsdHist = psdHist && psdHist.length > 0;
 
-              const periodOrder:Record<string,number>={"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,"JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12};
-              const periods=[...new Set(clean.map(h=>h.period))].sort((a,b)=>(periodOrder[a]||0)-(periodOrder[b]||0));
-              const years=[...new Set(clean.map(h=>h.year))].sort();
+              // Try stocks_watch stock_history as fallback
+              const swStock = stocks?.commodities?.[stockSelected];
+              const swHist = swStock?.stock_history;
+              const hasSwHist = swHist?.length > 0;
 
-              const yearData:Record<number,{period:string;value:number}[]>={};
-              years.forEach(y=>{yearData[y]=clean.filter(h=>h.year===y).sort((a,b)=>(periodOrder[a.period]||0)-(periodOrder[b.period]||0));});
+              if (!hasPsdHist && !hasSwHist) {
+                return <div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:11}}>Sem hist\u00f3rico de estoque para {stockSelected}</div>;
+              }
 
-              const allVals=clean.map(h=>h.value);
-              const maxVal=Math.max(...allVals,avg)*1.1;
-              const minVal=Math.min(...allVals)*0.9;
-              const range=maxVal-minVal||1;
+              const avg = selStockData.stock_avg || 0;
+              const current = selStockData.stock_current;
+              const dev = avg > 0 && current ? ((current - avg) / avg * 100) : 0;
+              const devColor = Math.abs(dev) > 15 ? C.red : Math.abs(dev) > 5 ? C.amber : C.green;
+              const unit_ = selStockData.stock_unit || '';
 
-              const W=900,H=300;
-              const pad={l:60,r:30,t:25,b:35};
-              const chartW=W-pad.l-pad.r;
-              const chartH=H-pad.t-pad.b;
-              const xStep=periods.length>1?chartW/(periods.length-1):chartW;
-              const yC=(v:number)=>pad.t+chartH*(1-(v-minVal)/range);
+              if (hasPsdHist) {
+                // PSD annual bar chart
+                const years = psdHist.map(h => h.year);
+                const vals = psdHist.map(h => h.value);
+                const maxVal = Math.max(...vals, avg) * 1.1;
+                const minVal_ = Math.min(...vals) * 0.85;
+                const range_ = maxVal - minVal_ || 1;
 
-              const colorList=["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#22c55e","#06b6d4"];
-              const yearColors:Record<number,string>={};
-              years.forEach((y,i)=>{yearColors[y]=colorList[i%colorList.length];});
+                const W=900, H=280;
+                const pad_={l:70,r:30,t:25,b:35};
+                const chartW_=W-pad_.l-pad_.r;
+                const chartH_=H-pad_.t-pad_.b;
+                const barW_=Math.min(60, (chartW_ / years.length) * 0.7);
+                const gap_=(chartW_ - barW_ * years.length) / (years.length + 1);
+                const yC_=(v:number) => pad_.t + chartH_ * (1 - (v - minVal_) / range_);
 
-              const dev=selStock.stock_avg&&selStock.stock_avg>0?((selStock.stock_current-selStock.stock_avg)/selStock.stock_avg*100):0;
-              const devColor=Math.abs(dev)>15?C.red:Math.abs(dev)>5?C.amber:C.green;
+                const colorList=["#3b82f6","#8b5cf6","#f97316","#ec4899","#f59e0b","#22c55e","#06b6d4"];
 
-              return (
-                <div style={{background:C.panelAlt,borderRadius:8,padding:20,border:`1px solid ${C.border}`}}>
-                  {/* Header with stats */}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-                    <div>
-                      <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} -- {selNm}</div>
-                      <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Estoque Trimestral ({selStock.stock_unit||""}) | Fonte: USDA QuickStats</div>
-                    </div>
-                    <div style={{display:"flex",gap:16}}>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:C.textMuted}}>ATUAL</div>
-                        <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.text}}>{selStock.stock_current?.toFixed(2)}</div>
+                return (
+                  <div style={{background:C.panelAlt,borderRadius:8,padding:20,border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} -- {selNm}</div>
+                        <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Ending Stocks {unit_} | Fonte: {selStockData.source === 'PSD' ? 'USDA PSD Online' : 'USDA QuickStats'}</div>
                       </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:C.textMuted}}>MÉDIA</div>
-                        <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.textDim}}>{selStock.stock_avg?.toFixed(2)}</div>
-                      </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:9,color:C.textMuted}}>DESVIO</div>
-                        <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:devColor}}>{dev>=0?"+":""}{dev.toFixed(1)}%</div>
+                      <div style={{display:"flex",gap:16}}>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:9,color:C.textMuted}}>ATUAL</div>
+                          <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.text}}>{current != null ? (current >= 1000 ? (current/1000).toFixed(1)+'M' : current.toLocaleString()) : '--'}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:9,color:C.textMuted}}>M\u00c9DIA 5Y</div>
+                          <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.textDim}}>{avg >= 1000 ? (avg/1000).toFixed(1)+'M' : avg.toLocaleString()}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:9,color:C.textMuted}}>DESVIO</div>
+                          <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:devColor}}>{dev>=0?"+":""}{dev.toFixed(1)}%</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Legend */}
-                  <div style={{display:"flex",gap:14,marginBottom:10,flexWrap:"wrap"}}>
-                    {years.map(y=>(
-                      <div key={y} style={{display:"flex",alignItems:"center",gap:4}}>
-                        <div style={{width:20,height:3,borderRadius:2,background:yearColors[y]}}/>
-                        <span style={{fontSize:10,color:yearColors[y],fontWeight:600}}>{y}</span>
-                      </div>
-                    ))}
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <div style={{width:20,height:0,borderTop:"2px dashed "+C.amber}}/>
-                      <span style={{fontSize:10,color:C.amber,fontWeight:600}}>Média ({avg.toFixed(1)})</span>
+                    {/* Legend */}
+                    <div style={{display:"flex",gap:14,marginBottom:10,flexWrap:"wrap"}}>
+                      {years.map((y,i)=>(
+                        <div key={y} style={{display:"flex",alignItems:"center",gap:4}}>
+                          <div style={{width:14,height:10,borderRadius:2,background:colorList[i%colorList.length]}}/>
+                          <span style={{fontSize:10,color:colorList[i%colorList.length],fontWeight:600}}>{y}</span>
+                        </div>
+                      ))}
+                      {avg > 0 && <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <div style={{width:20,height:0,borderTop:"2px dashed "+C.amber}}/>
+                        <span style={{fontSize:10,color:C.amber,fontWeight:600}}>M\u00e9dia 5Y ({avg >= 1000 ? (avg/1000).toFixed(1)+'M' : avg.toLocaleString()})</span>
+                      </div>}
                     </div>
-                  </div>
-
-                  {/* Bar Chart */}
-                  {(()=>{
-                    const nYears=years.length;
-                    const nPeriods=periods.length;
-                    if(!nPeriods||!nYears) return null;
-                    const groupW=chartW/nPeriods;
-                    const barGap=2;
-                    const barW=Math.max(4,Math.min(20,(groupW-barGap*(nYears+1))/nYears));
-                    const groupTotalW=nYears*barW+(nYears-1)*barGap;
-                    const groupOffset=(groupW-groupTotalW)/2;
-                    const zeroY=yC(minVal);
-                    return (
-                      <svg width={W} height={H} style={{display:"block",width:"100%"}} viewBox={"0 0 "+W+" "+H}>
-                        {/* Grid */}
-                        {[0,0.25,0.5,0.75,1].map(pct=>{
-                          const gy=pad.t+chartH*(1-pct);const val=minVal+range*pct;
-                          return (<g key={"g"+pct}><line x1={pad.l} y1={gy} x2={W-pad.r} y2={gy} stroke="rgba(148,163,184,.08)" strokeWidth={1}/><text x={pad.l-8} y={gy+3} fill={C.textMuted} fontSize={9} textAnchor="end" fontFamily="monospace">{val>=100?val.toFixed(0):val.toFixed(1)}</text></g>);
-                        })}
-                        {/* Average line */}
-                        <line x1={pad.l} y1={yC(avg)} x2={W-pad.r} y2={yC(avg)} stroke={C.amber} strokeWidth={1.5} strokeDasharray="6,4"/>
-                        {/* X axis labels */}
-                        {periods.map((per,pi)=>(<text key={per} x={pad.l+pi*groupW+groupW/2} y={H-pad.b+16} fill={C.textMuted} fontSize={10} textAnchor="middle" fontFamily="monospace" fontWeight="600">{per}</text>))}
-                        {/* Bars */}
-                        {periods.map((per,pi)=>(
-                          <g key={per}>
-                            {years.map((yr,yi)=>{
-                              const entry=yearData[yr]?.find(d=>d.period===per);
-                              if(!entry) return null;
-                              const bx=pad.l+pi*groupW+groupOffset+yi*(barW+barGap);
-                              const by=yC(entry.value);
-                              const bh=zeroY-by;
-                              return (
-                                <g key={yr}>
-                                  <rect x={bx} y={by} width={barW} height={Math.max(1,bh)} rx={2} fill={yearColors[yr]} opacity={0.85}/>
-                                  <text x={bx+barW/2} y={by-4} fill={yearColors[yr]} fontSize={8} textAnchor="middle" fontFamily="monospace" fontWeight="bold">{entry.value>=100?entry.value.toFixed(0):entry.value.toFixed(1)}</text>
-                                </g>
-                              );
-                            })}
+                    {/* Bar chart */}
+                    <svg width={W} height={H} style={{display:"block",width:"100%"}} viewBox={`0 0 ${W} ${H}`}>
+                      {[0,0.25,0.5,0.75,1].map(pct=>{
+                        const gy=pad_.t+chartH_*(1-pct);const val=minVal_+range_*pct;
+                        return (<g key={"g"+pct}><line x1={pad_.l} y1={gy} x2={W-pad_.r} y2={gy} stroke="rgba(148,163,184,.08)" strokeWidth={1}/><text x={pad_.l-8} y={gy+3} fill={C.textMuted} fontSize={9} textAnchor="end" fontFamily="monospace">{val>=10000?(val/1000).toFixed(0)+'k':val.toFixed(0)}</text></g>);
+                      })}
+                      {avg > 0 && <line x1={pad_.l} y1={yC_(avg)} x2={W-pad_.r} y2={yC_(avg)} stroke={C.amber} strokeWidth={1.5} strokeDasharray="6,4"/>}
+                      {psdHist.map((h,i)=>{
+                        const bx=pad_.l+gap_*(i+1)+barW_*i;
+                        const by=yC_(h.value);
+                        const bh=yC_(minVal_)-by;
+                        const col=colorList[i%colorList.length];
+                        const isLast = i === psdHist.length - 1;
+                        return (
+                          <g key={h.year}>
+                            <rect x={bx} y={by} width={barW_} height={Math.max(1,bh)} rx={3} fill={col} opacity={isLast?1:0.8}/>
+                            <text x={bx+barW_/2} y={by-5} fill={col} fontSize={10} textAnchor="middle" fontFamily="monospace" fontWeight="bold">
+                              {h.value>=10000?(h.value/1000).toFixed(1)+'k':h.value.toLocaleString()}
+                            </text>
+                            <text x={bx+barW_/2} y={H-pad_.b+16} fill={C.textMuted} fontSize={11} textAnchor="middle" fontFamily="monospace" fontWeight="700">
+                              {h.year}
+                            </text>
                           </g>
-                        ))}
-                      </svg>
-                    );
-                  })()}
+                        );
+                      })}
+                    </svg>
 
-                  {/* Gaussiana de distribuição do estoque */}
-                  {(()=>{
-                    if(!selStock?.stock_avg || !selStock?.stock_current) return null;
-                    const gMean = selStock.stock_avg;
-                    const gStd = selStock.stock_avg * 0.20;
-                    const svg = buildGaussianSVG(selStock.stock_current, gMean, gStd, stockSelected+" Estoque", " "+(selStock.stock_unit||""), 420, 110);
-                    if(!svg) return null;
-                    return (
-                      <div style={{marginTop:16,padding:12,background:"#0E1A24",borderRadius:8,border:"1px solid #1e3a4a"}}>
-                        <div style={{fontSize:10,color:"#DCB432",fontWeight:700,marginBottom:8,letterSpacing:"0.5px"}}>DISTRIBUIÇÃO HISTÓRICA — ESTOQUE {stockSelected}</div>
-                        <div dangerouslySetInnerHTML={{__html:svg}}/>
-                        <div style={{fontSize:9,color:"#64748b",marginTop:4}}>μ = média histórica USDA | σ = desvio padrão estimado (20%) | zona verde = ±1σ (normal)</div>
+                    {/* Gaussiana */}
+                    {(()=>{
+                      if(!avg || !current) return null;
+                      const gStd = avg * 0.20;
+                      const svg = buildGaussianSVG(current, avg, gStd, stockSelected+" Estoque", " "+unit_, 420, 110);
+                      if(!svg) return null;
+                      return (
+                        <div style={{marginTop:16,padding:12,background:"#0E1A24",borderRadius:8,border:"1px solid #1e3a4a"}}>
+                          <div style={{fontSize:10,color:"#DCB432",fontWeight:700,marginBottom:8,letterSpacing:"0.5px"}}>DISTRIBUI\u00c7\u00c3O HIST\u00d3RICA \u2014 ESTOQUE {stockSelected}</div>
+                          <div dangerouslySetInnerHTML={{__html:svg}}/>
+                          <div style={{fontSize:9,color:"#64748b",marginTop:4}}>\u03bc = m\u00e9dia 5Y USDA PSD | \u03c3 = desvio padr\u00e3o estimado (20%) | zona verde = \u00b11\u03c3 (normal)</div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              }
+
+              // Fallback: stocks_watch quarterly bar chart (original logic)
+              if (hasSwHist) {
+                const hist=swHist;
+                const swAvg=swStock?.stock_avg||0;
+                const normalize=(p:string)=>p.replace("FIRST OF ","").replace("END OF ","").slice(0,3);
+                const deduped:Record<string,{year:number;period:string;value:number}>={};
+                hist.forEach((h:any)=>{
+                  if(h.period==="YEAR") return;
+                  const key=h.year+"-"+normalize(h.period);
+                  if(!deduped[key]||h.value>deduped[key].value) deduped[key]={year:h.year,period:normalize(h.period),value:h.value};
+                });
+                const clean=Object.values(deduped);
+                if(!clean.length) return null;
+                const periodOrder:Record<string,number>={"JAN":1,"FEB":2,"MAR":3,"APR":4,"MAY":5,"JUN":6,"JUL":7,"AUG":8,"SEP":9,"OCT":10,"NOV":11,"DEC":12};
+                const periods=[...new Set(clean.map(h=>h.period))].sort((a,b)=>(periodOrder[a]||0)-(periodOrder[b]||0));
+                const years=[...new Set(clean.map(h=>h.year))].sort();
+                const yearData:Record<number,{period:string;value:number}[]>={};
+                years.forEach(y=>{yearData[y]=clean.filter(h=>h.year===y).sort((a,b)=>(periodOrder[a.period]||0)-(periodOrder[b.period]||0));});
+                const allVals=clean.map(h=>h.value);
+                const maxVal=Math.max(...allVals,swAvg)*1.1;
+                const minVal_=Math.min(...allVals)*0.9;
+                const range_=maxVal-minVal_||1;
+                const W=900,H=300;
+                const pad_={l:60,r:30,t:25,b:35};
+                const chartW_=W-pad_.l-pad_.r;
+                const chartH_=H-pad_.t-pad_.b;
+                const yC_=(v:number)=>pad_.t+chartH_*(1-(v-minVal_)/range_);
+                const colorList=["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#22c55e","#06b6d4"];
+                const yearColors:Record<number,string>={};
+                years.forEach((y,i)=>{yearColors[y]=colorList[i%colorList.length];});
+                const swDev=swStock?.stock_avg&&swStock.stock_avg>0?((swStock.stock_current-swStock.stock_avg)/swStock.stock_avg*100):0;
+                const swDevColor=Math.abs(swDev)>15?C.red:Math.abs(swDev)>5?C.amber:C.green;
+                return (
+                  <div style={{background:C.panelAlt,borderRadius:8,padding:20,border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:800,color:C.text}}>{stockSelected} -- {selNm}</div>
+                        <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>Estoque Trimestral ({swStock?.stock_unit||""}) | Fonte: USDA QuickStats</div>
                       </div>
-                    );
-                  })()}
-                </div>
-              );
+                      <div style={{display:"flex",gap:16}}>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:9,color:C.textMuted}}>ATUAL</div><div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.text}}>{swStock?.stock_current?.toFixed(2)||"--"}</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:9,color:C.textMuted}}>M\u00c9DIA</div><div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:C.textDim}}>{swStock?.stock_avg?.toFixed(2)||"--"}</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:9,color:C.textMuted}}>DESVIO</div><div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:swDevColor}}>{swDev>=0?"+":""}{swDev.toFixed(1)}%</div></div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:14,marginBottom:10,flexWrap:"wrap"}}>
+                      {years.map(y=>(<div key={y} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:20,height:3,borderRadius:2,background:yearColors[y]}}/><span style={{fontSize:10,color:yearColors[y],fontWeight:600}}>{y}</span></div>))}
+                      {swAvg > 0 && <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:20,height:0,borderTop:"2px dashed "+C.amber}}/><span style={{fontSize:10,color:C.amber,fontWeight:600}}>M\u00e9dia ({swAvg.toFixed(1)})</span></div>}
+                    </div>
+                    <svg width={W} height={H} style={{display:"block",width:"100%"}} viewBox={"0 0 "+W+" "+H}>
+                      {[0,0.25,0.5,0.75,1].map(pct=>{const gy=pad_.t+chartH_*(1-pct);const val=minVal_+range_*pct;return (<g key={"g"+pct}><line x1={pad_.l} y1={gy} x2={W-pad_.r} y2={gy} stroke="rgba(148,163,184,.08)" strokeWidth={1}/><text x={pad_.l-8} y={gy+3} fill={C.textMuted} fontSize={9} textAnchor="end" fontFamily="monospace">{val>=100?val.toFixed(0):val.toFixed(1)}</text></g>);})}
+                      {swAvg > 0 && <line x1={pad_.l} y1={yC_(swAvg)} x2={W-pad_.r} y2={yC_(swAvg)} stroke={C.amber} strokeWidth={1.5} strokeDasharray="6,4"/>}
+                      {(()=>{const nYears=years.length;const nPeriods=periods.length;if(!nPeriods||!nYears)return null;const groupW=chartW_/nPeriods;const barGap=2;const bW=Math.max(4,Math.min(20,(groupW-barGap*(nYears+1))/nYears));const groupTotalW=nYears*bW+(nYears-1)*barGap;const groupOffset=(groupW-groupTotalW)/2;const zeroY=yC_(minVal_);return periods.map((per,pi)=>(<g key={per}>{years.map((yr,yi)=>{const entry=yearData[yr]?.find((d:any)=>d.period===per);if(!entry)return null;const bx=pad_.l+pi*groupW+groupOffset+yi*(bW+barGap);const by=yC_(entry.value);const bh=zeroY-by;return (<g key={yr}><rect x={bx} y={by} width={bW} height={Math.max(1,bh)} rx={2} fill={yearColors[yr]} opacity={0.85}/><text x={bx+bW/2} y={by-4} fill={yearColors[yr]} fontSize={8} textAnchor="middle" fontFamily="monospace" fontWeight="bold">{entry.value>=100?entry.value.toFixed(0):entry.value.toFixed(1)}</text></g>);})}</g>));})()}
+                    </svg>
+                  </div>
+                );
+              }
+
+              return null;
             })()}
           </div>
         )}
@@ -2397,26 +2463,26 @@ export default function Dashboard() {
         {/* -- Tabela de Estoque Real USDA -- */}
         {realStocks.length > 0 && (
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>Estoque Real -- USDA QuickStats</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.textDim,marginBottom:8}}>Ending Stocks -- USDA PSD + QuickStats</div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><TableHeader cols={["Commodity","Estoque Atual","Média","Unidade","Desvio %","Estado","Tendência","Período"]} /></thead>
+                <thead><TableHeader cols={["Commodity","Ending Stock","M\u00e9dia 5Y","Unidade","Desvio %","Estado","Fonte"]} /></thead>
                 <tbody>
                   {realStocks.map(st=>{
                     const nm=COMMODITIES.find(c=>c.sym===st.symbol)?.name||st.symbol;
                     const dev=st.stock_avg&&st.stock_avg>0?((st.stock_current-st.stock_avg)/st.stock_avg*100):0;
                     const devCol=Math.abs(dev)>15?C.red:Math.abs(dev)>5?C.amber:C.green;
                     const isSel=stockSelected===st.symbol;
+                    const fmtVal = (v:number|null) => v == null ? '--' : v >= 10000 ? (v/1000).toFixed(1)+'k' : v.toLocaleString();
                     return (
                       <tr key={st.symbol+"_real"} onClick={()=>setStockSelected(st.symbol)} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:isSel?"rgba(59,130,246,.06)":"transparent"}}>
                         <td style={{padding:"8px 12px",fontWeight:700}}>{st.symbol} <span style={{color:C.textMuted,fontWeight:400}}>({nm})</span></td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,fontSize:12}}>{st.stock_current?.toFixed(2)||"--"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{st.stock_avg?.toFixed(2)||"--"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,fontSize:12}}>{fmtVal(st.stock_current)}</td>
+                        <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",color:C.textDim}}>{fmtVal(st.stock_avg)}</td>
                         <td style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:C.textMuted}}>{st.stock_unit||"--"}</td>
                         <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"monospace",fontWeight:700,color:devCol}}>{dev>=0?"+":""}{dev.toFixed(1)}%</td>
-                        <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label={st.state.replace(/_/g," ")} color={st.state.includes("APERTO")?C.red:st.state.includes("EXCESSO")?C.green:C.amber} /></td>
-                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Tendencia"))?.replace("Tendencia: ","")||"--"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"right",fontSize:9,color:C.textMuted}}>{st.factors?.find((f:string)=>f.includes("Dado mais recente"))?.replace("Dado mais recente: ","")||"--"}</td>
+                        <td style={{padding:"8px 12px",textAlign:"center"}}><Badge label={(st.state||'').replace(/_/g," ")} color={(st.state||'').includes("APERTO")||(st.state||'').includes("ABAIXO")?C.red:(st.state||'').includes("EXCESSO")||(st.state||'').includes("ACIMA")?C.green:C.amber} /></td>
+                        <td style={{padding:"8px 12px",textAlign:"center",fontSize:9,color:C.textMuted}}>{st.source||'--'}</td>
                       </tr>
                     );
                   })}
@@ -5335,7 +5401,18 @@ export default function Dashboard() {
           }}>
             <div style={{width:28,height:28,borderRadius:6,background:"rgba(220,180,50,.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{"\u{1F4CA}"}</div>
             <div>
-              <div style={{fontSize:12,fontWeight:viewMode==="intel"?800:600,color:viewMode==="intel"?"#DCB432":C.textDim,letterSpacing:1}}>INTEL</div>
+              <div style={{fontSize:12,fontWeight:viewMode==="intel"?800:600,color:viewMode==="intel"?"#DCB432":C.textDim,letterSpacing:1,display:'flex',alignItems:'center',gap:6}}>
+                INTEL
+                {(()=>{
+                  const cotAlerts = Object.values(cot?.commodities || {}).filter((c:any) =>
+                    c.disaggregated?.delta_analysis?.dominant_direction !== 'NEUTRAL' &&
+                    (c.disaggregated?.delta_analysis?.reversal_score || 0) > 60
+                  ).length;
+                  return cotAlerts > 0 ? (
+                    <span style={{background:'#DC3C3C',color:'#fff',fontSize:8,fontWeight:700,borderRadius:8,padding:'1px 5px',lineHeight:'12px'}}>{cotAlerts}</span>
+                  ) : null;
+                })()}
+              </div>
               <div style={{fontSize:8,color:C.textMuted}}>Central de Inteligência</div>
             </div>
           </div>
@@ -5345,6 +5422,8 @@ export default function Dashboard() {
               <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
               {COMMODITIES.filter(c=>c.group===grp).map(c=>{
                 const p=getPrice(c.sym);const ch=getChange(c.sym);const sel=c.sym===selected;
+                const cotDa = cot?.commodities?.[c.sym]?.disaggregated?.delta_analysis;
+                const hasCotAlert = cotDa && cotDa.dominant_direction !== 'NEUTRAL' && cotDa.reversal_score > 60;
                 return (
                   <div key={c.sym} onClick={()=>{setSelected(c.sym);setViewMode("commodity");}} style={{
                     display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 16px",cursor:"pointer",
@@ -5352,9 +5431,19 @@ export default function Dashboard() {
                     borderLeft:sel&&viewMode==="commodity"?`3px solid #00C878`:sel?`3px solid ${C.blue}`:"3px solid transparent",
                     transition:"all .15s",
                   }}>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:sel?700:500,color:sel?C.text:C.textDim}}>{c.sym}</div>
-                      <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:sel?700:500,color:sel?C.text:C.textDim}}>{c.sym}</div>
+                        <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
+                      </div>
+                      {hasCotAlert && (
+                        <span style={{
+                          width:7,height:7,borderRadius:'50%',
+                          background:cotDa!.dominant_direction==='BEARISH'?'#DC3C3C':'#00C878',
+                          display:'inline-block',flexShrink:0,
+                          boxShadow:`0 0 4px ${cotDa!.dominant_direction==='BEARISH'?'#DC3C3C':'#00C878'}`,
+                        }} title={`COT Delta: ${cotDa!.dominant_direction} ${cotDa!.reversal_score}%`}/>
+                      )}
                     </div>
                     <div style={{textAlign:"right"}}>
                       <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"--"}</div>

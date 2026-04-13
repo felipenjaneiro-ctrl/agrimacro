@@ -15,44 +15,163 @@ SPREADS = {
         "formula": "(ZM*44/2000) + (ZL*11/100) - ZS/100",  # CME Board Crush (44lb meal + 11lb oil yield per bushel)
         "components": ["ZM", "ZL", "ZS"],
         "unit": "USD/bu",
-        "description": "Margem de esmagamento de soja. Z-score elevado = margem acima do normal."
+        "description": "Margem de esmagamento de soja. Z-score elevado = margem acima do normal.",
+        "category": "graos",
     },
     "ke_zw": {
         "name": "KC-CBOT Wheat Spread",
         "formula": "KE - ZW",
         "components": ["KE", "ZW"],
         "unit": "cents/bu",
-        "description": "Prêmio de proteína HRW vs SRW. Positivo = mercado paga por qualidade."
+        "description": "Pr\u00eamio de prote\u00edna HRW vs SRW. Positivo = mercado paga por qualidade.",
+        "category": "graos",
     },
     "zl_cl": {
         "name": "Soybean Oil / Crude Ratio",
         "formula": "ZL / CL",
         "components": ["ZL", "CL"],
         "unit": "ratio",
-        "description": "Dinâmica de biodiesel. Alto = óleo de soja relativamente caro vs petróleo."
+        "description": "Din\u00e2mica de biodiesel. Alto = \u00f3leo de soja relativamente caro vs petr\u00f3leo.",
+        "category": "energia",
     },
     "feedlot": {
         "name": "Feedlot Margin",
         "formula": "LE*6 - GF - ZC*0.5",  # Simplified feedlot margin
         "components": ["LE", "GF", "ZC"],
         "unit": "USD/cwt",
-        "description": "Margem do confinamento. Positiva = lucro para confinadores."
+        "description": "Margem do confinamento. Positiva = lucro para confinadores.",
+        "category": "pecuaria",
     },
     "zc_zm": {
         "name": "Corn/Meal Ratio",
         "formula": "ZC / ZM",
         "components": ["ZC", "ZM"],
         "unit": "ratio",
-        "description": "Competição na ração animal. Baixo = milho mais competitivo que farelo."
+        "description": "Competi\u00e7\u00e3o na ra\u00e7\u00e3o animal. Baixo = milho mais competitivo que farelo.",
+        "category": "graos",
     },
     "zc_zs": {
         "name": "Corn/Soy Ratio",
         "formula": "ZC / ZS",
         "components": ["ZC", "ZS"],
         "unit": "ratio",
-        "description": "Decisão de plantio. <0.4 favorece soja, >0.45 favorece milho."
+        "description": "Decis\u00e3o de plantio. <0.4 favorece soja, >0.45 favorece milho.",
+        "category": "graos",
+    },
+    "cattle_crush": {
+        "name": "Cattle Crush Margin",
+        "formula": "LE - (GF * 0.70) - (ZC * 0.0046)",
+        "components": ["LE", "GF", "ZC"],
+        "unit": "USD/cwt",
+        "description": "Margem bruta do confinamento por cwt. Alto = confinamento lucr\u00e1vel.",
+        "category": "pecuaria",
+    },
+    "feed_wheat": {
+        "name": "Feed Wheat Ratio (ZW/ZC)",
+        "formula": "ZW / ZC",
+        "components": ["ZW", "ZC"],
+        "unit": "ratio",
+        "description": "Trigo vs milho na ra\u00e7\u00e3o. <1.15 = trigo compete com milho.",
+        "category": "graos",
     },
 }
+
+# Category mapping for existing spreads
+SPREAD_CATEGORIES = {
+    "soy_crush": "graos",
+    "ke_zw": "graos",
+    "zl_cl": "energia",
+    "feedlot": "pecuaria",
+    "zc_zm": "graos",
+    "zc_zs": "graos",
+    "cattle_crush": "pecuaria",
+    "feed_wheat": "graos",
+}
+
+# Interpretation texts
+INTERPRETATIONS = {
+    "soy_crush": "Margem que a ind\u00fastria tem para comprar soja em gr\u00e3o e vender farelo + \u00f3leo. Quando sobe, ind\u00fastria compra mais soja \u2192 suporte de pre\u00e7o.",
+    "ke_zw": "Pr\u00eamio pago pelo trigo duro (proteico) sobre o mole. Sobe quando p\u00e3es artesanais e massas demandam mais prote\u00edna.",
+    "zl_cl": "Quantos litros de \u00f3leo de soja equivalem a um barril de petr\u00f3leo. Alto = biodiesel com \u00f3leo vegetal se torna econ\u00f4mico.",
+    "feedlot": "Lucro estimado de comprar bezerro (GF), engordar com milho (ZC) e vender como boi gordo (LE). Positivo = expans\u00e3o do rebanho. Negativo = abate precoce.",
+    "zc_zm": "Custo relativo do milho vs farelo de soja como fonte de energia na ra\u00e7\u00e3o. Baixo = milho barato, pecu\u00e1ria usa mais milho.",
+    "zc_zs": "A rela\u00e7\u00e3o mais importante para o produtor americano: define o que plantar. Abaixo de 2.3 = economicamente vantajoso plantar milho. Acima de 2.5 = mais lucrativo plantar soja.",
+    "cattle_crush": "Margem bruta do confinamento: pre\u00e7o do boi gordo menos custo do bezerro e ra\u00e7\u00e3o. Alto = confinamento lucrativo = mais demanda futura de milho.",
+    "feed_wheat": "Competi\u00e7\u00e3o entre trigo e milho na ra\u00e7\u00e3o animal. Abaixo de 1.15 = trigo barato, compete com milho. Acima de 1.30 = milho mais competitivo.",
+}
+
+WATCH_IF = {
+    "soy_crush": "Queda r\u00e1pida = esmagamento parando \u2192 baixista para ZS",
+    "ke_zw": "Invers\u00e3o (KC < CBOT) = raridade hist\u00f3rica, oportunidade de arbitragem",
+    "zl_cl": "Se subir acima de 0.85, refinarias americanas preferem biodiesel de soja \u2192 alta demanda para ZL e ZS",
+    "feedlot": "Margem negativa por 3+ meses = redu\u00e7\u00e3o de oferta bovina em 18-24 meses \u2192 alta estrutural de LE",
+    "zc_zm": "Quando cai abaixo de 1.2, integrados de frango e su\u00edno mudam formula\u00e7\u00e3o \u2192 mais demanda para ZC",
+    "zc_zs": "Relat\u00f3rio de acreagem USDA em 30/junho confirmar\u00e1 se a inten\u00e7\u00e3o virou plantio real",
+    "cattle_crush": "Margem acima de $15/cwt por 2+ meses = pecuaristas expandem rebanho \u2192 mais demanda GF",
+    "feed_wheat": "Abaixo de 1.10 por 2+ semanas = formuladores trocam milho por trigo \u2192 press\u00e3o em ZC",
+}
+
+def generate_signal_now(spread_key, value, zscore, regime, trend_pct):
+    """Gera texto contextual baseado no estado atual."""
+    direction = "subindo" if trend_pct > 1 else "caindo" if trend_pct < -1 else "est\u00e1vel"
+
+    signals = {
+        "soy_crush": {
+            "extreme_high": f"Margem no pico ({zscore:+.1f}\u03c3). Ind\u00fastria pagando muito pela soja. Aten\u00e7\u00e3o: revers\u00e3o poss\u00edvel.",
+            "high": f"Margem acima do normal ({direction}). Suporte para ZS via demanda industrial.",
+            "normal": "Margem dentro do normal. Esmagamento saud\u00e1vel sem sinal direcional.",
+            "low": "Margem pressionada. Ind\u00fastria pode reduzir compras de ZS.",
+        },
+        "feedlot": {
+            "extreme_high": "Confinamento extremamente lucrativo. Expans\u00e3o de rebanho prov\u00e1vel \u2192 alta futura de GF.",
+            "high": f"Margem boa ({direction}). Pecuaristas comprando GF \u2192 suporte para feeder.",
+            "normal": "Margem normal. Ciclo pecu\u00e1rio em equil\u00edbrio.",
+            "low": "Margem comprimida. Risco de abate precoce \u2192 bearish LE m\u00e9dio prazo.",
+        },
+        "cattle_crush": {
+            "extreme_high": "Margem de confinamento no pico. Forte incentivo para engorda \u2192 demanda de milho sobe.",
+            "high": f"Confinamento lucrativo ({direction}). Demanda por GF e ZC sustentada.",
+            "normal": "Margem normal de confinamento. Sem press\u00e3o excepcional.",
+            "low": "Confinamento no preju\u00edzo. Abate precoce poss\u00edvel \u2192 press\u00e3o em LE curto prazo.",
+        },
+        "zc_zs": {
+            "extreme_high": f"Ratio extremo ({value:.4f}). Milho relativamente caro vs soja \u2192 produtores migram para milho.",
+            "high": f"Ratio acima do normal ({direction}). Soja mais atrativa para plantio.",
+            "normal": "Ratio equilibrado. Sem vantagem clara de plantio.",
+            "low": "Milho barato vs soja. Produtores tendem a plantar mais milho.",
+        },
+        "ke_zw": {
+            "extreme_high": f"Pr\u00eamio de prote\u00edna extremo ({direction}). Trigo duro muito demandado.",
+            "high": f"Pr\u00eamio HRW acima do normal. Demanda por qualidade forte.",
+            "normal": "Spread KC-CBOT dentro do padr\u00e3o sazonal.",
+            "low": "Pr\u00eamio de prote\u00edna comprimido. Excesso de trigo duro ou falta de mole.",
+        },
+        "zl_cl": {
+            "extreme_high": f"\u00d3leo de soja extremamente caro vs petr\u00f3leo. Biodiesel perde competitividade.",
+            "high": f"Ratio {direction}. \u00d3leo de soja caro \u2014 biodiesel no limite.",
+            "normal": "Paridade \u00f3leo/petr\u00f3leo normal. Biodiesel competitivo.",
+            "low": "Petr\u00f3leo relativamente caro. Biodiesel de soja ganha espa\u00e7o.",
+        },
+        "zc_zm": {
+            "extreme_high": "Milho muito caro vs farelo. Formuladores trocam milho por farelo na ra\u00e7\u00e3o.",
+            "high": f"Milho perdendo competitividade na ra\u00e7\u00e3o ({direction}).",
+            "normal": "Equil\u00edbrio milho/farelo normal na formula\u00e7\u00e3o.",
+            "low": "Milho barato vs farelo \u2192 mais demanda por milho na ra\u00e7\u00e3o.",
+        },
+        "feed_wheat": {
+            "extreme_high": "Trigo muito caro vs milho. Milho domina formula\u00e7\u00e3o de ra\u00e7\u00e3o.",
+            "high": f"Trigo perdendo espa\u00e7o na ra\u00e7\u00e3o ({direction}). Milho mais competitivo.",
+            "normal": "Equil\u00edbrio trigo/milho na formula\u00e7\u00e3o.",
+            "low": "Trigo barato, compete com milho na ra\u00e7\u00e3o \u2192 press\u00e3o em ZC.",
+        },
+    }
+
+    level = ("extreme_high" if zscore >= 2.0 else
+             "high" if zscore >= 1.0 else
+             "low" if zscore <= -1.0 else "normal")
+
+    return signals.get(spread_key, {}).get(level,
+        f"Z-score {zscore:+.2f}. Posi\u00e7\u00e3o {direction} vs m\u00e9dia hist\u00f3rica.")
 
 def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
     """Calculate a single spread with historical z-score"""
@@ -93,6 +212,10 @@ def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
                 val = values["ZC"] / values["ZM"] if values["ZM"] > 0 else 0
             elif spread_key == "zc_zs":
                 val = values["ZC"] / values["ZS"] if values["ZS"] > 0 else 0
+            elif spread_key == "cattle_crush":
+                val = values["LE"] - (values["GF"] * 0.70) - (values["ZC"] * 0.0046)
+            elif spread_key == "feed_wheat":
+                val = values["ZW"] / values["ZC"] if values["ZC"] > 0 else 0
             else:
                 continue
             
@@ -140,10 +263,13 @@ def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
         trend = "INDEFINIDO"
         trend_pct = 0
     
+    signal_now = generate_signal_now(spread_key, current, round(zscore_1y, 2), regime, trend_pct)
+
     return {
         "name": spread_def["name"],
         "unit": spread_def["unit"],
         "description": spread_def["description"],
+        "category": spread_def.get("category") or SPREAD_CATEGORIES.get(spread_key, "outros"),
         "current": round(current, 4),
         "mean_1y": round(mean_1y, 4),
         "std_1y": round(std_1y, 4),
@@ -152,6 +278,9 @@ def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
         "regime": regime,
         "trend": trend,
         "trend_pct": round(trend_pct, 1),
+        "interpretation": INTERPRETATIONS.get(spread_key, ""),
+        "signal_now": signal_now,
+        "watch_if": WATCH_IF.get(spread_key, ""),
         "points": len(spread_values),
         "history": spread_values[-60:]  # Last 60 days for charting
     }
@@ -179,7 +308,13 @@ if __name__ == "__main__":
         result = process_spreads(Path(sys.argv[1]))
     else:
         result = process_spreads(Path("../agrimacro-dash/public/data/raw/price_history.json"))
-    
+
+    # Save to spreads.json
+    out_path = Path(__file__).parent.parent / "agrimacro-dash" / "public" / "data" / "processed" / "spreads.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+
     print(f"Processed {len(result['spreads'])} spreads:")
     for key, data in result["spreads"].items():
         print(f"  {key}: {data['current']:.4f} {data['unit']} | Z={data['zscore_1y']:+.2f} | {data['regime']} | {data['trend']}")
+    print(f"Saved to {out_path}")

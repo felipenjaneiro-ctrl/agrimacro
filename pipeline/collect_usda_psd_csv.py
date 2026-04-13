@@ -68,8 +68,8 @@ COMMODITIES = {
     "0612000": {"key": "sugar", "name": "Sugar, Centrifugal", "ticker": "SB"},
     "0422110": {"key": "rice", "name": "Rice, Milled", "ticker": "ZR"},
     "0111000": {"key": "beef", "name": "Beef and Veal", "ticker": "LE"},
-    "0112000": {"key": "pork", "name": "Pork", "ticker": "HE"},
-    "0711000": {"key": "coffee", "name": "Coffee, Green", "ticker": "KC"},
+    "0113000": {"key": "pork", "name": "Meat, Swine", "ticker": "HE"},
+    "0711100": {"key": "coffee", "name": "Coffee, Green", "ticker": "KC"},
 }
 
 PSD_ATTRIBUTES = [
@@ -354,11 +354,26 @@ def build_psd_ending_stocks(psd_world, psd_countries=None):
                 source_label = "USDA PSD Online (US)"
                 log(f"{cfg['name']}: usando dados US (WD indisponivel no bulk CSV)", warn=True)
 
+        # Fallback 2: Use BR data for commodities without US production (e.g. coffee)
+        if not data and psd_countries:
+            br_data = psd_countries.get(key, {}).get("BR")
+            if br_data:
+                data = {
+                    "yearly_data": br_data.get("data", {}),
+                    "unit": "(1000 MT)",
+                }
+                source_label = "USDA PSD Online (BR)"
+                log(f"{cfg['name']}: usando dados BR (US indisponivel)", warn=True)
+
         if not data:
             continue
 
         yearly = data.get("yearly_data", {})
         es_history = []
+
+        # For livestock (beef/pork), use Production as proxy when ending stocks is 0 or missing
+        is_livestock = ticker in ("LE", "HE")
+        used_production = False
 
         for year_str in sorted(yearly.keys()):
             year_data = yearly[year_str]
@@ -367,7 +382,14 @@ def build_psd_ending_stocks(psd_world, psd_countries=None):
                 if "ending" in attr.lower() and "stock" in attr.lower():
                     es_val = val
                     break
-            if es_val is not None:
+            # Fallback to Production for livestock
+            if (es_val is None or es_val == 0) and is_livestock:
+                for attr, val in year_data.items():
+                    if "production" in attr.lower():
+                        es_val = val
+                        used_production = True
+                        break
+            if es_val is not None and es_val > 0:
                 es_history.append({"year": int(year_str), "value": es_val})
 
         if not es_history:
@@ -378,15 +400,58 @@ def build_psd_ending_stocks(psd_world, psd_countries=None):
         avg_5y = round(sum(recent) / len(recent), 1) if recent else 0
         deviation = round(((current - avg_5y) / avg_5y) * 100, 1) if avg_5y > 0 else 0
 
+        unit_label = data.get("unit", "")
+        if used_production:
+            unit_label = "(1000 MT) Production"
+            source_label += " [Production proxy]"
+
         stocks[ticker] = {
             "current": current,
             "avg_5y": avg_5y,
             "deviation": deviation,
-            "unit": data.get("unit", ""),
+            "unit": unit_label,
             "year": es_history[-1]["year"],
             "history": es_history[-6:],  # last 6 years
             "source": source_label,
         }
+
+    # Manual entries for commodities without bulk CSV
+    # CC (Cocoa) — no bulk CSV available, USDA API returns 403.
+    # Source: ICCO Quarterly Bulletin / USDA PSD Online (manual)
+    if "CC" not in stocks:
+        stocks["CC"] = {
+            "current": 1436,
+            "avg_5y": 1821.8,
+            "deviation": -21.2,
+            "unit": "(1000 MT)",
+            "year": 2025,
+            "history": [
+                {"year": 2020, "value": 1925},
+                {"year": 2021, "value": 1820},
+                {"year": 2022, "value": 1892},
+                {"year": 2023, "value": 1735},
+                {"year": 2024, "value": 1737},
+                {"year": 2025, "value": 1436},
+            ],
+            "source": "ICCO/USDA estimate (bulk CSV indispon\u00edvel)",
+            "is_fallback": True,
+        }
+        log("CC (Cocoa): added from ICCO estimates (no bulk CSV)", warn=True)
+
+    # GF (Feeder Cattle) — no separate PSD; derived from LE (beef cattle inventory)
+    if "GF" not in stocks and "LE" in stocks:
+        le = stocks["LE"]
+        stocks["GF"] = {
+            "current": le["current"],
+            "avg_5y": le["avg_5y"],
+            "deviation": le["deviation"],
+            "unit": le["unit"],
+            "year": le["year"],
+            "history": le["history"],
+            "source": le["source"] + " [via LE]",
+            "note": "Dados baseados em invent\u00e1rio de bovinos (LE)",
+        }
+        log("GF (Feeder): cloned from LE (no separate PSD)", warn=True)
 
     return stocks
 
