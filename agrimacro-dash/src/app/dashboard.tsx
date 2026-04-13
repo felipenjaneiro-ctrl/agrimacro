@@ -1283,6 +1283,8 @@ export default function Dashboard() {
   const [fedwatch, setFedwatch] = useState<any>(null);
   const [intelSynthesis, setIntelSynthesis] = useState<any>(null);
   const [correlations, setCorrelations] = useState<any>(null);
+  const [livestockPsdData, setLivestockPsdData] = useState<any>(null);
+  const [livestockWeeklyData, setLivestockWeeklyData] = useState<any>(null);
   const [dxProcessed, setDxProcessed] = useState<any[]|null>(null);
   const [intelCouncil, setIntelCouncil] = useState<{text:string;time:string}|null>(null);
   const [intelCouncilLoading, setIntelCouncilLoading] = useState(false);
@@ -1354,6 +1356,8 @@ export default function Dashboard() {
     fetch("/data/processed/parities.json").then(r=>r.json()).then(setParitiesData).catch(()=>{});
     fetch("/data/processed/conab_data.json").then(r=>r.json()).then(setConabData).catch(()=>{});
     fetch("/data/bilateral/basis_temporal.json").then(r=>r.json()).then(setBilateralData).catch(()=>{});
+    fetch("/data/processed/livestock_psd.json").then(r=>r.json()).then(setLivestockPsdData).catch(()=>{});
+    fetch("/data/processed/livestock_weekly.json").then(r=>r.json()).then(setLivestockWeeklyData).catch(()=>{});
   }, []);
 
   // IBKR Auto-Refresh
@@ -4446,6 +4450,58 @@ export default function Dashboard() {
         if (biLines.length) {
           sections.push("\n=== BILATERAL BR vs EUA ===");
           biLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // PROTEÍNA ANIMAL — PSD Global
+      if (livestockPsdData?.commodities) {
+        const psdLines: string[] = [];
+        const syms: Record<string,string> = { LE: "Beef", HE: "Pork", PO: "Poultry" };
+        Object.entries(syms).forEach(([sym, name]) => {
+          const d = livestockPsdData.commodities[sym];
+          if (!d) return;
+          psdLines.push(`${name} (${sym}):`);
+          const usaS = d.usa?.summaries || {};
+          if (usaS.production) psdLines.push(`  EUA produção: ${usaS.production.current} 1000MT (${usaS.production.deviation_pct>0?"+":""}${usaS.production.deviation_pct}% vs 5A)`);
+          if (usaS.imports) psdLines.push(`  EUA importações: ${usaS.imports.current} 1000MT (${usaS.imports.deviation_pct>0?"+":""}${usaS.imports.deviation_pct}% vs 5A)`);
+          const brS = d.brazil?.summaries || {};
+          if (brS.exports) psdLines.push(`  Brasil exportações: ${brS.exports.current} 1000MT (${brS.exports.deviation_pct>0?"+":""}${brS.exports.deviation_pct}% vs 5A)`);
+          const cnS = d.china?.summaries || {};
+          if (cnS.production) psdLines.push(`  China produção: ${cnS.production.current} 1000MT (${cnS.production.deviation_pct>0?"+":""}${cnS.production.deviation_pct}% vs 5A)`);
+        });
+        if (psdLines.length) {
+          sections.push("\n=== PROTEÍNA ANIMAL — OFERTA GLOBAL (USDA PSD) ===");
+          psdLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // PROTEÍNA ANIMAL — Indicadores Semanais
+      if (livestockWeeklyData?.data) {
+        const wLines: string[] = [];
+        const wd = livestockWeeklyData.data;
+        if (wd.cold_storage_le) {
+          const cs = wd.cold_storage_le;
+          wLines.push(`Cold Storage Beef: ${cs.signal}${cs.deviation_pct!=null?` (${cs.deviation_pct>0?"+":""}${cs.deviation_pct}% vs média)`:""}${cs.interpretation?` — ${cs.interpretation}`:""}`);
+        }
+        if (wd.cold_storage_he) {
+          const cs = wd.cold_storage_he;
+          wLines.push(`Cold Storage Pork: ${cs.signal}${cs.deviation_pct!=null?` (${cs.deviation_pct>0?"+":""}${cs.deviation_pct}% vs média)`:""}`);
+        }
+        if (wd.abate_bovinos_br && !wd.abate_bovinos_br.is_fallback) {
+          const ab = wd.abate_bovinos_br;
+          wLines.push(`Abate Bovinos Brasil: ${ab.signal}${ab.deviation_pct!=null?` (${ab.deviation_pct>0?"+":""}${ab.deviation_pct}% vs média)`:""}${ab.interpretation?` — ${ab.interpretation}`:""}`);
+        }
+        if (wd.packer_le) {
+          const pp = wd.packer_le;
+          wLines.push(`Packer Activity LE: ${pp.signal} (momentum 20d: ${pp.momentum_20d>0?"+":""}${pp.momentum_20d}%)${pp.interpretation?` — ${pp.interpretation}`:""}`);
+        }
+        if (wd.packer_he) {
+          const pp = wd.packer_he;
+          wLines.push(`Packer Activity HE: ${pp.signal} (momentum 20d: ${pp.momentum_20d>0?"+":""}${pp.momentum_20d}%)`);
+        }
+        if (wLines.length) {
+          sections.push("\n=== PROTEÍNA ANIMAL — INDICADORES SEMANAIS ===");
+          wLines.forEach(l => sections.push(l));
         }
       }
 
