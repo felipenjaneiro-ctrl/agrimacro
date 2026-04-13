@@ -5483,6 +5483,7 @@ export default function Dashboard() {
   // -- Main Return --------------------------------------------------------
   return (
     <div style={{display:"flex",minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI','Helvetica Neue',sans-serif"}}>
+      <style>{`@keyframes cotPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }`}</style>
       {/* Sidebar */}
       <div style={{width:220,minHeight:"100vh",background:C.panel,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column"}}>
         <div style={{padding:"18px 16px 10px",borderBottom:`1px solid ${C.border}`}}>
@@ -5522,8 +5523,40 @@ export default function Dashboard() {
               <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
               {COMMODITIES.filter(c=>c.group===grp).map(c=>{
                 const p=getPrice(c.sym);const ch=getChange(c.sym);const sel=c.sym===selected;
-                const cotDa = cot?.commodities?.[c.sym]?.disaggregated?.delta_analysis;
-                const hasCotAlert = cotDa && cotDa.dominant_direction !== 'NEUTRAL' && cotDa.reversal_score > 60;
+                const cotComm = cot?.commodities?.[c.sym];
+                const cotDis = cotComm?.disaggregated;
+                const cotLeg = cotComm?.legacy;
+                const da = cotDis?.delta_analysis;
+
+                // COT Index (min-max over history)
+                const mmHist = cotDis?.history?.map((h:any) => h.managed_money_net || 0).filter((v:number) => v !== 0);
+                let cotIdx: number | null = null;
+                if (mmHist && mmHist.length >= 10) {
+                  const mmMin = Math.min(...mmHist);
+                  const mmMax = Math.max(...mmHist);
+                  const mmLast = mmHist[mmHist.length - 1];
+                  cotIdx = mmMax > mmMin ? Math.round((mmLast - mmMin) / (mmMax - mmMin) * 100) : 50;
+                }
+
+                // Badge logic
+                const hasSignal = da && da.dominant_direction !== 'NEUTRAL' && da.reversal_score >= 60;
+                let badgeColor: string | null = null;
+                let badgeLabel = '';
+                if (cotIdx !== null) {
+                  if (cotIdx >= 85) { badgeColor = '#DC3C3C'; badgeLabel = `COT ${cotIdx}/100 EXTREMO\u2191`; }
+                  else if (cotIdx <= 15) { badgeColor = '#00C878'; badgeLabel = `COT ${cotIdx}/100 EXTREMO\u2193`; }
+                  else if (cotIdx >= 70) { badgeColor = '#DCB432'; badgeLabel = `COT ${cotIdx}/100`; }
+                  else if (cotIdx <= 30) { badgeColor = '#3b82f6'; badgeLabel = `COT ${cotIdx}/100`; }
+                }
+                if (hasSignal && !badgeColor) {
+                  badgeColor = da!.dominant_direction === 'BEARISH' ? '#DC3C3C' : '#00C878';
+                  badgeLabel = `${da!.dominant_direction} ${da!.reversal_score}%`;
+                }
+                const showBadge = badgeColor !== null;
+                const isPulsing = hasSignal && cotIdx !== null && cotIdx >= 85;
+                const deltaVal = da?.current_delta;
+                const tooltipText = badgeLabel + (deltaVal ? ` | \u0394${deltaVal > 0 ? '+' : ''}${(deltaVal/1000).toFixed(0)}K` : '');
+
                 return (
                   <div key={c.sym} onClick={()=>{setSelected(c.sym);setViewMode("commodity");}} style={{
                     display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 16px",cursor:"pointer",
@@ -5531,23 +5564,26 @@ export default function Dashboard() {
                     borderLeft:sel&&viewMode==="commodity"?`3px solid #00C878`:sel?`3px solid ${C.blue}`:"3px solid transparent",
                     transition:"all .15s",
                   }}>
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <div>
-                        <div style={{fontSize:12,fontWeight:sel?700:500,color:sel?C.text:C.textDim}}>{c.sym}</div>
-                        <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
-                      </div>
-                      {hasCotAlert && (
-                        <span style={{
-                          width:7,height:7,borderRadius:'50%',
-                          background:cotDa!.dominant_direction==='BEARISH'?'#DC3C3C':'#00C878',
-                          display:'inline-block',flexShrink:0,
-                          boxShadow:`0 0 4px ${cotDa!.dominant_direction==='BEARISH'?'#DC3C3C':'#00C878'}`,
-                        }} title={`COT Delta: ${cotDa!.dominant_direction} ${cotDa!.reversal_score}%`}/>
-                      )}
+                    <div>
+                      <div style={{fontSize:12,fontWeight:sel?700:500,color:sel?C.text:C.textDim}}>{c.sym}</div>
+                      <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
                       <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"--"}</div>
                       {ch && <div style={{fontSize:9,fontFamily:"monospace",color:ch.pct>=0?C.green:C.red}}>{ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>}
+                      {showBadge && (
+                        <div style={{display:'flex',alignItems:'center',gap:3,justifyContent:'flex-end',marginTop:1}} title={tooltipText}>
+                          <div style={{
+                            width: hasSignal ? 7 : 5, height: hasSignal ? 7 : 5,
+                            borderRadius:'50%', background: badgeColor!,flexShrink:0,
+                            boxShadow: hasSignal ? `0 0 4px ${badgeColor}` : 'none',
+                            animation: isPulsing ? 'cotPulse 1.5s infinite' : 'none',
+                          }}/>
+                          <span style={{fontSize:8,fontFamily:'monospace',color:badgeColor!,opacity:0.9}}>
+                            {cotIdx}{deltaVal != null && <span style={{opacity:0.7}}>{deltaVal > 0 ? '\u2191' : '\u2193'}</span>}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
