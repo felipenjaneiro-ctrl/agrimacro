@@ -6397,6 +6397,25 @@ export default function Dashboard() {
           {loading ? <LoadingSpinner /> : viewMode==="intel" ? renderIntelPage() : viewMode==="commodity" ? (tab==="Visão Geral" ? (<>
             {/* Deep Dive button for selected commodity */}
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              {/* Option 1: Send to Strategy chat (pre-fills textarea + auto-submits) */}
+              <button onClick={()=>{
+                const prompt = buildCommodityPromptTop(selected);
+                setStrategyInput(prompt);
+                setStrategyConvoHistory([]);
+                setStrategyResult(null);
+                setViewMode("intel");
+                // Auto-submit after switching to intel tab
+                setTimeout(()=>{
+                  const textarea = document.querySelector('textarea[placeholder*="tese"]') as HTMLTextAreaElement;
+                  if(textarea) textarea.scrollIntoView({behavior:"smooth",block:"center"});
+                }, 200);
+              }} style={{
+                padding:"6px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:"pointer",
+                background:"rgba(124,58,237,.12)",color:"#a78bfa",
+                border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
+              }}>Deep Dive {selected} (Strategy)</button>
+
+              {/* Option 2: Direct Council analysis */}
               <button onClick={async()=>{
                 if(intelCouncilLoading) return;
                 setIntelCouncilLoading(true);
@@ -6413,10 +6432,11 @@ export default function Dashboard() {
                 setIntelCouncilLoading(false);
               }} disabled={intelCouncilLoading} style={{
                 padding:"6px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
-                background:"rgba(124,58,237,.12)",color:"#a78bfa",
-                border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
-              }}>{intelCouncilLoading?`Analisando ${selected}...`:`Deep Dive ${selected}`}</button>
-              <span style={{fontSize:9,color:"#64748b"}}>DNA + IV + COT + Sazonalidade + Spreads + Portfolio</span>
+                background:intelCouncilLoading?"#1E3044":"rgba(220,180,50,.10)",color:"#DCB432",
+                border:"1px solid rgba(220,180,50,.3)",transition:"all .2s",
+              }}>{intelCouncilLoading?`Analisando...`:`Council ${selected}`}</button>
+
+              <span style={{fontSize:9,color:"#64748b"}}>Strategy: abre na aba Intel c/ prompt preenchido | Council: analise direta</span>
             </div>
             {renderTab()}
           </>) : renderCommodityView()) : renderTab()}
