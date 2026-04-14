@@ -4987,7 +4987,48 @@ export default function Dashboard() {
                   background:intelCouncilLoading?"#1E3044":"rgba(220,180,50,.10)",color:"#DCB432",
                   border:"1px solid #DCB43244",transition:"all .2s",
                 }}>{intelCouncilLoading?"Analisando...":"Aprofundar com IA"}</button>
-                <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Envia síntese + macro + portfólio + sinais para Claude API</div>
+
+                {/* Council Quick Button */}
+                <button onClick={async()=>{
+                  if(intelCouncilLoading) return;
+                  setIntelCouncilLoading(true);
+                  try {
+                    const res = await fetch("/api/council",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"quick"})});
+                    const d = await res.json();
+                    if(res.ok && d.response){
+                      const entry={text:d.response,time:new Date().toLocaleString("pt-BR")};
+                      setIntelCouncil(entry);
+                      setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                    } else setIntelCouncil({text:"ERRO: "+(d.error||"API error"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                  }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});}
+                  setIntelCouncilLoading(false);
+                }} disabled={intelCouncilLoading} style={{
+                  padding:"8px 20px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
+                  background:"rgba(124,58,237,.12)",color:"#a78bfa",marginLeft:8,
+                  border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
+                }}>{intelCouncilLoading?"Council...":"Council Quick"}</button>
+
+                {/* Council Full Button */}
+                <button onClick={async()=>{
+                  if(intelCouncilLoading) return;
+                  setIntelCouncilLoading(true);
+                  try {
+                    const res = await fetch("/api/council",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"full"})});
+                    const d = await res.json();
+                    if(res.ok && d.response){
+                      const entry={text:d.response,time:new Date().toLocaleString("pt-BR")};
+                      setIntelCouncil(entry);
+                      setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                    } else setIntelCouncil({text:"ERRO: "+(d.error||"API error"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                  }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});}
+                  setIntelCouncilLoading(false);
+                }} disabled={intelCouncilLoading} style={{
+                  padding:"8px 20px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
+                  background:"rgba(220,60,60,.10)",color:"#ef4444",marginLeft:8,
+                  border:"1px solid rgba(220,60,60,.25)",transition:"all .2s",
+                }}>{intelCouncilLoading?"Council...":"Council Full"}</button>
+
+                <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Aprofundar: chat | Council Quick: 300 palavras | Council Full: relatorio executivo completo</div>
               </div>
             </div>
           );
