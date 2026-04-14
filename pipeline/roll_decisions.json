@@ -1,0 +1,127 @@
+{
+  "generated_at": "2026-04-14T17:14:51.193468",
+  "total_spreads": 8,
+  "critical": 0,
+  "high": 0,
+  "medium": 1,
+  "low": 7,
+  "decisions": [
+    {
+      "sym": "GF",
+      "contract": "GFJ6",
+      "direction": "CALL",
+      "dte": 15,
+      "urgency": "MEDIUM",
+      "action": "CLOSE",
+      "reasons": [
+        "DTE=15 \u2014 zona de gamma. Monitorar diariamente.",
+        "Theta negativo com DTE < 21 \u2014 posicao perdendo tempo."
+      ],
+      "warnings": [],
+      "structure": "BUY 12x C3710 | SELL 66x C3760 | BUY 54x C3810",
+      "next_expiry": {
+        "expiry": "20260521",
+        "contract": "GFK6",
+        "dte": 36
+      }
+    },
+    {
+      "sym": "ZL",
+      "contract": "OZLK6",
+      "direction": "CALL",
+      "dte": 29,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=29 \u2014 theta trabalhando. Manter."
+      ],
+      "warnings": [],
+      "structure": "SELL 60x C7800 | BUY 60x C8200",
+      "next_expiry": null
+    },
+    {
+      "sym": "CL",
+      "contract": "LOM6",
+      "direction": "CALL",
+      "dte": 34,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=34 \u2014 theta trabalhando. Manter."
+      ],
+      "warnings": [],
+      "structure": "SELL 16x C12300 | SELL 24x C12400 | SELL 16x C12500 | BUY 16x C12800 | BUY 24x C12900 | BUY 16x C13000",
+      "next_expiry": null
+    },
+    {
+      "sym": "SI",
+      "contract": "SOK6",
+      "direction": "PUT",
+      "dte": 42,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=42 \u2014 theta trabalhando. Manter."
+      ],
+      "warnings": [],
+      "structure": "BUY 2x P5500 | SELL 2x P6000 | BUY 18x P6100 | SELL 22x P6500 | BUY 4x P6900",
+      "next_expiry": null
+    },
+    {
+      "sym": "CL",
+      "contract": "LON6",
+      "direction": "CALL",
+      "dte": 68,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=68 \u2014 distante do vencimento. Theta lento mas seguro."
+      ],
+      "warnings": [],
+      "structure": "SELL 30x C11700 | BUY 30x C13300 | BUY 5x C9800",
+      "next_expiry": null
+    },
+    {
+      "sym": "CC",
+      "contract": "CON6",
+      "direction": "PUT",
+      "dte": 92,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=92 \u2014 distante do vencimento. Theta lento mas seguro."
+      ],
+      "warnings": [],
+      "structure": "BUY 18x P2500 | SELL 4x P2650 | SELL 18x P2700 | BUY 4x P2900",
+      "next_expiry": null
+    },
+    {
+      "sym": "ZL",
+      "contract": "OZLM6",
+      "direction": "CALL",
+      "dte": 999,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=999 \u2014 distante do vencimento. Theta lento mas seguro."
+      ],
+      "warnings": [],
+      "structure": "BUY 16x C6700 | SELL 72x C7000 | SELL 16x C7100 | BUY 72x C7300",
+      "next_expiry": null
+    },
+    {
+      "sym": "SI",
+      "contract": "SOM6",
+      "direction": "PUT",
+      "dte": 999,
+      "urgency": "LOW",
+      "action": "HOLD",
+      "reasons": [
+        "DTE=999 \u2014 distante do vencimento. Theta lento mas seguro."
+      ],
+      "warnings": [],
+      "structure": "BUY 1x P7000 | SELL 1x P7500",
+      "next_expiry": null
+    }
+  ]
+}
