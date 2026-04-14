@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import LightweightChart from "./LightweightChart";
+import COTChart from "./COTChart";
 
 const C = {
   bg:      '#0E1A24',
@@ -159,42 +161,56 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
     const uptrend = vals.length >= 2 && vals[vals.length - 1] >= vals[0];
 
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center' }}>
-        <div>
-          <div style={{
-            fontSize: 32, fontWeight: 700, fontFamily: 'monospace',
-            color: change >= 0 ? C.green : C.red,
-          }}>
-            {current?.toFixed(2) || '—'}
-          </div>
-          <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-            <span style={{
-              fontSize: 12, fontFamily: 'monospace',
+      <div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center' }}>
+          <div>
+            <div style={{
+              fontSize: 32, fontWeight: 700, fontFamily: 'monospace',
               color: change >= 0 ? C.green : C.red,
             }}>
-              {change >= 0 ? '+' : ''}{change.toFixed(2)}% (1D)
-            </span>
-            {change1M !== null && (
+              {current?.toFixed(2) || '—'}
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
               <span style={{
                 fontSize: 12, fontFamily: 'monospace',
-                color: change1M >= 0 ? C.green : C.red,
+                color: change >= 0 ? C.green : C.red,
               }}>
-                {change1M >= 0 ? '+' : ''}{change1M.toFixed(2)}% (1M)
+                {change >= 0 ? '+' : ''}{change.toFixed(2)}% (1D)
               </span>
-            )}
+              {change1M !== null && (
+                <span style={{
+                  fontSize: 12, fontFamily: 'monospace',
+                  color: change1M >= 0 ? C.green : C.red,
+                }}>
+                  {change1M >= 0 ? '+' : ''}{change1M.toFixed(2)}% (1M)
+                </span>
+              )}
+            </div>
+            <div style={{
+              display: 'flex', gap: 16, marginTop: 8,
+              fontSize: 10, color: C.dim, fontFamily: 'monospace',
+            }}>
+              <span>52W H: <span style={{ color: C.text }}>{high52.toFixed(2)}</span></span>
+              <span>52W L: <span style={{ color: C.text }}>{low52.toFixed(2)}</span></span>
+            </div>
           </div>
-          <div style={{
-            display: 'flex', gap: 16, marginTop: 8,
-            fontSize: 10, color: C.dim, fontFamily: 'monospace',
-          }}>
-            <span>52W H: <span style={{ color: C.text }}>{high52.toFixed(2)}</span></span>
-            <span>52W L: <span style={{ color: C.text }}>{low52.toFixed(2)}</span></span>
-          </div>
+          {vals.length >= 2 && (
+            <svg width={sparkW} height={sparkH}>
+              <polyline points={pts} fill="none" stroke={uptrend ? C.green : C.red} strokeWidth={2} />
+            </svg>
+          )}
         </div>
-        {vals.length >= 2 && (
-          <svg width={sparkW} height={sparkH}>
-            <polyline points={pts} fill="none" stroke={uptrend ? C.green : C.red} strokeWidth={2} />
-          </svg>
+        {/* Mini candlestick chart (60 bars) */}
+        {bars.length >= 10 && (
+          <div style={{ marginTop: 12 }}>
+            <LightweightChart
+              bars={bars.slice(-90)}
+              symbol={selected}
+              height={350}
+              showRSI={true}
+              cotIndex={cot?.commodities?.[selected]?.disaggregated?.cot_index ?? undefined}
+            />
+          </div>
         )}
       </div>
     );
@@ -262,7 +278,12 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
             { label: 'COT INDEX', value: cotIdx != null ? `${cotIdx.toFixed(1)}` : '—',
               color: cotColor,
               sub: cotIdx == null ? '' : cotIdx >= 85 ? 'EXTREMO COMPRADO' : cotIdx <= 15 ? 'EXTREMO VENDIDO' :
-                   cotIdx >= 70 ? 'ALTO' : cotIdx <= 30 ? 'BAIXO' : 'NEUTRO' },
+                   cotIdx >= 70 ? 'ALTO' : cotIdx <= 30 ? 'BAIXO' : 'NEUTRO',
+              windows: [
+                {label:'156w', val: da?.cot_index},
+                {label:'52w',  val: da?.cot_index_52w},
+                {label:'26w',  val: da?.cot_index_26w},
+              ] },
             { label: 'MM NET', value: mmNet != null ?
               `${mmNet > 0 ? '+' : ''}${(mmNet / 1000).toFixed(0)}K` : '—',
               color: mmNet != null ? (mmNet > 0 ? C.green : C.red) : C.dim,
@@ -271,7 +292,7 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
               `${da.current_delta > 0 ? '+' : ''}${(da.current_delta / 1000).toFixed(0)}K` : '—',
               color: da?.current_delta != null ? (da.current_delta > 0 ? C.green : C.red) : C.dim,
               sub: da?.dominant_direction || '—' },
-          ].map((item, i) => (
+          ].map((item: any, i: number) => (
             <div key={i} style={{
               padding: 12, background: C.panel2, borderRadius: 6,
               borderLeft: `3px solid ${item.color}`,
@@ -279,9 +300,32 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
               <div style={{ fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
                 {item.label}
               </div>
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: item.color }}>
-                {item.value}
-              </div>
+              {item.windows ? (
+                <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                  {item.windows.map(({label, val}: {label:string; val:any}) => {
+                    if (val === undefined || val === null) return null;
+                    const wColor = val >= 80 ? '#DC3C3C' : val <= 20 ? '#00C878' :
+                                  val >= 70 ? '#DCB432' : val <= 30 ? '#3b82f6' : '#64748b';
+                    return (
+                      <div key={label} style={{
+                        textAlign:'center', padding:'4px 8px',
+                        background: wColor + '15',
+                        border: `1px solid ${wColor}33`,
+                        borderRadius:4
+                      }}>
+                        <div style={{fontSize:8, color:'#64748b', marginBottom:2}}>{label}</div>
+                        <div style={{fontSize:14, fontWeight:700, fontFamily:'monospace', color: wColor}}>
+                          {typeof val === 'number' ? val.toFixed(0) : val}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: item.color }}>
+                  {item.value}
+                </div>
+              )}
               <div style={{ fontSize: 9, color: item.color, marginTop: 2, fontWeight: 600 }}>
                 {item.sub}
               </div>
@@ -304,6 +348,15 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
             </div>
           </div>
         )}
+
+        {/* COT Chart — Legacy + Disaggregated panels */}
+        <div style={{ marginTop: 12 }}>
+          <COTChart
+            symbol={selected}
+            legacyHistory={leg?.history || []}
+            disaggHistory={dis?.history || []}
+          />
+        </div>
       </div>
     );
   };
@@ -315,37 +368,40 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
 
     const monthLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const curMonth = new Date().getMonth();
-    const series = s.series || {};
-    const currentSeries = series.current || [];
-    const avgSeries = series.average || [];
 
-    // Try to extract monthly returns from the season data
-    const years = Object.keys(series).filter(y => y !== 'current' && y !== 'average');
+    // Use pre-computed monthly_returns from JSON (array of 12 numbers)
+    const raw = s.monthly_returns || s.monthly_returns_modern || [];
     let monthlyAvgs: number[] = [];
-
-    if (years.length >= 3) {
-      for (let m = 0; m < 12; m++) {
-        const rets: number[] = [];
-        years.forEach(y => {
-          const pts = series[y] || [];
-          // Find points in this month
-          const monthPts = pts.filter((p: any) => {
-            if (!p.date) return false;
-            const d = new Date(p.date);
-            return d.getMonth() === m;
+    if (Array.isArray(raw) && raw.length >= 12) {
+      monthlyAvgs = raw.slice(0, 12).map((v: any) =>
+        typeof v === 'number' ? v : (v?.avg ?? 0)
+      );
+    } else {
+      // Fallback: compute from series data
+      const series = s.series || {};
+      const years = Object.keys(series).filter(y => y !== 'current' && y !== 'average');
+      if (years.length >= 2) {
+        for (let m = 0; m < 12; m++) {
+          const rets: number[] = [];
+          years.forEach((y: string) => {
+            const pts = series[y] || [];
+            // day-of-year range for this month: ~m*30 to (m+1)*30
+            const dayLo = m * 30 + 1;
+            const dayHi = (m + 1) * 30 + 15;
+            const monthPts = pts.filter((p: any) => p.day >= dayLo && p.day <= dayHi);
+            if (monthPts.length >= 2) {
+              const first = monthPts[0].close;
+              const last = monthPts[monthPts.length - 1].close;
+              if (first > 0) rets.push((last - first) / first * 100);
+            }
           });
-          if (monthPts.length >= 2) {
-            const first = monthPts[0].close;
-            const last = monthPts[monthPts.length - 1].close;
-            if (first > 0) rets.push((last - first) / first * 100);
-          }
-        });
-        monthlyAvgs.push(rets.length ? rets.reduce((a, b) => a + b, 0) / rets.length : 0);
+          monthlyAvgs.push(rets.length ? rets.reduce((a: number, b: number) => a + b, 0) / rets.length : 0);
+        }
       }
     }
 
-    if (monthlyAvgs.every(v => v === 0)) {
-      return <div style={{ color: C.dim, fontSize: 11 }}>Dados sazonais disponíveis apenas na aba Sazonalidade</div>;
+    if (!monthlyAvgs.length || monthlyAvgs.every(v => v === 0)) {
+      return <div style={{ color: C.dim, fontSize: 11 }}>Dados sazonais disponiveis apenas na aba Sazonalidade</div>;
     }
 
     const maxAbs = Math.max(...monthlyAvgs.map(v => Math.abs(v)), 0.1);
@@ -459,7 +515,7 @@ export default function CommodityTab({ selected, prices, psdData, cot, season, s
     const price = data.price ?? data.preco ?? data.valor;
     const unit = data.unit ?? data.unidade ?? '';
     const local = data.location ?? data.local ?? data.label ?? '';
-    const date = data.date ?? data.data ?? '';
+    const date = data.period ?? data.date ?? data.data ?? physicalBr?.timestamp ?? '';
     const changePct = data.change_pct;
 
     return (

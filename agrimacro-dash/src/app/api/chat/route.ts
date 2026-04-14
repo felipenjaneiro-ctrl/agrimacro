@@ -216,7 +216,130 @@ function buildContext(): string {
     }
   }
 
-  // 8. Intel Synthesis
+  // 8. Options Chain — IV RANK, Skew, Term Structure por underlying
+  const chainJson = loadJSON("options_chain.json");
+  if (chainJson?.underlyings) {
+    const underlyings = chainJson.underlyings;
+
+    ctx += "\n=== OPTIONS INTELLIGENCE — IV RANK, SKEW, TERM STRUCTURE ===\n";
+    ctx += "NOTA: IV Rank = percentil 52 semanas (requer historico acumulado).\n";
+    ctx += "Skew = IV put 25d vs call 25d (positivo = puts mais caros).\n";
+    ctx += "Term = contango/backwardation da curva de IV.\n\n";
+
+    Object.entries(underlyings).forEach(([sym, data]: any) => {
+      const exps = Object.values(data.expirations || {});
+      if (!exps.length) return;
+
+      const firstExp: any = exps[0];
+      const calls = firstExp?.calls || [];
+      const puts = firstExp?.puts || [];
+
+      // ATM call (delta ~0.5, broader tolerance)
+      const atmCall = calls
+        .filter((c: any) => c.iv != null && c.delta != null)
+        .sort((a: any, b: any) => Math.abs(a.delta - 0.5) - Math.abs(b.delta - 0.5))[0];
+
+      const iv = atmCall?.iv ? (atmCall.iv * 100).toFixed(1) + "%" : "N/A";
+      const totalCallVol = calls.reduce(
+        (s: number, c: any) => s + (c.volume || 0),
+        0,
+      );
+      const totalPutVol = puts.reduce(
+        (s: number, c: any) => s + (c.volume || 0),
+        0,
+      );
+      const pcRatio =
+        totalCallVol > 0
+          ? (totalPutVol / totalCallVol).toFixed(2)
+          : "N/A";
+
+      // IV Rank
+      const ivr = data.iv_rank;
+      const rankStr = ivr?.rank_52w != null
+        ? `Rank=${ivr.rank_52w.toFixed(0)}% (${ivr.history_days}d)`
+        : ivr?.current_iv != null
+          ? `Rank=building (${ivr.history_days}d)`
+          : "Rank=N/A";
+
+      // Skew
+      const sk = data.skew;
+      const skewStr = sk?.skew_pct != null
+        ? `Skew=${sk.skew_pct > 0 ? "+" : ""}${sk.skew_pct}%`
+        : "Skew=N/A";
+
+      // Term structure
+      const ts = data.term_structure;
+      const termStr = ts?.structure || "N/A";
+
+      ctx +=
+        `${sym} (${data.name || sym}): ` +
+        `IV ATM=${iv} | ${rankStr} | ${skewStr} | ` +
+        `Term=${termStr} | P/C=${pcRatio} | ` +
+        `Und=${data.und_price}\n`;
+    });
+
+    ctx += "\n";
+  }
+
+  // 9a. Crop Progress
+  const cropProg = loadJSON("crop_progress.json");
+  if (cropProg?.crops && !cropProg.is_fallback) {
+    ctx += "=== CROP PROGRESS (USDA NASS) ===\n";
+    Object.entries(cropProg.crops).forEach(([key, data]: any) => {
+      const nat = data.national || {};
+      const parts: string[] = [key];
+      if (nat.planted != null) parts.push(`${nat.planted}% plantado`);
+      if (nat.emerged != null) parts.push(`${nat.emerged}% emergido`);
+      if (nat.harvested != null) parts.push(`${nat.harvested}% colhido`);
+      ctx += parts.join(" | ") + "\n";
+    });
+    ctx += "\n";
+  }
+
+  // 9b. Export Activity
+  const exportAct = loadJSON("export_activity.json");
+  if (exportAct?.commodities && !exportAct.is_fallback) {
+    ctx += "=== EXPORT ACTIVITY ===\n";
+    Object.entries(exportAct.commodities).forEach(([sym, data]: any) => {
+      ctx +=
+        `${sym}: ${data.pct_of_target?.toFixed(1) ?? "?"}% target | ` +
+        `${data.vs_last_year_pct != null ? (data.vs_last_year_pct > 0 ? "+" : "") + data.vs_last_year_pct.toFixed(1) + "% vs ano ant" : ""} | ` +
+        `${data.signal || ""}\n`;
+    });
+    ctx += "\n";
+  }
+
+  // 9c. Drought Monitor
+  const drought = loadJSON("drought_monitor.json");
+  if (drought?.national && !drought.is_fallback) {
+    ctx += "=== DROUGHT MONITOR ===\n";
+    const nat = drought.national;
+    ctx += `Nacional: ${nat.any_drought_pct?.toFixed(1)}% em drought\n`;
+    if (drought.regions) {
+      Object.entries(drought.regions).forEach(([, reg]: any) => {
+        ctx += `${reg.label}: D2+=${reg.d2_plus_pct?.toFixed(1)}% | ${reg.signal}\n`;
+      });
+    }
+    ctx += "\n";
+  }
+
+  // 9d. Fertilizer Prices
+  const fert = loadJSON("fertilizer_prices.json");
+  if (fert?.fertilizers && !fert.is_fallback) {
+    ctx += "=== FERTILIZANTES ===\n";
+    ctx += (fert.lag_note || "Lag: 6-12 meses no custo agricola") + "\n";
+    Object.entries(fert.fertilizers).forEach(([, data]: any) => {
+      if (data.price_usd_ton != null) {
+        ctx +=
+          `${data.name}: $${data.price_usd_ton}/ton` +
+          `${data.change_yoy_pct != null ? ` (${data.change_yoy_pct > 0 ? "+" : ""}${data.change_yoy_pct.toFixed(1)}% YoY)` : ""}` +
+          ` ${data.signal || ""}\n`;
+      }
+    });
+    ctx += "\n";
+  }
+
+  // 10. Intel Synthesis
   const intel = loadJSON("intel_synthesis.json");
   if (intel && !intel.is_fallback) {
     ctx += "=== SÍNTESE DE INTELIGÊNCIA (PIPELINE) ===\n";
@@ -257,6 +380,110 @@ function buildContext(): string {
         `Commodities sem dados primários: ${fallbacks.join(", ")}\n`;
       ctx +=
         "Use web_search para verificar dados atuais destas commodities.\n\n";
+    }
+  }
+
+  // 11. Sazonalidade (pre-computed monthly returns)
+  const seasonData = loadJSON("seasonality.json");
+  if (seasonData) {
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const curMonth = new Date().getMonth();
+    ctx += `\n=== SAZONALIDADE — ${months[curMonth].toUpperCase()} (HISTORICO 5 ANOS) ===\n`;
+    const syms = ["ZC", "ZS", "ZW", "KE", "LE", "GF", "CL", "CC", "SB", "KC"];
+    syms.forEach((sym) => {
+      const s = seasonData[sym];
+      if (!s?.monthly_returns) return;
+      const v = s.monthly_returns[curMonth];
+      const val = typeof v === "number" ? v : v?.avg ?? 0;
+      const pct = typeof v === "object" ? v?.positive_pct : null;
+      ctx += `${sym}: ${val >= 0 ? "+" : ""}${val.toFixed(2)}%${pct != null ? ` (${pct}% positivo)` : ""}\n`;
+    });
+    ctx += "\n";
+  }
+
+  // 12. Bilateral Indicators (BR vs EUA competitiveness)
+  const bilateralData = loadJSON("bilateral_indicators.json");
+  if (bilateralData?.summary) {
+    ctx += "=== BILATERAL BR vs EUA ===\n";
+    if (bilateralData.lcs?.status === "OK") {
+      const l = bilateralData.lcs;
+      ctx += `LCS: Spread $${l.spread_usd_mt?.toFixed(2)}/MT (${l.spread_pct?.toFixed(1)}%) | Competitivo: ${l.competitive_origin} | FOB BR=$${l.br_fob?.toFixed(0)} EUA=$${l.us_fob?.toFixed(0)}\n`;
+    }
+    if (bilateralData.bci?.status === "OK") {
+      const b = bilateralData.bci;
+      ctx += `BCI: Score=${b.bci_score} (${b.bci_signal}) | Trend=${b.bci_trend}\n`;
+    }
+    if (bilateralData.summary) {
+      ctx += `Summary: LCS_origin=${bilateralData.summary.lcs_origin} | BCI=${bilateralData.summary.bci_score} (${bilateralData.summary.bci_signal})\n`;
+    }
+    ctx += "\n";
+  }
+
+  // 13. Livestock Bottleneck Score
+  const bottleneck = loadJSON("bottleneck.json");
+  if (bottleneck?.commodities) {
+    ctx += "=== LIVESTOCK BOTTLENECK THESIS ===\n";
+    ["LE", "GF", "HE"].forEach((sym) => {
+      const d = bottleneck.commodities[sym];
+      if (!d) return;
+      ctx += `${sym}: Score=${d.score ?? "N/A"} | Mom3m=${d.mom_3m ?? "N/A"}% | Mom6m=${d.mom_6m ?? "N/A"}% | ${d.recommendation ?? ""}\n`;
+    });
+    ctx += "\n";
+  }
+
+  // 14. Physical BR (CEPEA) — full products
+  const physBR = loadJSON("physical_br.json");
+  if (physBR) {
+    const products = physBR.products || physBR;
+    if (typeof products === "object") {
+      const lines: string[] = [];
+      Object.entries(products).forEach(([key, data]: any) => {
+        if (!data?.price) return;
+        lines.push(
+          `${data.label || key}: R$${data.price} ${data.unit || ""}${data.change_pct != null ? ` (${data.change_pct >= 0 ? "+" : ""}${data.change_pct}%)` : ""}${data.source ? ` [${data.source}]` : ""}`,
+        );
+      });
+      if (lines.length) {
+        ctx += "=== MERCADO FISICO BRASIL (CEPEA) ===\n";
+        ctx += lines.join("\n") + "\n\n";
+      }
+    }
+  }
+
+  // 15. Estrutura de Termo (Contango/Backwardation)
+  const contractHist = loadJSON("contract_history.json");
+  if (contractHist?.contracts) {
+    const byComm: Record<string, { contract: string; price: number }[]> = {};
+    Object.entries(contractHist.contracts as Record<string, any>).forEach(
+      ([name, c]: any) => {
+        if (!c.commodity || !c.bars?.length) return;
+        const lastBar = c.bars[c.bars.length - 1];
+        if (!lastBar?.close || lastBar.close <= 0) return;
+        if (!byComm[c.commodity]) byComm[c.commodity] = [];
+        byComm[c.commodity].push({
+          contract: name,
+          price: lastBar.close,
+        });
+      },
+    );
+
+    const termLines: string[] = [];
+    Object.entries(byComm).forEach(([sym, contracts]) => {
+      if (contracts.length < 2) return;
+      contracts.sort((a, b) => a.contract.localeCompare(b.contract));
+      const front = contracts[0];
+      const back = contracts[contracts.length - 1];
+      const diff = ((back.price - front.price) / front.price) * 100;
+      const structure =
+        diff < -2 ? "BACKWARDATION" : diff > 2 ? "CONTANGO" : "FLAT";
+      termLines.push(
+        `${sym}: ${structure} (${diff > 0 ? "+" : ""}${diff.toFixed(1)}%) | Front=${front.price.toFixed(2)} (${front.contract}) | Back=${back.price.toFixed(2)} (${back.contract})`,
+      );
+    });
+
+    if (termLines.length) {
+      ctx += "=== ESTRUTURA DE TERMO (CONTANGO/BACKWARDATION) ===\n";
+      ctx += termLines.join("\n") + "\n\n";
     }
   }
 

@@ -16,7 +16,7 @@ import json
 import asyncio
 import math
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 BASE = Path(__file__).parent.parent
 OUT_PATH = BASE / "agrimacro-dash" / "public" / "data" / "processed" / "options_chain.json"
@@ -80,6 +80,21 @@ def safe_float(val):
         if math.isnan(f) or f == -1.0:
             return None
         return f
+    except (TypeError, ValueError):
+        return None
+
+
+def clean_greek(v):
+    """Limpa valor de greek: None/nan/inf/absurdo -> None."""
+    if v is None:
+        return None
+    try:
+        f = float(v)
+        if math.isnan(f) or math.isinf(f) or abs(f) > 1e10:
+            return None
+        if f == -1:
+            return None
+        return round(f, 6)
     except (TypeError, ValueError):
         return None
 
@@ -152,7 +167,6 @@ async def fetch_chain_for_underlying(ib: IB, sym: str, spec: dict) -> dict:
     }
 
     # 2. Buscar preco do underlying (front-month)
-    ib.reqMarketDataType(4)  # delayed-frozen
     front = futures[0]
     ticker = ib.reqMktData(front, "", True, False)
     await asyncio.sleep(3)
@@ -268,17 +282,21 @@ async def fetch_chain_for_underlying(ib: IB, sym: str, spec: dict) -> dict:
             continue
 
         # Requisitar market data em batch (streaming)
+        # genericTickList='106' = Option Model Greeks (critical for IV/delta)
         tickers = {}
         for contract, right, strike in valid:
-            tk = ib.reqMktData(contract, "", False, False)
+            tk = ib.reqMktData(contract, "106", False, False)
             tickers[(right, strike)] = tk
 
-        await asyncio.sleep(5)
+        # Grains (CBOT) need more time to populate modelGreeks via streaming
+        wait_secs = 8 if exchange == "CBOT" else 5
+        await asyncio.sleep(wait_secs)
 
         # Coletar resultados
         calls = []
         puts = []
         for (right, strike), tk in tickers.items():
+            mg = tk.modelGreeks
             data = {
                 "strike": strike,
                 "bid": safe_float(tk.bid),
@@ -289,16 +307,11 @@ async def fetch_chain_for_underlying(ib: IB, sym: str, spec: dict) -> dict:
                     tk.callOpenInterest if right == "C"
                     else tk.putOpenInterest
                 ),
-                "iv": (safe_float(tk.modelGreeks.impliedVol)
-                       if tk.modelGreeks else None),
-                "delta": (safe_float(tk.modelGreeks.delta)
-                          if tk.modelGreeks else None),
-                "gamma": (safe_float(tk.modelGreeks.gamma)
-                          if tk.modelGreeks else None),
-                "theta": (safe_float(tk.modelGreeks.theta)
-                          if tk.modelGreeks else None),
-                "vega": (safe_float(tk.modelGreeks.vega)
-                         if tk.modelGreeks else None),
+                "iv": clean_greek(mg.impliedVol) if mg else None,
+                "delta": clean_greek(mg.delta) if mg else None,
+                "gamma": clean_greek(mg.gamma) if mg else None,
+                "theta": clean_greek(mg.theta) if mg else None,
+                "vega": clean_greek(mg.vega) if mg else None,
             }
             ib.cancelMktData(tk.contract)
             if right == "C":
@@ -317,10 +330,199 @@ async def fetch_chain_for_underlying(ib: IB, sym: str, spec: dict) -> dict:
 
         n_c = len(calls)
         n_p = len(puts)
+        iv_count = sum(1 for c in calls if c["iv"] is not None)
         print(f"  [OK] {sym} {local_sym} {opt_exp}: "
-              f"{n_c} calls, {n_p} puts")
+              f"{n_c} calls ({iv_count} com IV), {n_p} puts")
 
     return result
+
+
+IV_HISTORY_PATH = BASE / "agrimacro-dash" / "public" / "data" / "processed" / "iv_history.json"
+
+
+def get_atm_iv(expiration_data, und_price):
+    """Extract ATM IV from an expiration's calls (closest delta to 0.5)."""
+    calls = expiration_data.get("calls", [])
+    with_iv = [c for c in calls if c.get("iv") is not None and c["iv"] > 0]
+    if not with_iv:
+        return None
+    # Prefer delta-based ATM, fallback to strike-based
+    with_delta = [c for c in with_iv if c.get("delta") is not None]
+    if with_delta:
+        best = min(with_delta, key=lambda c: abs(c["delta"] - 0.5))
+        if abs(best["delta"] - 0.5) < 0.25:
+            return best["iv"]
+    # Fallback: closest strike to und_price
+    if und_price and und_price > 0:
+        best = min(with_iv, key=lambda c: abs(c["strike"] - und_price))
+        return best["iv"]
+    return None
+
+
+def compute_iv_analytics(output):
+    """
+    Compute per-underlying:
+    - iv_rank: 52-week percentile of current ATM IV (from iv_history.json)
+    - skew: OTM put IV vs OTM call IV (25-delta)
+    - term_structure: IV across expirations (contango/backwardation)
+
+    Mutates output["underlyings"][sym] in-place.
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Load IV history for rank calculation
+    iv_history = {}
+    if IV_HISTORY_PATH.exists():
+        try:
+            iv_history = json.load(open(IV_HISTORY_PATH))
+        except Exception:
+            iv_history = {}
+
+    for sym, data in output.get("underlyings", {}).items():
+        expirations = data.get("expirations", {})
+        und_price = data.get("und_price", 0) or 0
+        if not expirations:
+            continue
+
+        sorted_exps = sorted(expirations.keys())
+
+        # ── ATM IV from front-month ──
+        front_exp = sorted_exps[0]
+        front_data = expirations[front_exp]
+        current_iv = get_atm_iv(front_data, und_price)
+
+        # ── Term Structure: ATM IV per expiration ──
+        term_points = []
+        for exp_key in sorted_exps:
+            exp_d = expirations[exp_key]
+            dte = exp_d.get("days_to_exp", 0)
+            atm_iv = get_atm_iv(exp_d, und_price)
+            if atm_iv is not None:
+                term_points.append({
+                    "expiry": exp_key,
+                    "dte": dte,
+                    "iv": round(atm_iv, 4),
+                })
+
+        # Determine term structure shape
+        term_shape = "FLAT"
+        if len(term_points) >= 2:
+            front_iv = term_points[0]["iv"]
+            back_iv = term_points[-1]["iv"]
+            if front_iv > 0:
+                diff_pct = ((back_iv - front_iv) / front_iv) * 100
+                if diff_pct > 5:
+                    term_shape = "CONTANGO"
+                elif diff_pct < -5:
+                    term_shape = "BACKWARDATION"
+
+        data["term_structure"] = {
+            "points": term_points,
+            "structure": term_shape,
+        }
+
+        # ── Skew: 25-delta put IV vs 25-delta call IV ──
+        calls = front_data.get("calls", [])
+        puts = front_data.get("puts", [])
+
+        # Find 25-delta options (OTM wings)
+        otm_call_iv = None
+        otm_put_iv = None
+
+        calls_with_d = [c for c in calls
+                        if c.get("delta") is not None and c.get("iv") is not None]
+        puts_with_d = [p for p in puts
+                       if p.get("delta") is not None and p.get("iv") is not None]
+
+        if calls_with_d:
+            # 25-delta call: delta closest to 0.25
+            best = min(calls_with_d, key=lambda c: abs(c["delta"] - 0.25))
+            if abs(best["delta"] - 0.25) < 0.15:
+                otm_call_iv = best["iv"]
+
+        if puts_with_d:
+            # 25-delta put: delta closest to -0.25
+            best = min(puts_with_d, key=lambda p: abs(p["delta"] + 0.25))
+            if abs(best["delta"] + 0.25) < 0.15:
+                otm_put_iv = best["iv"]
+
+        skew_val = None
+        skew_pct = None
+        if otm_put_iv and otm_call_iv and otm_call_iv > 0:
+            skew_val = round(otm_put_iv - otm_call_iv, 4)
+            skew_pct = round(((otm_put_iv / otm_call_iv) - 1) * 100, 1)
+
+        data["skew"] = {
+            "put_25d_iv": round(otm_put_iv, 4) if otm_put_iv else None,
+            "call_25d_iv": round(otm_call_iv, 4) if otm_call_iv else None,
+            "skew_val": skew_val,
+            "skew_pct": skew_pct,
+        }
+
+        # ── IV Rank: percentile of current IV over 52-week history ──
+        if current_iv is not None:
+            # Append to history
+            if sym not in iv_history:
+                iv_history[sym] = []
+            iv_history[sym].append({
+                "date": today,
+                "iv": round(current_iv, 4),
+            })
+            # Dedupe by date (keep latest per day)
+            seen = {}
+            for entry in iv_history[sym]:
+                seen[entry["date"]] = entry
+            iv_history[sym] = sorted(seen.values(), key=lambda x: x["date"])
+            # Keep only last 365 days
+            cutoff = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+            iv_history[sym] = [e for e in iv_history[sym] if e["date"] >= cutoff]
+
+            # Compute rank
+            hist_ivs = [e["iv"] for e in iv_history[sym]]
+            if len(hist_ivs) >= 2:
+                iv_min = min(hist_ivs)
+                iv_max = max(hist_ivs)
+                if iv_max > iv_min:
+                    iv_rank = round(
+                        ((current_iv - iv_min) / (iv_max - iv_min)) * 100, 1
+                    )
+                else:
+                    iv_rank = 50.0
+            else:
+                iv_rank = None  # Not enough history yet
+
+            data["iv_rank"] = {
+                "current_iv": round(current_iv, 4),
+                "rank_52w": iv_rank,
+                "iv_high_52w": round(iv_max, 4) if len(hist_ivs) >= 2 else None,
+                "iv_low_52w": round(iv_min, 4) if len(hist_ivs) >= 2 else None,
+                "history_days": len(hist_ivs),
+            }
+        else:
+            data["iv_rank"] = {
+                "current_iv": None,
+                "rank_52w": None,
+                "history_days": 0,
+            }
+
+        # Log
+        iv_str = f"{current_iv*100:.1f}%" if current_iv else "N/A"
+        rank_str = (f"{data['iv_rank']['rank_52w']:.0f}%"
+                    if data['iv_rank'].get('rank_52w') is not None else "building")
+        skew_str = f"{skew_pct:+.1f}%" if skew_pct is not None else "N/A"
+        print(f"  {sym}: IV={iv_str} Rank={rank_str} "
+              f"Skew={skew_str} Term={term_shape} "
+              f"({len(term_points)} pts)")
+
+    # Save IV history
+    try:
+        with open(IV_HISTORY_PATH, "w") as f:
+            json.dump(iv_history, f, indent=1)
+        n_syms = len(iv_history)
+        total_pts = sum(len(v) for v in iv_history.values())
+        print(f"  [SAVED] iv_history.json: {n_syms} syms, {total_pts} data points")
+    except Exception as e:
+        print(f"  [WARN] Failed to save iv_history.json: {e}")
 
 
 async def main():
@@ -384,6 +586,10 @@ async def main():
             await asyncio.sleep(2)
 
     ib.disconnect()
+
+    # ── Post-processing: IV Rank, Skew, Term Structure ──
+    print("\n[POST] Calculando IV Rank, Skew, Term Structure...")
+    compute_iv_analytics(output)
 
     # Salvar final
     output["generated_at"] = datetime.now().isoformat()

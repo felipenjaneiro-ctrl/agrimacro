@@ -246,7 +246,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         result = process_seasonality(Path(sys.argv[1]))
     else:
-        result = process_seasonality(Path("../agrimacro-dash/public/data/raw/price_history.json"))
+        result = process_seasonality(Path("../agrimacro-dash/public/data/processed/price_history.json"))
 
     out_path = Path(__file__).parent.parent / "agrimacro-dash" / "public" / "data" / "processed" / "seasonality.json"
     with open(out_path, "w", encoding="utf-8") as f:

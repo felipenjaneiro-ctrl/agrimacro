@@ -1,4 +1,5 @@
 import BilateralPanel from "./BilateralPanel";
+import LightweightChart from "./LightweightChart";
 import GrainRatiosTab from "./GrainRatiosTab";
 import LivestockRiskTab from "./LivestockRiskTab";
 import CostOfProductionTab from "./CostOfProductionTab";
@@ -155,13 +156,13 @@ interface COTDeltaSignal {
 }
 interface COTDeltaAnalysis {
   signals:COTDeltaSignal[]; dominant_direction:string; reversal_score:number;
-  cot_index:number; neg_streak:number; pos_streak:number;
+  cot_index:number; cot_index_52w?:number; cot_index_26w?:number; neg_streak:number; pos_streak:number;
   current_delta:number; prev_delta:number; oi_trend_pct:number; deltas_8w:number[];
 }
 interface COTCommodity {
   ticker:string; name:string;
   legacy?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number};
-  disaggregated?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number;delta_analysis?:COTDeltaAnalysis};
+  disaggregated?:{ticker:string;name:string;report_type:string;latest:COTHistoryEntry;history:COTHistoryEntry[];weeks:number;cot_index?:number;cot_index_52w?:number;cot_index_26w?:number;delta_analysis?:COTDeltaAnalysis};
 }
 interface COTData {
   generated_at:string; source:string; year:number;
@@ -230,7 +231,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
 const TABS:Tab[] = ["Visão Geral","Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
 
 const SEASON_COLORS:Record<string,string> = {
-  "2021":"#3b82f6","2022":"#8b5cf6","2023":"#ec4899","2024":"#f59e0b","2025":"#22c55e",
+  "2021":"#6366f1","2022":"#3b82f6","2023":"#8b5cf6","2024":"#ec4899","2025":"#22c55e","2026":"#f59e0b",
   "current":"#f59e0b","average":"#e2e8f0",
 };
 
@@ -1282,6 +1283,13 @@ export default function Dashboard() {
     return {text:"",time:""};
   });
   const [macroIndicators, setMacroIndicators] = useState<any>(null);
+  const [cropProgressData, setCropProgressData] = useState<any>(null);
+  const [exportActivityData, setExportActivityData] = useState<any>(null);
+  const [droughtData, setDroughtData] = useState<any>(null);
+  const [fertilizerData, setFertilizerData] = useState<any>(null);
+  const [intelFrame, setIntelFrame] = useState<any>(null);
+  const [priceValidation, setPriceValidation] = useState<any>(null);
+  const [bottleneckData, setBottleneckData] = useState<any>(null);
   const [googleTrends, setGoogleTrends] = useState<any>(null);
   const [fedwatch, setFedwatch] = useState<any>(null);
   const [intelSynthesis, setIntelSynthesis] = useState<any>(null);
@@ -1346,6 +1354,13 @@ export default function Dashboard() {
       fetch("/data/processed/price_history.json").then(r=>r.json()).then(d=>{if(d?.DX) setDxProcessed(d.DX);}).catch(()=>{}),
       fetch("/data/processed/grok_sentiment.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setGrokSentiment(d);}).catch(()=>{}),
       fetch("/data/processed/grok_news.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setGrokNews(d);}).catch(()=>{}),
+      fetch("/data/processed/crop_progress.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setCropProgressData(d);}).catch(()=>console.warn("No crop progress")),
+      fetch("/data/processed/export_activity.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setExportActivityData(d);}).catch(()=>console.warn("No export activity")),
+      fetch("/data/processed/drought_monitor.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setDroughtData(d);}).catch(()=>console.warn("No drought data")),
+      fetch("/data/processed/fertilizer_prices.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setFertilizerData(d);}).catch(()=>console.warn("No fertilizer data")),
+      fetch("/data/processed/intelligence_frame.json").then(r=>r.json()).then(setIntelFrame).catch(()=>console.warn("No intelligence frame")),
+      fetch("/data/processed/price_validation.json").then(r=>r.json()).then(setPriceValidation).catch(()=>console.warn("No price validation")),
+      fetch("/data/processed/bottleneck.json").then(r=>r.json()).then(d=>{if(d?.commodities)setBottleneckData(d.commodities);}).catch(()=>console.warn("No bottleneck")),
     ]).finally(()=>{setErrors(errs);setLoading(false);});
   },[]);
 
@@ -1440,9 +1455,16 @@ export default function Dashboard() {
   const renderGraficoCOT = () => (
     <div>
       {prices && prices[selected] ? (
-        <PriceChart candles={prices[selected]} symbol={selected} />
+        <LightweightChart
+          bars={prices[selected]}
+          symbol={selected}
+          height={420}
+          showRSI={true}
+          cotIndex={cot?.commodities?.[selected]?.disaggregated?.cot_index ?? undefined}
+          basis={paritiesData?.parities?.brl_competitiveness?.value ?? undefined}
+        />
       ) : (
-        <DataPlaceholder title="Sem dados de preço" detail={`${selected} não encontrado em price_history.json`} />
+        <DataPlaceholder title="Sem dados de pre\u00e7o" detail={`${selected} n\u00e3o encontrado em price_history.json`} />
       )}
       <div style={{marginTop:12}}>
         {hasCOT(selected) ? (
@@ -1669,10 +1691,34 @@ export default function Dashboard() {
                             <DeltaBars deltas={detailData.deltas_8w} />
                             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:12}}>
                               <div style={{padding:8,background:'#0E1A24',borderRadius:4}}>
-                                <div style={{fontSize:7,color:'#64748b'}}>COT INDEX</div>
-                                <div style={{fontSize:14,fontWeight:700,fontFamily:'monospace',
-                                  color:detailData.cot_index>80||detailData.cot_index<20?'#DC3C3C':'#00C878'
-                                }}>{detailData.cot_index.toFixed(0)}</div>
+                                <div style={{fontSize:7,color:'#64748b',marginBottom:2}}>COT INDEX</div>
+                                <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                                  {[
+                                    {label:'156w', val: detailData.cot_index},
+                                    {label:'52w',  val: detailData.cot_index_52w},
+                                    {label:'26w',  val: detailData.cot_index_26w},
+                                  ].map(({label, val}) => {
+                                    if (val === undefined || val === null) return null;
+                                    const color = val >= 80 ? '#DC3C3C' : val <= 20 ? '#00C878' :
+                                                  val >= 70 ? '#DCB432' : val <= 30 ? '#3b82f6' : '#64748b';
+                                    return (
+                                      <div key={label} style={{
+                                        textAlign:'center', padding:'4px 8px',
+                                        background: color + '15',
+                                        border: `1px solid ${color}33`,
+                                        borderRadius:4
+                                      }}>
+                                        <div style={{fontSize:8, color:'#64748b', marginBottom:2}}>
+                                          {label}
+                                        </div>
+                                        <div style={{fontSize:14, fontWeight:700,
+                                                     fontFamily:'monospace', color}}>
+                                          {typeof val === 'number' ? val.toFixed(0) : val}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                               <div style={{padding:8,background:'#0E1A24',borderRadius:4}}>
                                 <div style={{fontSize:7,color:'#64748b'}}>OI TREND</div>
@@ -1932,11 +1978,15 @@ export default function Dashboard() {
 
       {futures && (
         <div style={{marginTop:28}}>
-          <SectionTitle>Contratos Futuros -- Preços por Vencimento</SectionTitle>
+          <SectionTitle>Contratos Futuros -- Pre\u00e7os por Vencimento</SectionTitle>
           <div style={{fontSize:10,color:C.textMuted,marginBottom:12}}>
-            Todos os vencimentos em negociação | Fonte: Yahoo Finance / Stooq | {Object.keys(futures.commodities||{}).length} commodities
+            {fwdSyms.length>0?`Mostrando: ${fwdSyms.join(", ")}`:"Todos os vencimentos"} | Fonte: Yahoo Finance / Stooq
           </div>
-          {Object.entries(futures.commodities||{}).map(([sym,fc])=>{
+          {(()=>{
+            const activeFwd = fwdSyms.length > 0 ? fwdSyms : Object.keys(futures.commodities||{});
+            const filtered = Object.entries(futures.commodities||{}).filter(([sym])=>activeFwd.includes(sym));
+            return filtered;
+          })().map(([sym,fc])=>{
             const nm=COMMODITIES.find(c=>c.sym===sym)?.name||sym;
             const contracts=fc.contracts||[];
             if(!contracts.length) return null;
@@ -2128,6 +2178,67 @@ export default function Dashboard() {
                               {"\u{1F441}"} Monitore se
                             </div>
                             <div style={{fontSize:11,color:'#64748b',lineHeight:1.5}}>{watchIf}</div>
+                          </div>
+                        )}
+
+                        {/* ITEM 5: Feedlot cycle corrected */}
+                        {sp.key === 'feedlot' && (sp as any).method === 'cycle_corrected' && (
+                          <div style={{fontSize:9, color:'#64748b', marginTop:8, padding:'6px 8px', background:'#0E1A2480', borderRadius:4, borderLeft:'2px solid #DCB432'}}>
+                            {"\u23F1"} Ciclo real: {(sp as any).contracts?.gf || '?'} {"\u2192"} {(sp as any).contracts?.zc || '?'} {"\u2192"} {(sp as any).contracts?.le || '?'}
+                          </div>
+                        )}
+
+                        {/* ITEM 5: Soy Crush forward vs spot */}
+                        {sp.key === 'soy_crush' && (sp as any).value_forward !== undefined && (
+                          <div style={{display:'flex', gap:12, marginTop:8}}>
+                            <div>
+                              <div style={{fontSize:8, color:'#64748b'}}>SPOT</div>
+                              <div style={{fontSize:13, fontFamily:'monospace', color:'#e2e8f0'}}>
+                                {typeof sp.current === 'number' ? sp.current.toFixed(2) : sp.current}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:8, color:'#64748b'}}>FORWARD +2m</div>
+                              <div style={{fontSize:13, fontFamily:'monospace',
+                                color: (sp as any).value_forward < sp.current ? '#DC3C3C' : '#00C878'}}>
+                                {(sp as any).value_forward?.toFixed(2)}
+                                <span style={{fontSize:8, marginLeft:3}}>
+                                  ({(((sp as any).value_forward / sp.current - 1) * 100).toFixed(0)}%)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ITEM 6: ZL/CL term structure */}
+                        {sp.key === 'zl_cl' && ((sp as any).value_3m || (sp as any).value_6m) && (
+                          <div style={{marginTop:8}}>
+                            <div style={{fontSize:8, color:'#64748b', marginBottom:4}}>
+                              ESTRUTURA DE TERMO
+                            </div>
+                            <div style={{display:'flex', gap:8}}>
+                              {[
+                                {label:'Spot', val: sp.current},
+                                {label:'+3m',  val: (sp as any).value_3m},
+                                {label:'+6m',  val: (sp as any).value_6m},
+                              ].filter(x => x.val != null).map(({label, val}) => (
+                                <div key={label} style={{
+                                  padding:'3px 6px',
+                                  background:'#142332',
+                                  borderRadius:4,
+                                  fontSize:10,
+                                  fontFamily:'monospace'
+                                }}>
+                                  <span style={{color:'#64748b', fontSize:8}}>{label} </span>
+                                  <span style={{color:'#e2e8f0'}}>{val?.toFixed(4)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {(sp as any).term_note && (
+                              <div style={{fontSize:9, color:'#DCB432', marginTop:4}}>
+                                {(sp as any).term_note}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -3015,6 +3126,44 @@ export default function Dashboard() {
     return (
     <div>
       <SectionTitle>Leitura do Dia</SectionTitle>
+
+      {/* FILM ENTRY — Entrada do Dia (from intelligence_frame) */}
+      {intelFrame?.film_entry && (
+        <div style={{marginBottom:24, padding:16, background:'#0E1A24', borderRadius:8, border:'1px solid #DCB432', borderLeft:'4px solid #DCB432'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+            <div style={{fontSize:12, fontWeight:700, color:'#DCB432', textTransform:'uppercase', letterSpacing:'0.08em'}}>
+              Entrada do Dia — {intelFrame.film_entry.date}
+            </div>
+            {intelFrame.by_commodity && (
+              <div style={{display:'flex', gap:4}}>
+                {Object.entries(intelFrame.by_commodity as Record<string,any>).filter(([,v]:any) => Math.abs(v.score) >= 2).slice(0,4).map(([sym, info]:any) => (
+                  <span key={sym} style={{fontSize:9, padding:'2px 6px', borderRadius:4, fontWeight:700, fontFamily:'monospace',
+                    background: info.score > 0 ? 'rgba(0,200,120,.12)' : 'rgba(220,60,60,.12)',
+                    color: info.score > 0 ? '#00C878' : '#DC3C3C',
+                  }}>{sym} {info.score > 0 ? '+' : ''}{info.score}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{fontSize:13, color:'#e2e8f0', fontWeight:600, marginBottom:10, lineHeight:1.5}}>
+            {intelFrame.film_entry.one_liner}
+          </div>
+          {intelFrame.film_entry.key_events?.length > 0 && (
+            <div style={{display:'flex', flexDirection:'column', gap:4}}>
+              {intelFrame.film_entry.key_events.map((ev:string, i:number) => (
+                <div key={i} style={{fontSize:10, color:'#94a3b8', paddingLeft:8, borderLeft:'2px solid #1e3a4a'}}>
+                  {ev}
+                </div>
+              ))}
+            </div>
+          )}
+          {intelFrame.market_narrative && (
+            <div style={{marginTop:10, fontSize:11, color:'#64748b', fontStyle:'italic', lineHeight:1.5}}>
+              {intelFrame.market_narrative}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CALENDARIO */}
       <div style={{marginBottom:28}}>
@@ -4070,15 +4219,54 @@ export default function Dashboard() {
     const buildIntelPrompt = () => {
       const sections:string[] = [];
 
-      sections.push("Você é um analista sênior de commodities com acesso completo ao contexto de mercado e portfólio do usuário. Analise a situação atual considerando:");
+      sections.push("Voc\u00ea \u00e9 um analista s\u00eanior de commodities com acesso completo ao contexto de mercado e portf\u00f3lio do usu\u00e1rio. Analise a situa\u00e7\u00e3o atual considerando:");
 
-      // Synthesis
-      const syn = intelSynthesis;
-      if(syn && !syn.is_fallback) {
-        sections.push("\n=== SÍNTESE DO DIA ===");
-        if(syn.summary) sections.push(syn.summary);
-        if(syn.priority_high?.length) sections.push("Sinais críticos:\n" + syn.priority_high.map((s:any)=>"- "+s.title+(s.detail?" ("+s.detail+")":"")).join("\n"));
-        if(syn.priority_medium?.length) sections.push("Sinais atenção:\n" + syn.priority_medium.map((s:any)=>"- "+s.title).join("\n"));
+      // Intelligence Frame (replaces old synthesis when available)
+      if (intelFrame?.market_narrative) {
+        sections.push("\n=== INTELLIGENCE FRAME DO DIA ===");
+        sections.push(intelFrame.market_narrative);
+
+        // High priority alerts
+        const highAlerts = (intelFrame.alerts || []).filter((a:any) => a.priority === "HIGH");
+        if (highAlerts.length) {
+          sections.push("\nALERTAS CRITICOS:");
+          highAlerts.forEach((a:any) => sections.push(`- [${a.type}] ${a.commodity}: ${a.message}${a.lag ? ` (lag: ${a.lag})` : ""}`));
+        }
+
+        // Commodity scores
+        const byCom = intelFrame.by_commodity || {};
+        const scored = Object.entries(byCom)
+          .filter(([,v]:any) => Math.abs(v.score) >= 2)
+          .sort(([,a]:any, [,b]:any) => Math.abs(b.score) - Math.abs(a.score));
+        if (scored.length) {
+          sections.push("\nCOMMODITIES COM VIES FORTE:");
+          scored.forEach(([sym, info]:any) => {
+            const dir = info.score > 0 ? "ALTISTA" : "BAIXISTA";
+            sections.push(`${sym}: ${dir} (${info.score > 0 ? "+" : ""}${info.score}) | ${info.signals?.slice(0,3).join(", ") || ""}`);
+            if (info.key_number) sections.push(`  Numero-chave: ${info.key_number}`);
+            if (info.lag_factor) sections.push(`  Lag: ${info.lag_factor}`);
+          });
+        }
+
+        // Macro frame
+        const mf = intelFrame.macro_frame || {};
+        if (Object.keys(mf).length) {
+          sections.push("\nMACRO FRAME:");
+          if (mf.dxy) sections.push(`DXY: ${mf.dxy.value} (${mf.dxy.signal}) \u2014 ${mf.dxy.impact}`);
+          if (mf.oil) sections.push(`CL: $${mf.oil.value} (${mf.oil.signal}) \u2014 ${mf.oil.impact}`);
+          if (mf.fertilizer_index) sections.push(`Fertilizantes: ${mf.fertilizer_index.yoy_change > 0 ? "+" : ""}${mf.fertilizer_index.yoy_change}% YoY (${mf.fertilizer_index.signal})`);
+        }
+      }
+
+      // Fallback: old synthesis if no intelligence frame
+      if (!intelFrame?.market_narrative) {
+        const syn = intelSynthesis;
+        if(syn && !syn.is_fallback) {
+          sections.push("\n=== S\u00cdNTESE DO DIA ===");
+          if(syn.summary) sections.push(syn.summary);
+          if(syn.priority_high?.length) sections.push("Sinais cr\u00edticos:\n" + syn.priority_high.map((s:any)=>"- "+s.title+(s.detail?" ("+s.detail+")":"")).join("\n"));
+          if(syn.priority_medium?.length) sections.push("Sinais aten\u00e7\u00e3o:\n" + syn.priority_medium.map((s:any)=>"- "+s.title).join("\n"));
+        }
       }
 
       // Macro
@@ -4269,6 +4457,56 @@ export default function Dashboard() {
         }
       }
 
+      // Greeks e Options Intelligence
+      if (greeksData && optionsChain) {
+        sections.push(`\n=== OPTIONS INTELLIGENCE ===`);
+
+        // IV rank por underlying (usando options_chain.json)
+        const chain = optionsChain?.underlyings || {};
+
+        Object.entries(chain).forEach(([sym, data]: any) => {
+          const exps = Object.values(data.expirations || {});
+          if (!exps.length) return;
+
+          // ATM IV (primeira expiração disponível)
+          const firstExp: any = exps[0];
+          const atmCalls = firstExp?.calls || [];
+          const atmCall = atmCalls.find((c: any) =>
+            Math.abs((c.delta || 0) - 0.5) < 0.1
+          );
+
+          if (atmCall?.iv) {
+            // Put/Call volume ratio
+            const totalCallVol = atmCalls.reduce(
+              (s: number, c: any) => s + (c.volume || 0), 0
+            );
+            const atmPuts = firstExp?.puts || [];
+            const totalPutVol = atmPuts.reduce(
+              (s: number, c: any) => s + (c.volume || 0), 0
+            );
+            const pcRatio = totalCallVol > 0
+              ? (totalPutVol / totalCallVol).toFixed(2) : 'N/A';
+
+            sections.push(
+              `${sym}: IV=${(atmCall.iv * 100).toFixed(1)}% | ` +
+              `P/C ratio=${pcRatio} | ` +
+              `und_price=${data.und_price}`
+            );
+          }
+        });
+
+        // Greeks totais do portfólio
+        const pgTotals = greeksData?.portfolio_greeks;
+        if (pgTotals) {
+          sections.push(
+            `\nPortf\u00f3lio Greeks totais:` +
+            ` Delta=${pgTotals.total_delta?.toFixed(2)}` +
+            ` | Theta=$${pgTotals.total_theta?.toFixed(2)}/dia` +
+            ` | Vega=${pgTotals.total_vega?.toFixed(2)}`
+          );
+        }
+      }
+
       // Physical international data
       if(physIntl?.international) {
         const phIntlLines:string[] = [];
@@ -4361,31 +4599,60 @@ export default function Dashboard() {
         });
       }
 
-      // Sazonalidade do símbolo atual
-      if (season && prices) {
+      // LACUNA 1: Sazonalidade (pre-computed monthly_returns)
+      if (season) {
         const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
         const curMonth = new Date().getMonth();
-        const symList = [selected, ...['ZC','ZS','ZW','LE','GF','CL','SB','KC'].filter(s => s !== selected)].slice(0, 6);
+        const symList = [selected, ...['ZC','ZS','ZW','LE','GF','CL','SB','KC','CC'].filter(s => s !== selected)].slice(0, 8);
         const seasonLines: string[] = [];
         symList.forEach(sym => {
-          const candles = prices[sym];
-          if (!candles || candles.length < 252) return;
-          const rets: number[] = [];
-          for (let i = 22; i < candles.length; i++) {
-            if (new Date(candles[i].date).getMonth() === curMonth) {
-              const prev = candles[i-22]?.close;
-              if (prev && prev > 0) rets.push((candles[i].close - prev) / prev * 100);
-            }
-          }
-          if (rets.length >= 3) {
-            const avg = rets.reduce((s,v) => s+v, 0) / rets.length;
-            const pctPos = Math.round(rets.filter(r => r > 0).length / rets.length * 100);
-            seasonLines.push(`${sym} em ${months[curMonth]}: m\u00e9dia hist\u00f3rica ${avg > 0 ? '+' : ''}${avg.toFixed(1)}%, positivo em ${pctPos}% dos anos`);
+          const s = (season as any)?.[sym];
+          if (!s?.monthly_returns) return;
+          const returns = s.monthly_returns;
+          const v = returns[curMonth];
+          const val = typeof v === 'number' ? v : v?.avg ?? 0;
+          const pctPos = typeof v === 'object' ? v?.positive_pct : null;
+          seasonLines.push(`${sym} em ${months[curMonth]}: ${val >= 0 ? '+' : ''}${val.toFixed(2)}%${pctPos != null ? ` (positivo ${pctPos}%)` : ''}`);
+          // Add full year for selected
+          if (sym === selected) {
+            returns.forEach((rv: any, i: number) => {
+              const rv2 = typeof rv === 'number' ? rv : rv?.avg ?? 0;
+              const isCur = i === curMonth ? ' \u2190 MES ATUAL' : '';
+              seasonLines.push(`  ${months[i]}: ${rv2 >= 0 ? '+' : ''}${rv2.toFixed(2)}%${isCur}`);
+            });
           }
         });
         if (seasonLines.length) {
-          sections.push(`\n=== SAZONALIDADE \u2014 ${months[curMonth].toUpperCase()} ===`);
+          sections.push(`\n=== SAZONALIDADE \u2014 ${months[curMonth].toUpperCase()} (${(season as any)?.[selected]?.window_full || '5A'}) ===`);
           seasonLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // LACUNA 2: Bilateral Indicators (detailed)
+      if (bilateralData?.summary) {
+        sections.push("\n=== BILATERAL BR vs EUA (DETALHADO) ===");
+        if (bilateralData.summary) sections.push(`Resumo: ${JSON.stringify(bilateralData.summary).slice(0, 300)}`);
+        if (bilateralData.lcs?.status === "OK") {
+          const l = bilateralData.lcs;
+          sections.push(`LCS: Spread $${l.spread_usd_mt?.toFixed(2)}/MT (${l.spread_pct?.toFixed(1)}%) | Mais competitivo: ${l.competitive_origin} | FOB BR=$${l.br_fob?.toFixed(0)} EUA=$${l.us_fob?.toFixed(0)}`);
+        }
+        if (bilateralData.bci?.status === "OK") {
+          const b = bilateralData.bci;
+          sections.push(`BCI: Score=${b.bci_score} (${b.bci_signal}) | Trend=${b.bci_trend} | Forte=${b.strongest} | Fraco=${b.weakest}`);
+        }
+      }
+
+      // LACUNA 3: Livestock Bottleneck
+      if (bottleneckData) {
+        const bnLines: string[] = [];
+        ['LE','GF','HE'].forEach(sym => {
+          const d = (bottleneckData as any)[sym];
+          if (!d) return;
+          bnLines.push(`${sym}: Score=${d.score ?? 'N/A'} | Mom3m=${d.mom_3m ?? 'N/A'}% | Mom6m=${d.mom_6m ?? 'N/A'}% | ${d.recommendation ?? ''}`);
+        });
+        if (bnLines.length) {
+          sections.push("\n=== LIVESTOCK BOTTLENECK THESIS ===");
+          bnLines.forEach(l => sections.push(l));
         }
       }
 
@@ -4511,6 +4778,74 @@ export default function Dashboard() {
         if (wLines.length) {
           sections.push("\n=== PROTEÍNA ANIMAL — INDICADORES SEMANAIS ===");
           wLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // Crop Progress (USDA NASS)
+      if (cropProgressData?.crops) {
+        const cpLines: string[] = [];
+        Object.entries(cropProgressData.crops).forEach(([key, data]: any) => {
+          const nat = data.national || {};
+          const parts: string[] = [`${key}`];
+          if (nat.planted != null) {
+            parts.push(`${nat.planted}% plantado`);
+          }
+          if (nat.emerged != null) parts.push(`${nat.emerged}% emergido`);
+          if (nat.harvested != null) parts.push(`${nat.harvested}% colhido`);
+          cpLines.push(parts.join(' | '));
+        });
+        if (cpLines.length) {
+          sections.push("\n=== CROP PROGRESS (USDA) ===");
+          cpLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // Export Activity
+      if (exportActivityData?.commodities) {
+        const exLines: string[] = [];
+        Object.entries(exportActivityData.commodities).forEach(([sym, data]: any) => {
+          const parts: string[] = [`${sym}`];
+          if (data.pct_of_target != null) parts.push(`${data.pct_of_target.toFixed(1)}% do target USDA`);
+          if (data.vs_last_year_pct != null) parts.push(`${data.vs_last_year_pct > 0 ? '+' : ''}${data.vs_last_year_pct.toFixed(1)}% vs ano ant.`);
+          if (data.signal) parts.push(data.signal);
+          exLines.push(parts.join(' | '));
+        });
+        if (exLines.length) {
+          sections.push("\n=== EXPORT ACTIVITY ===");
+          exLines.forEach(l => sections.push(l));
+        }
+      }
+
+      // Drought Monitor
+      if (droughtData?.national) {
+        sections.push("\n=== DROUGHT MONITOR ===");
+        const nat = droughtData.national;
+        sections.push(`Nacional: ${nat.any_drought_pct?.toFixed(1)}% em drought (D2+: ${((nat.d2_pct||0)+(nat.d3_pct||0)+(nat.d4_pct||0)).toFixed(1)}%)`);
+        if (droughtData.regions) {
+          Object.entries(droughtData.regions).forEach(([key, reg]: any) => {
+            sections.push(`${reg.label}: D2+=${reg.d2_plus_pct?.toFixed(1)}% | ${reg.signal}`);
+          });
+        }
+        if (droughtData.crop_alerts?.length) {
+          droughtData.crop_alerts.forEach((a: any) => sections.push(`ALERTA: ${a.message}`));
+        }
+      }
+
+      // Fertilizer Prices
+      if (fertilizerData?.fertilizers) {
+        const fLines: string[] = [];
+        Object.entries(fertilizerData.fertilizers).forEach(([key, data]: any) => {
+          if (data.price_usd_ton != null) {
+            fLines.push(`${data.name || key}: $${data.price_usd_ton}/ton${data.change_yoy_pct != null ? ` (${data.change_yoy_pct > 0 ? '+' : ''}${data.change_yoy_pct.toFixed(1)}% YoY)` : ''} ${data.signal || ''}`);
+          }
+        });
+        if (fLines.length) {
+          sections.push("\n=== FERTILIZANTES ===");
+          sections.push(fertilizerData.lag_note || "Lag: impacto no custo de plantio 6-12 meses");
+          fLines.forEach(l => sections.push(l));
+          if (fertilizerData.cost_impact?.signal) {
+            sections.push(`Impacto custo: ${fertilizerData.cost_impact.signal} ${fertilizerData.cost_impact.detail || ''}`);
+          }
         }
       }
 
@@ -5526,7 +5861,30 @@ export default function Dashboard() {
                       <div style={{
                         fontSize:9, color:'#DCB432', marginTop:6
                       }}>
-                        \u23F1 Impacto estimado em: {par.impact_date}
+                        {"\u23F1"} Impacto estimado em: {par.impact_date}
+                      </div>
+                    )}
+
+                    {par.contracts && (
+                      <div style={{
+                        fontSize:8, color:'#64748b',
+                        marginTop:4, fontFamily:'monospace'
+                      }}>
+                        Contratos: {
+                          typeof par.contracts === 'string'
+                            ? par.contracts
+                            : Object.values(par.contracts).join(' / ')
+                        }
+                      </div>
+                    )}
+
+                    {par.lag_note && (
+                      <div style={{
+                        fontSize:9, color:'#475569',
+                        marginTop:3, borderLeft:'2px solid #1e3a4a',
+                        paddingLeft:6
+                      }}>
+                        {"\u23F1"} {par.lag_note}
                       </div>
                     )}
                   </div>
@@ -5608,6 +5966,8 @@ export default function Dashboard() {
               <div style={{padding:"10px 16px 4px",fontSize:9,fontWeight:700,color:C.textMuted,letterSpacing:1,textTransform:"uppercase"}}>{grp}</div>
               {COMMODITIES.filter(c=>c.group===grp).map(c=>{
                 const p=getPrice(c.sym);const ch=getChange(c.sym);const sel=c.sym===selected;
+                const isSusp = priceValidation?.details?.[c.sym]?.is_suspicious === true;
+                const suspReason = priceValidation?.details?.[c.sym]?.reason;
                 const cotComm = cot?.commodities?.[c.sym];
                 const cotDis = cotComm?.disaggregated;
                 const cotLeg = cotComm?.legacy;
@@ -5654,8 +6014,14 @@ export default function Dashboard() {
                       <div style={{fontSize:9,color:C.textMuted}}>{c.name}</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:p?C.text:C.textMuted}}>{p?p.toFixed(2):"--"}</div>
-                      {ch && <div style={{fontSize:9,fontFamily:"monospace",color:ch.pct>=0?C.green:C.red}}>{ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>}
+                      <div style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:isSusp?"#64748b":p?C.text:C.textMuted,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:2}}>
+                        {p?p.toFixed(2):"--"}
+                        {isSusp && <span style={{fontSize:8,color:"#DC3C3C",fontWeight:700}} title={suspReason||"Dado suspeito"}>{"\u26A0\uFE0F"}</span>}
+                      </div>
+                      {isSusp
+                        ? <div style={{fontSize:9,color:"#64748b",fontFamily:"monospace"}}>?%</div>
+                        : ch && <div style={{fontSize:9,fontFamily:"monospace",color:ch.pct>=0?C.green:C.red}}>{ch.pct>=0?"+":""}{ch.pct.toFixed(2)}%</div>
+                      }
                       {showBadge && (
                         <div style={{display:'flex',alignItems:'center',gap:3,justifyContent:'flex-end',marginTop:1}} title={tooltipText}>
                           <div style={{
@@ -5695,6 +6061,18 @@ export default function Dashboard() {
             <div style={{fontSize:16,fontWeight:700}}>{viewMode==="intel"?"Central de Inteligência":COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
             <Badge label="DADOS REAIS" color={C.green} />
             {pipelineOk && <Badge label="PIPELINE ONLINE" color={C.blue} />}
+            {(priceValidation?.blocked ?? 0) > 0 && (
+              <div style={{
+                background:'#DC3C3C22',
+                border:'1px solid #DC3C3C55',
+                borderRadius:4, padding:'3px 10px',
+                fontSize:9, color:'#DC3C3C',
+                fontWeight:700, marginLeft:8,
+                display:'flex', alignItems:'center', gap:4,
+              }}>
+                {"\u26A0\uFE0F"} {priceValidation.blocked} dado(s) suspeito(s)
+              </div>
+            )}
             <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:12}}>
               <button onClick={refreshIbkr} disabled={ibkrRefreshing} style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:ibkrRefreshing?"#555":C.blue,color:"#fff",border:"none",borderRadius:4,cursor:ibkrRefreshing?"wait":"pointer",letterSpacing:0.5}}>
                 {ibkrRefreshing?"? Atualizando...":"IBKR Refresh"}

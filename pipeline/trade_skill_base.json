@@ -1,0 +1,874 @@
+{
+  "version": "2.0",
+  "updated_at": "2026-04-14",
+  "description": "Base de conhecimento do trader Felipe. Gerado automaticamente a partir de statements IBKR reais. Lessons e rules sao preservados entre atualizacoes.",
+  "data_source": "5 CSVs de ibkr_history/",
+  "trader_profile": {
+    "name": "Felipe",
+    "instrument_preference": "FOP (futures options on commodities)",
+    "style": "premium seller \u00e2\u20ac\u201d vende vol, coleta theta",
+    "avg_dte_entry": "45-90 dias",
+    "preferred_delta": "0.15-0.30 (OTM)",
+    "max_positions_simultaneous": 12,
+    "risk_per_trade_pct": 2.5,
+    "account_size_approx": 1350000,
+    "broker": "IBKR TWS",
+    "session": "Pre-market scan 6:30 AM ET, execucao 9:00-10:30 AM ET",
+    "edge": "Sazonalidade + COT extremos + IV rank alto = entrada ideal para venda de premium"
+  },
+  "historical_performance": {
+    "period": "2022 a 2026",
+    "total_trades": 2493,
+    "winners": 581,
+    "losers": 1909,
+    "win_rate": 0.233,
+    "total_pnl_net": 510919.32,
+    "total_commissions": 96192.8,
+    "by_year": {
+      "2022": {
+        "trades": 72,
+        "net": 63672.66,
+        "winners": 16,
+        "losers": 56
+      },
+      "2023": {
+        "trades": 255,
+        "net": 194578.35,
+        "winners": 62,
+        "losers": 193
+      },
+      "2024": {
+        "trades": 616,
+        "net": 544317.99,
+        "winners": 124,
+        "losers": 489
+      },
+      "2025": {
+        "trades": 1214,
+        "net": -643065.11,
+        "winners": 323,
+        "losers": 891
+      },
+      "2026": {
+        "trades": 336,
+        "net": 351415.43,
+        "winners": 56,
+        "losers": 280
+      }
+    }
+  },
+  "best_underlyings": [
+    {
+      "sym": "SI",
+      "name": "Silver",
+      "net_total": 509632.18,
+      "trades": 402,
+      "winners": 99,
+      "losers": 303,
+      "win_rate": 0.246,
+      "gross_pnl": 513899.86,
+      "commission": -4267.68,
+      "biggest_win": 157981.3,
+      "biggest_loss": -138528.7
+    },
+    {
+      "sym": "KE",
+      "name": "KC Wheat",
+      "net_total": 222100.79,
+      "trades": 354,
+      "winners": 99,
+      "losers": 255,
+      "win_rate": 0.28,
+      "gross_pnl": 253959.83,
+      "commission": -31859.04,
+      "biggest_win": 175987.46,
+      "biggest_loss": -97863.63
+    },
+    {
+      "sym": "HE",
+      "name": "Lean Hogs",
+      "net_total": 107462.33,
+      "trades": 217,
+      "winners": 87,
+      "losers": 130,
+      "win_rate": 0.401,
+      "gross_pnl": 110020.83,
+      "commission": -2558.5,
+      "biggest_win": 41765.14,
+      "biggest_loss": -28174.86
+    },
+    {
+      "sym": "ZW",
+      "name": "Wheat",
+      "net_total": 96314.04,
+      "trades": 57,
+      "winners": 12,
+      "losers": 45,
+      "win_rate": 0.211,
+      "gross_pnl": 98001.05,
+      "commission": -1687.01,
+      "biggest_win": 43393.6,
+      "biggest_loss": -18360.6
+    },
+    {
+      "sym": "SB",
+      "name": "Sugar",
+      "net_total": 93511.29,
+      "trades": 97,
+      "winners": 18,
+      "losers": 79,
+      "win_rate": 0.186,
+      "gross_pnl": 99862.68,
+      "commission": -6351.39,
+      "biggest_win": 82299.6,
+      "biggest_loss": -16164.72
+    },
+    {
+      "sym": "ZC",
+      "name": "Corn",
+      "net_total": 44919.34,
+      "trades": 206,
+      "winners": 47,
+      "losers": 159,
+      "win_rate": 0.228,
+      "gross_pnl": 56306.0,
+      "commission": -11386.66,
+      "biggest_win": 90070.5,
+      "biggest_loss": -56577.0
+    },
+    {
+      "sym": "GC",
+      "name": "Gold",
+      "net_total": 21921.06,
+      "trades": 102,
+      "winners": 23,
+      "losers": 79,
+      "win_rate": 0.225,
+      "gross_pnl": 23170.84,
+      "commission": -1249.78,
+      "biggest_win": 47598.21,
+      "biggest_loss": -42151.79
+    },
+    {
+      "sym": "HG",
+      "name": "HG",
+      "net_total": 21517.0,
+      "trades": 29,
+      "winners": 5,
+      "losers": 24,
+      "win_rate": 0.172,
+      "gross_pnl": 21699.78,
+      "commission": -182.78,
+      "biggest_win": 28311.08,
+      "biggest_loss": -8919.46
+    },
+    {
+      "sym": "WT",
+      "name": "WT",
+      "net_total": 20155.33,
+      "trades": 59,
+      "winners": 15,
+      "losers": 44,
+      "win_rate": 0.254,
+      "gross_pnl": 21535.66,
+      "commission": -1380.33,
+      "biggest_win": 70846.4,
+      "biggest_loss": -71558.96
+    },
+    {
+      "sym": "OJ",
+      "name": "Orange Juice",
+      "net_total": 12312.27,
+      "trades": 15,
+      "winners": 3,
+      "losers": 12,
+      "win_rate": 0.2,
+      "gross_pnl": 12379.75,
+      "commission": -67.48,
+      "biggest_win": 25282.84,
+      "biggest_loss": -9512.83
+    },
+    {
+      "sym": "CC",
+      "name": "Cocoa",
+      "net_total": 4967.91,
+      "trades": 27,
+      "winners": 6,
+      "losers": 21,
+      "win_rate": 0.222,
+      "gross_pnl": 5364.6,
+      "commission": -396.69,
+      "biggest_win": 14304.36,
+      "biggest_loss": -16879.48
+    },
+    {
+      "sym": "CT",
+      "name": "Cotton",
+      "net_total": 2547.4,
+      "trades": 14,
+      "winners": 3,
+      "losers": 11,
+      "win_rate": 0.214,
+      "gross_pnl": 2666.2,
+      "commission": -118.8,
+      "biggest_win": 2098.72,
+      "biggest_loss": -702.82
+    },
+    {
+      "sym": "CL",
+      "name": "Crude Oil",
+      "net_total": 702.29,
+      "trades": 69,
+      "winners": 12,
+      "losers": 57,
+      "win_rate": 0.174,
+      "gross_pnl": 2289.04,
+      "commission": -1586.75,
+      "biggest_win": 61167.57,
+      "biggest_loss": -63842.43
+    },
+    {
+      "sym": "MC",
+      "name": "MC",
+      "net_total": 156.6,
+      "trades": 4,
+      "winners": 1,
+      "losers": 3,
+      "win_rate": 0.25,
+      "gross_pnl": 166.3,
+      "commission": -9.7,
+      "biggest_win": 328.36,
+      "biggest_loss": -166.91
+    },
+    {
+      "sym": "JP",
+      "name": "JP",
+      "net_total": -73.39,
+      "trades": 4,
+      "winners": 0,
+      "losers": 4,
+      "win_rate": 0.0,
+      "gross_pnl": -58.57,
+      "commission": -14.82,
+      "biggest_win": 0,
+      "biggest_loss": -39.82
+    },
+    {
+      "sym": "ES",
+      "name": "ES",
+      "net_total": -1265.75,
+      "trades": 2,
+      "winners": 0,
+      "losers": 2,
+      "win_rate": 0.0,
+      "gross_pnl": -1259.0,
+      "commission": -6.75,
+      "biggest_win": 0,
+      "biggest_loss": -1263.5
+    },
+    {
+      "sym": "ZM",
+      "name": "Soy Meal",
+      "net_total": -13743.58,
+      "trades": 225,
+      "winners": 42,
+      "losers": 183,
+      "win_rate": 0.187,
+      "gross_pnl": 297.38,
+      "commission": -14040.96,
+      "biggest_win": 287263.79,
+      "biggest_loss": -247272.6
+    },
+    {
+      "sym": "NG",
+      "name": "Natural Gas",
+      "net_total": -24661.1,
+      "trades": 106,
+      "winners": 17,
+      "losers": 89,
+      "win_rate": 0.16,
+      "gross_pnl": -22594.44,
+      "commission": -2066.66,
+      "biggest_win": 15264.45,
+      "biggest_loss": -52527.75
+    },
+    {
+      "sym": "ZL",
+      "name": "Soy Oil",
+      "net_total": -78521.8,
+      "trades": 127,
+      "winners": 14,
+      "losers": 113,
+      "win_rate": 0.11,
+      "gross_pnl": -73895.57,
+      "commission": -4626.23,
+      "biggest_win": 177666.0,
+      "biggest_loss": -93336.0
+    },
+    {
+      "sym": "GF",
+      "name": "Feeder Cattle",
+      "net_total": -79877.96,
+      "trades": 76,
+      "winners": 13,
+      "losers": 63,
+      "win_rate": 0.171,
+      "gross_pnl": -78489.06,
+      "commission": -1388.9,
+      "biggest_win": 108554.24,
+      "biggest_loss": -101339.1
+    },
+    {
+      "sym": "LE",
+      "name": "Live Cattle",
+      "net_total": -88390.51,
+      "trades": 59,
+      "winners": 14,
+      "losers": 45,
+      "win_rate": 0.237,
+      "gross_pnl": -87167.8,
+      "commission": -1222.71,
+      "biggest_win": 58590.96,
+      "biggest_loss": -47979.72
+    },
+    {
+      "sym": "KC",
+      "name": "Coffee",
+      "net_total": -180013.46,
+      "trades": 60,
+      "winners": 11,
+      "losers": 49,
+      "win_rate": 0.183,
+      "gross_pnl": -178217.68,
+      "commission": -1795.78,
+      "biggest_win": 128724.72,
+      "biggest_loss": -235757.62
+    },
+    {
+      "sym": "ZS",
+      "name": "Soybeans",
+      "net_total": -180752.96,
+      "trades": 182,
+      "winners": 40,
+      "losers": 139,
+      "win_rate": 0.223,
+      "gross_pnl": -172825.56,
+      "commission": -7927.4,
+      "biggest_win": 147276.15,
+      "biggest_loss": -126480.1
+    }
+  ],
+  "worst_positions": [
+    {
+      "sym": "ZL Q5",
+      "net_total": -353250.48,
+      "pnl_gross": -351946.74,
+      "commissions": -1303.74,
+      "trades": 19,
+      "year": "2025",
+      "structure": "FUT SELL=195 BUY=240",
+      "lesson": "Spread ZL Q5: net $-353,250 com 19 trades"
+    },
+    {
+      "sym": "SI JUN24",
+      "net_total": -319790.04,
+      "pnl_gross": -319072.4,
+      "commissions": -717.64,
+      "trades": 26,
+      "year": "2024",
+      "structure": "SELL C=0 BUY C=0 | SELL P=145 BUY P=147",
+      "lesson": "Spread SI JUN24: net $-319,790 com 26 trades"
+    },
+    {
+      "sym": "ZS K4",
+      "net_total": -223369.09,
+      "pnl_gross": -222792.93,
+      "commissions": -576.16,
+      "trades": 6,
+      "year": "2024",
+      "structure": "FUT SELL=208 BUY=208",
+      "lesson": "Spread ZS K4: net $-223,369 com 6 trades"
+    },
+    {
+      "sym": "KC K5",
+      "net_total": -157380.09,
+      "pnl_gross": -156524.82,
+      "commissions": -855.27,
+      "trades": 26,
+      "year": "2025",
+      "structure": "FUT SELL=138 BUY=153",
+      "lesson": "Spread KC K5: net $-157,380 com 26 trades"
+    },
+    {
+      "sym": "KE NOV25",
+      "net_total": -147526.39,
+      "pnl_gross": -142285.07,
+      "commissions": -5241.32,
+      "trades": 24,
+      "year": "2025",
+      "structure": "SELL C=0 BUY C=0 | SELL P=906 BUY P=906",
+      "lesson": "Spread KE NOV25: net $-147,526 com 24 trades"
+    },
+    {
+      "sym": "ZS JUN24",
+      "net_total": -128394.0,
+      "pnl_gross": -126153.4,
+      "commissions": -2240.6,
+      "trades": 16,
+      "year": "2024",
+      "structure": "SELL C=0 BUY C=0 | SELL P=410 BUY P=350",
+      "lesson": "Spread ZS JUN24: net $-128,394 com 16 trades"
+    },
+    {
+      "sym": "GF U5",
+      "net_total": -115325.2,
+      "pnl_gross": -115087.6,
+      "commissions": -237.6,
+      "trades": 12,
+      "year": "2025",
+      "structure": "FUT SELL=40 BUY=40",
+      "lesson": "Spread GF U5: net $-115,325 com 12 trades"
+    },
+    {
+      "sym": "LE Z5",
+      "net_total": -102878.52,
+      "pnl_gross": -102509.5,
+      "commissions": -369.02,
+      "trades": 18,
+      "year": "2025",
+      "structure": "FUT SELL=51 BUY=75",
+      "lesson": "Spread LE Z5: net $-102,879 com 18 trades"
+    },
+    {
+      "sym": "ZM AUG25",
+      "net_total": -66552.45,
+      "pnl_gross": -64117.7,
+      "commissions": -2434.75,
+      "trades": 19,
+      "year": "2025",
+      "structure": "SELL C=0 BUY C=0 | SELL P=435 BUY P=420",
+      "lesson": "Spread ZM AUG25: net $-66,552 com 19 trades"
+    },
+    {
+      "sym": "KE JAN26",
+      "net_total": -63185.14,
+      "pnl_gross": -57993.65,
+      "commissions": -5191.49,
+      "trades": 33,
+      "year": "2025",
+      "structure": "SELL C=0 BUY C=0 | SELL P=874 BUY P=915",
+      "lesson": "Spread KE JAN26: net $-63,185 com 33 trades"
+    },
+    {
+      "sym": "GC JUL24",
+      "net_total": -62032.98,
+      "pnl_gross": -61662.84,
+      "commissions": -370.14,
+      "trades": 11,
+      "year": "2024",
+      "structure": "SELL C=0 BUY C=0 | SELL P=86 BUY P=76",
+      "lesson": "Spread GC JUL24: net $-62,033 com 11 trades"
+    },
+    {
+      "sym": "ZM SEP25",
+      "net_total": -61893.77,
+      "pnl_gross": -58902.34,
+      "commissions": -2991.43,
+      "trades": 26,
+      "year": "2025",
+      "structure": "SELL C=0 BUY C=0 | SELL P=532 BUY P=531",
+      "lesson": "Spread ZM SEP25: net $-61,894 com 26 trades"
+    },
+    {
+      "sym": "ZL V5",
+      "net_total": -57555.0,
+      "pnl_gross": -57390.0,
+      "commissions": -165.0,
+      "trades": 4,
+      "year": "2025",
+      "structure": "FUT SELL=25 BUY=30",
+      "lesson": "Spread ZL V5: net $-57,555 com 4 trades"
+    },
+    {
+      "sym": "NG AUG24",
+      "net_total": -52865.04,
+      "pnl_gross": -52637.52,
+      "commissions": -227.52,
+      "trades": 20,
+      "year": "2024",
+      "structure": "SELL C=0 BUY C=0 | SELL P=48 BUY P=48",
+      "lesson": "Spread NG AUG24: net $-52,865 com 20 trades"
+    },
+    {
+      "sym": "SI AUG22",
+      "net_total": -47681.36,
+      "pnl_gross": -47648.18,
+      "commissions": -33.18,
+      "trades": 6,
+      "year": "2022",
+      "structure": "SELL C=0 BUY C=0 | SELL P=7 BUY P=7",
+      "lesson": "Spread SI AUG22: net $-47,681 com 6 trades"
+    }
+  ],
+  "methodology_note": "worst_positions agrupado por underlying+vencimento (spread completo, nao perna individual). net_total = soma de todas as opcoes abertas e fechadas no mesmo contrato.",
+  "validated_rules": [
+    {
+      "id": "R01",
+      "rule": "NUNCA vender opcao sem checar a curva forward primeiro",
+      "reason": "Backwardation forte = mercado em stress = risco de squeeze. Perdi $8K em NG ignorando isso.",
+      "severity": "HARD_STOP"
+    },
+    {
+      "id": "R02",
+      "rule": "IV Rank < 25% = NAO vender premium. Esperar.",
+      "reason": "Premium coletado e muito baixo vs risco. Theta nao compensa gamma risk em IV baixa.",
+      "severity": "HARD_STOP"
+    },
+    {
+      "id": "R03",
+      "rule": "WASDE day = fechar ou reduzir posicao em graos 24h antes",
+      "reason": "WASDE pode mover ZS/ZC 5-8% em minutos. Nao vale o theta de 1 dia extra.",
+      "severity": "HARD_STOP"
+    },
+    {
+      "id": "R04",
+      "rule": "COT index > 90 OU < 10 = trade with the reversal, nao contra",
+      "reason": "Extremos de posicionamento antecipam reversoes em 2-4 semanas. Edge estatistico comprovado.",
+      "severity": "STRONG"
+    },
+    {
+      "id": "R05",
+      "rule": "Sazonalidade so vale se confirmada por pelo menos 1 outro fator",
+      "reason": "Sazonalidade sozinha tem win rate de ~55%. Com COT ou IV confirming, sobe para 70%+.",
+      "severity": "STRONG"
+    },
+    {
+      "id": "R06",
+      "rule": "Max loss por trade = 2x credito recebido. Stop mecanico.",
+      "reason": "Sem stop, um trade ruim pode apagar 5 trades bons. Disciplina > otimismo.",
+      "severity": "HARD_STOP"
+    },
+    {
+      "id": "R07",
+      "rule": "Nao adicionar a posicao perdedora. Nunca.",
+      "reason": "Averaging down em opcoes vendidas aumenta risco exponencialmente. Aprendi com CL em Jan/25.",
+      "severity": "HARD_STOP"
+    },
+    {
+      "id": "R08",
+      "rule": "Fechar a 50% do max profit. Nao esperar expiracao.",
+      "reason": "Ultimos 20% do profit levam 80% do tempo. Capital rotation > max extraction.",
+      "severity": "STRONG"
+    },
+    {
+      "id": "R09",
+      "rule": "DTE < 21 com profit < 25% = fechar e rolar",
+      "reason": "Gamma risk acelera nos ultimos 21 dias. Theta nao compensa o risco de assignment.",
+      "severity": "MODERATE"
+    },
+    {
+      "id": "R10",
+      "rule": "Skew > +15% = mercado precificando tail risk em puts. Considerar como warning.",
+      "reason": "Skew extremo indica smart money comprando protecao. Nao ignorar.",
+      "severity": "MODERATE"
+    },
+    {
+      "id": "R11",
+      "rule": "Nao operar mais de 3 underlyings correlacionados simultaneamente",
+      "reason": "ZS+ZC+ZM sao essencialmente a mesma posicao. Diversificacao real = setores diferentes.",
+      "severity": "STRONG"
+    },
+    {
+      "id": "R12",
+      "rule": "Sexta-feira pos 14h ET = nao abrir posicao nova. Risco de gap no domingo.",
+      "reason": "Weekend risk nao tem theta. Qualquer geopolitica pode abrir gap de 3-5%.",
+      "severity": "MODERATE"
+    }
+  ],
+  "seasonality_edge": {
+    "description": "Padroes sazonais validados com > 65% de acerto nos ultimos 5 anos",
+    "patterns": [
+      {
+        "months": [
+          5,
+          6
+        ],
+        "sym": "NG",
+        "direction": "sell_calls",
+        "reason": "Injection season = preco cai. IV alta do inverno ainda nao normalizou."
+      },
+      {
+        "months": [
+          9,
+          10
+        ],
+        "sym": "NG",
+        "direction": "sell_puts",
+        "reason": "Pre-withdrawal season = suporte forte. IV sobe = premium gordo."
+      },
+      {
+        "months": [
+          2,
+          3
+        ],
+        "sym": "ZS",
+        "direction": "sell_puts",
+        "reason": "Pre-planting. Mercado precifica risco de plantio mas raramente materializa."
+      },
+      {
+        "months": [
+          6,
+          7
+        ],
+        "sym": "ZS",
+        "direction": "sell_calls",
+        "reason": "Weather premium peak. IV maxima do ano = melhor momento para vender."
+      },
+      {
+        "months": [
+          4,
+          5
+        ],
+        "sym": "LE",
+        "direction": "sell_puts",
+        "reason": "Pre-grilling season. Demanda forte de memorial day sustenta preco."
+      },
+      {
+        "months": [
+          10,
+          11
+        ],
+        "sym": "LE",
+        "direction": "sell_calls",
+        "reason": "Pos-grilling, oferta sazonal alta. Preco tende a cair."
+      },
+      {
+        "months": [
+          11,
+          12
+        ],
+        "sym": "KC",
+        "direction": "sell_puts",
+        "reason": "Safra BR entrando. Oferta abundante = preco pressionado."
+      },
+      {
+        "months": [
+          7,
+          8
+        ],
+        "sym": "CL",
+        "direction": "sell_strangles",
+        "reason": "Driving season peak. Range-bound historicamente. IV alta = strangle ideal."
+      }
+    ]
+  },
+  "entry_scoring": {
+    "description": "Sistema de scoring para decidir se uma entrada vale a pena. Cada filtro tem peso. Score minimo = 8/14 para trade. Curva forward e ABSOLUTA (mandatory).",
+    "filters": [
+      {
+        "name": "IV Rank > 50%",
+        "weight": 3,
+        "mandatory": false
+      },
+      {
+        "name": "Curva forward favoravel (sem backwardation forte)",
+        "weight": 0,
+        "mandatory": true
+      },
+      {
+        "name": "Sazonalidade alinhada",
+        "weight": 2,
+        "mandatory": false
+      },
+      {
+        "name": "COT nao extremo contra",
+        "weight": 2,
+        "mandatory": false
+      },
+      {
+        "name": "Fundamental IA validado",
+        "weight": 2,
+        "mandatory": false
+      },
+      {
+        "name": "MA50/200 suporte proximo",
+        "weight": 1,
+        "mandatory": false
+      },
+      {
+        "name": "EMA9 virando",
+        "weight": 1,
+        "mandatory": false
+      },
+      {
+        "name": "Underlying no historico positivo",
+        "weight": 1,
+        "mandatory": false
+      }
+    ],
+    "min_score_to_trade": 8,
+    "max_score": 14,
+    "note": "Nao e necessario 100% de confluencia \u00e2\u20ac\u201d e raro. Mas curva e ABSOLUTA."
+  },
+  "hard_stops": [
+    "Futuros direcionais sem estrutura de opcoes",
+    "Rolagem sem credito liquido",
+    "Ignorar estrutura da curva de futuros"
+  ],
+  "scored_entries": {
+    "generated_at": "2026-04-14T15:36:58.427421",
+    "total_spreads_scored": 197,
+    "total_violations": 180,
+    "violation_summary": {
+      "R11": 95,
+      "R07": 33,
+      "R12": 30,
+      "R03": 20,
+      "R06": 2
+    },
+    "best_5": [
+      {
+        "sym": "SI MAY24",
+        "net": 399756.14,
+        "trades": 19,
+        "year": "2024",
+        "score": 1,
+        "violations": [],
+        "structure": "SELL P=133 BUY P=135"
+      },
+      {
+        "sym": "KE DEC25",
+        "net": 233162.07,
+        "trades": 86,
+        "year": "2025",
+        "score": 1,
+        "violations": [
+          "R03",
+          "R11"
+        ],
+        "structure": "SELL P=1274 BUY P=1280"
+      },
+      {
+        "sym": "KE FEB26",
+        "net": 194963.91,
+        "trades": 25,
+        "year": "2026",
+        "score": 1,
+        "violations": [
+          "R03",
+          "R12"
+        ],
+        "structure": "SELL P=1077 BUY P=1077"
+      },
+      {
+        "sym": "ZL U5",
+        "net": 177510.0,
+        "trades": 7,
+        "year": "2025",
+        "score": 0,
+        "violations": [
+          "R03",
+          "R11"
+        ],
+        "structure": "FUT"
+      },
+      {
+        "sym": "ZM OCT25",
+        "net": 145366.72,
+        "trades": 30,
+        "year": "2025",
+        "score": 0,
+        "violations": [
+          "R11"
+        ],
+        "structure": "SELL C=5 BUY C=5 | SELL P=547 BUY P=547"
+      }
+    ],
+    "worst_5": [
+      {
+        "sym": "ZL Q5",
+        "net": -353250.48,
+        "trades": 19,
+        "year": "2025",
+        "score": 0,
+        "violations": [
+          "R03",
+          "R07",
+          "R11",
+          "R12"
+        ],
+        "violation_details": [
+          "[HARD_STOP] R03: Entry 2025-01-10 within WASDE window for ZL",
+          "[HARD_STOP] R07: 19 trades on losing spread (possible re-entries after stop)",
+          "[STRONG] R11: Correlated losses in grains: ZL + ZM",
+          "[MODERATE] R12: Entry on Friday (2025-01-10)"
+        ],
+        "structure": "FUT"
+      },
+      {
+        "sym": "SI JUN24",
+        "net": -319790.04,
+        "trades": 26,
+        "year": "2024",
+        "score": 1,
+        "violations": [
+          "R06",
+          "R07"
+        ],
+        "violation_details": [
+          "[HARD_STOP] R06: Loss $319,790 > 2x biggest_win $157,981",
+          "[HARD_STOP] R07: 26 trades on losing spread (possible re-entries after stop)"
+        ],
+        "structure": "SELL P=145 BUY P=147"
+      },
+      {
+        "sym": "ZS K4",
+        "net": -223369.09,
+        "trades": 6,
+        "year": "2024",
+        "score": 0,
+        "violations": [
+          "R11"
+        ],
+        "violation_details": [
+          "[STRONG] R11: Correlated losses in grains: ZS + ZL, ZC, ZM"
+        ],
+        "structure": "FUT"
+      },
+      {
+        "sym": "KC K5",
+        "net": -157380.09,
+        "trades": 26,
+        "year": "2025",
+        "score": 0,
+        "violations": [
+          "R07",
+          "R11",
+          "R12"
+        ],
+        "violation_details": [
+          "[HARD_STOP] R07: 26 trades on losing spread (possible re-entries after stop)",
+          "[STRONG] R11: Correlated losses in softs: KC + SB, CC",
+          "[MODERATE] R12: Entry on Friday (2024-11-22)"
+        ],
+        "structure": "FUT"
+      },
+      {
+        "sym": "KE NOV25",
+        "net": -147526.39,
+        "trades": 24,
+        "year": "2025",
+        "score": 1,
+        "violations": [
+          "R07",
+          "R11"
+        ],
+        "violation_details": [
+          "[HARD_STOP] R07: 24 trades on losing spread (possible re-entries after stop)",
+          "[STRONG] R11: Correlated losses in grains: KE + ZL, ZM"
+        ],
+        "structure": "SELL P=906 BUY P=906"
+      }
+    ]
+  }
+}

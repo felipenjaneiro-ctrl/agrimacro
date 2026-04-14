@@ -284,24 +284,44 @@ def collect_ibkr_data(client_id=10):
         except Exception as e:
             print(f"    {sym}: error - {e}")
 
-    # === 2. Get market data for front months ===
-    print("  [2/4] Fetching market data...")
+    # === 2. Get 5Y historical data via continuous futures ===
+    # ContFut gives a seamless price series across contract rollovers.
+    # This provides the multi-year data needed for seasonality analysis.
+    print("  [2/4] Fetching 5Y market data (continuous futures)...")
     prices_result = {}
-    for sym, details_list in all_contracts.items():
-        if not details_list:
-            continue
-        # Sort by expiry, take front month
-        sorted_details = sorted(details_list, key=lambda d: d.contract.lastTradeDateOrContractMonth)
-        # Filter only contracts not yet expired
-        now_str = datetime.now().strftime('%Y%m%d')
-        active = [d for d in sorted_details if d.contract.lastTradeDateOrContractMonth >= now_str]
-        if not active:
-            active = sorted_details[-3:]
-
-        front = active[0].contract
+    for sym, spec in COMMODITIES.items():
         try:
+            # Build continuous futures contract
+            contfut = ContFuture(symbol=spec['symbol'], exchange=spec['exchange'])
+            qualified = ib.qualifyContracts(contfut)
+            if not qualified:
+                # Fallback: use front month with 1Y
+                if sym in all_contracts and all_contracts[sym]:
+                    sorted_d = sorted(all_contracts[sym], key=lambda d: d.contract.lastTradeDateOrContractMonth)
+                    now_str = datetime.now().strftime('%Y%m%d')
+                    active = [d for d in sorted_d if d.contract.lastTradeDateOrContractMonth >= now_str]
+                    if not active:
+                        active = sorted_d[-3:]
+                    front = active[0].contract
+                    bars = ib.reqHistoricalData(
+                        front, endDateTime='', durationStr='1 Y',
+                        barSizeSetting='1 day', whatToShow='TRADES',
+                        useRTH=True, formatDate=1
+                    )
+                    if bars:
+                        prices_result[sym] = [{
+                            "date": str(b.date),
+                            "open": b.open, "high": b.high,
+                            "low": b.low, "close": b.close,
+                            "volume": int(b.volume)
+                        } for b in bars]
+                        print(f"    {sym} front fallback: {len(bars)} bars")
+                    ib.sleep(0.5)
+                continue
+
+            # Request 5 years of daily data
             bars = ib.reqHistoricalData(
-                front, endDateTime='', durationStr='1 Y',
+                qualified[0], endDateTime='', durationStr='5 Y',
                 barSizeSetting='1 day', whatToShow='TRADES',
                 useRTH=True, formatDate=1
             )
@@ -312,10 +332,29 @@ def collect_ibkr_data(client_id=10):
                     "low": b.low, "close": b.close,
                     "volume": int(b.volume)
                 } for b in bars]
-                print(f"    {sym} front ({front.localSymbol}): {len(bars)} bars")
+                print(f"    {sym} contfut: {len(bars)} bars ({str(bars[0].date)} -> {str(bars[-1].date)})")
             else:
-                print(f"    {sym}: no historical data")
-            ib.sleep(0.5)
+                print(f"    {sym}: no continuous data, trying front month...")
+                # Fallback to front month with 1Y
+                if sym in all_contracts and all_contracts[sym]:
+                    sorted_d = sorted(all_contracts[sym], key=lambda d: d.contract.lastTradeDateOrContractMonth)
+                    now_str = datetime.now().strftime('%Y%m%d')
+                    active = [d for d in sorted_d if d.contract.lastTradeDateOrContractMonth >= now_str]
+                    if active:
+                        fb = ib.reqHistoricalData(
+                            active[0].contract, endDateTime='', durationStr='1 Y',
+                            barSizeSetting='1 day', whatToShow='TRADES',
+                            useRTH=True, formatDate=1
+                        )
+                        if fb:
+                            prices_result[sym] = [{
+                                "date": str(b.date),
+                                "open": b.open, "high": b.high,
+                                "low": b.low, "close": b.close,
+                                "volume": int(b.volume)
+                            } for b in fb]
+                            print(f"    {sym} front fallback: {len(fb)} bars")
+            ib.sleep(1)  # Longer sleep for 5Y requests (IBKR rate limit)
         except Exception as e:
             print(f"    {sym}: historical error - {e}")
 

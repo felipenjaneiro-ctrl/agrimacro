@@ -36,7 +36,7 @@ def main():
     reports_path.mkdir(parents=True, exist_ok=True)
 
     results = {}
-    total_steps = 31
+    total_steps = 34
 
     # =========================================================
     # CORE STEPS (1-10)
@@ -307,6 +307,36 @@ def main():
         results["crop_progress"] = {"status": "WARN", "error": str(e)}
         log(f"Crop progress failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 20b/{total_steps}: Collecting export activity...")
+    try:
+        from collect_export_activity import main as collect_export_activity
+        collect_export_activity()
+        results["export_activity"] = {"status": "OK"}
+        log("Export activity collected", "OK")
+    except BaseException as e:
+        results["export_activity"] = {"status": "WARN", "error": str(e)}
+        log(f"Export activity failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 20c/{total_steps}: Collecting drought monitor...")
+    try:
+        from collect_drought_monitor import main as collect_drought_monitor
+        collect_drought_monitor()
+        results["drought_monitor"] = {"status": "OK"}
+        log("Drought monitor collected", "OK")
+    except BaseException as e:
+        results["drought_monitor"] = {"status": "WARN", "error": str(e)}
+        log(f"Drought monitor failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 20d/{total_steps}: Collecting fertilizer prices...")
+    try:
+        from collect_fertilizer import main as collect_fertilizer
+        collect_fertilizer()
+        results["fertilizer"] = {"status": "OK"}
+        log("Fertilizer prices collected", "OK")
+    except BaseException as e:
+        results["fertilizer"] = {"status": "WARN", "error": str(e)}
+        log(f"Fertilizer prices failed (non-blocking): {e}", "WARN")
+
     log(f"Step 21/{total_steps}: Collecting macro indicators (S&P500, VIX, 10Y)...")
     try:
         from collect_macro_indicators import main as collect_macro
@@ -402,15 +432,25 @@ def main():
         results["intel_synthesis"] = {"status": "WARN", "error": str(e)}
         log(f"Intel synthesis failed (non-blocking): {e}", "WARN")
 
-    log(f"Step 29/{total_steps}: Generating PDF report...")
+    log(f"Step 28b/{total_steps}: Running intelligence engine (daily frame)...")
     try:
-        from generate_report_pdf import build_pdf
-        build_pdf()
+        from intelligence_engine import main as run_intelligence_engine
+        run_intelligence_engine()
+        results["intelligence_frame"] = {"status": "OK"}
+        log("Intelligence frame generated", "OK")
+    except BaseException as e:
+        results["intelligence_frame"] = {"status": "WARN", "error": str(e)}
+        log(f"Intelligence engine failed (non-blocking): {e}", "WARN")
+
+    log(f"Step 29/{total_steps}: Generating PDF report (v4 with Options Intelligence)...")
+    try:
+        from patch_report_v4 import build_pdf_v4
+        build_pdf_v4()
         results["pdf"] = {"status": "OK"}
-        log("PDF report generated", "OK")
+        log("PDF v4 report generated (with Options Intelligence + Track Record)", "OK")
     except Exception as e:
-        results["pdf"] = {"status": "ERROR", "error": str(e)}
-        log(f"PDF generation failed: {e}", "ERR")
+        results["pdf"] = {"status": "WARN", "error": str(e)}
+        log(f"PDF v4 generation failed (non-blocking): {e}", "WARN")
 
     log(f"Step 30/{total_steps}: Generating video script...")
     try:

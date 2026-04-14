@@ -1,0 +1,446 @@
+{
+  "generated_at": "2026-04-14T15:49:51.305068",
+  "total_cycles": 183,
+  "total_trades": 2720,
+  "roll_distribution": {
+    "0": 142,
+    "1": 38,
+    "2-3": 3,
+    "4+": 0
+  },
+  "duration_by_rolls": {
+    "0": {
+      "count": 142,
+      "avg_duration": 42.4,
+      "avg_net": 7138.34,
+      "total_net": 1013643.89,
+      "win_rate": 67.6
+    },
+    "1": {
+      "count": 38,
+      "avg_duration": 37.1,
+      "avg_net": -11890.26,
+      "total_net": -451829.92,
+      "win_rate": 34.2
+    },
+    "2-3": {
+      "count": 3,
+      "avg_duration": 59.7,
+      "avg_net": -24431.32,
+      "total_net": -73293.95,
+      "win_rate": 33.3
+    }
+  },
+  "by_underlying": {
+    "CC": {
+      "name": "Cocoa",
+      "total_cycles": 5,
+      "no_roll": 5,
+      "one_roll": 0,
+      "multi_roll": 0,
+      "total_net": 4947.32,
+      "clean_net": 4947.32,
+      "rolled_net": 0,
+      "avg_duration_days": 18.2,
+      "clean_pct": 100.0
+    },
+    "CL": {
+      "name": "Crude Oil",
+      "total_cycles": 5,
+      "no_roll": 4,
+      "one_roll": 1,
+      "multi_roll": 0,
+      "total_net": 678.59,
+      "clean_net": 22146.59,
+      "rolled_net": -21468.0,
+      "avg_duration_days": 8.0,
+      "clean_pct": 80.0
+    },
+    "CT": {
+      "name": "Cotton",
+      "total_cycles": 1,
+      "no_roll": 1,
+      "one_roll": 0,
+      "multi_roll": 0,
+      "total_net": 2547.4,
+      "clean_net": 2547.4,
+      "rolled_net": 0,
+      "avg_duration_days": 18.0,
+      "clean_pct": 100.0
+    },
+    "GC": {
+      "name": "Gold",
+      "total_cycles": 9,
+      "no_roll": 6,
+      "one_roll": 3,
+      "multi_roll": 0,
+      "total_net": 21841.68,
+      "clean_net": 20122.08,
+      "rolled_net": 1719.6,
+      "avg_duration_days": 12.4,
+      "clean_pct": 66.7
+    },
+    "GF": {
+      "name": "Feeder Cattle",
+      "total_cycles": 9,
+      "no_roll": 6,
+      "one_roll": 3,
+      "multi_roll": 0,
+      "total_net": -79907.66,
+      "clean_net": -74815.02,
+      "rolled_net": -5092.64,
+      "avg_duration_days": 33.8,
+      "clean_pct": 66.7
+    },
+    "HE": {
+      "name": "Lean Hogs",
+      "total_cycles": 6,
+      "no_roll": 5,
+      "one_roll": 1,
+      "multi_roll": 0,
+      "total_net": 123577.54,
+      "clean_net": 103182.18,
+      "rolled_net": 20395.36,
+      "avg_duration_days": 112.0,
+      "clean_pct": 83.3
+    },
+    "KC": {
+      "name": "Coffee",
+      "total_cycles": 5,
+      "no_roll": 5,
+      "one_roll": 0,
+      "multi_roll": 0,
+      "total_net": -180072.86,
+      "clean_net": -180072.86,
+      "rolled_net": 0,
+      "avg_duration_days": 59.6,
+      "clean_pct": 100.0
+    },
+    "KE": {
+      "name": "KC Wheat",
+      "total_cycles": 15,
+      "no_roll": 13,
+      "one_roll": 1,
+      "multi_roll": 1,
+      "total_net": 224962.46,
+      "clean_net": 418423.99,
+      "rolled_net": -193461.53,
+      "avg_duration_days": 51.5,
+      "clean_pct": 86.7
+    },
+    "LE": {
+      "name": "Live Cattle",
+      "total_cycles": 8,
+      "no_roll": 5,
+      "one_roll": 3,
+      "multi_roll": 0,
+      "total_net": -88555.6,
+      "clean_net": -72032.72,
+      "rolled_net": -16522.88,
+      "avg_duration_days": 33.1,
+      "clean_pct": 62.5
+    },
+    "NG": {
+      "name": "Natural Gas",
+      "total_cycles": 8,
+      "no_roll": 7,
+      "one_roll": 1,
+      "multi_roll": 0,
+      "total_net": -24738.88,
+      "clean_net": 28126.16,
+      "rolled_net": -52865.04,
+      "avg_duration_days": 43.5,
+      "clean_pct": 87.5
+    },
+    "OJ": {
+      "name": "Orange Juice",
+      "total_cycles": 3,
+      "no_roll": 2,
+      "one_roll": 1,
+      "multi_roll": 0,
+      "total_net": 12309.5,
+      "clean_net": 30597.86,
+      "rolled_net": -18288.36,
+      "avg_duration_days": 22.3,
+      "clean_pct": 66.7
+    },
+    "SB": {
+      "name": "Sugar",
+      "total_cycles": 11,
+      "no_roll": 8,
+      "one_roll": 2,
+      "multi_roll": 1,
+      "total_net": 93246.96,
+      "clean_net": 131794.16,
+      "rolled_net": -38547.2,
+      "avg_duration_days": 51.0,
+      "clean_pct": 72.7
+    },
+    "SI": {
+      "name": "Silver",
+      "total_cycles": 32,
+      "no_roll": 22,
+      "one_roll": 9,
+      "multi_roll": 1,
+      "total_net": 512219.24,
+      "clean_net": 447627.44,
+      "rolled_net": 64591.8,
+      "avg_duration_days": 41.1,
+      "clean_pct": 68.8
+    },
+    "ZC": {
+      "name": "Corn",
+      "total_cycles": 14,
+      "no_roll": 12,
+      "one_roll": 2,
+      "multi_roll": 0,
+      "total_net": 44362.0,
+      "clean_net": 59571.89,
+      "rolled_net": -15209.89,
+      "avg_duration_days": 45.1,
+      "clean_pct": 85.7
+    },
+    "ZL": {
+      "name": "Soy Oil",
+      "total_cycles": 11,
+      "no_roll": 11,
+      "one_roll": 0,
+      "multi_roll": 0,
+      "total_net": -78947.62,
+      "clean_net": -78947.62,
+      "rolled_net": 0,
+      "avg_duration_days": 42.3,
+      "clean_pct": 100.0
+    },
+    "ZM": {
+      "name": "Soy Meal",
+      "total_cycles": 16,
+      "no_roll": 11,
+      "one_roll": 5,
+      "multi_roll": 0,
+      "total_net": -14570.24,
+      "clean_net": 103101.12,
+      "rolled_net": -117671.36,
+      "avg_duration_days": 53.1,
+      "clean_pct": 68.8
+    },
+    "ZS": {
+      "name": "Soybeans",
+      "total_cycles": 19,
+      "no_roll": 13,
+      "one_roll": 6,
+      "multi_roll": 0,
+      "total_net": -181232.37,
+      "clean_net": -48528.64,
+      "rolled_net": -132703.73,
+      "avg_duration_days": 31.6,
+      "clean_pct": 68.4
+    },
+    "ZW": {
+      "name": "Wheat",
+      "total_cycles": 6,
+      "no_roll": 6,
+      "one_roll": 0,
+      "multi_roll": 0,
+      "total_net": 95852.56,
+      "clean_net": 95852.56,
+      "rolled_net": 0,
+      "avg_duration_days": 33.3,
+      "clean_pct": 100.0
+    }
+  },
+  "by_entry_month": {
+    "Jan": {
+      "total_cycles": 18,
+      "no_roll": 14,
+      "clean_pct": 77.8,
+      "total_net": -234926.39,
+      "clean_net": -188730.22
+    },
+    "Feb": {
+      "total_cycles": 18,
+      "no_roll": 14,
+      "clean_pct": 77.8,
+      "total_net": 617748.63,
+      "clean_net": 638191.51
+    },
+    "Mar": {
+      "total_cycles": 10,
+      "no_roll": 6,
+      "clean_pct": 60.0,
+      "total_net": -480352.87,
+      "clean_net": -330315.47
+    },
+    "Apr": {
+      "total_cycles": 17,
+      "no_roll": 16,
+      "clean_pct": 94.1,
+      "total_net": -114382.43,
+      "clean_net": -104522.43
+    },
+    "May": {
+      "total_cycles": 20,
+      "no_roll": 18,
+      "clean_pct": 90.0,
+      "total_net": 10912.74,
+      "clean_net": 123948.28
+    },
+    "Jun": {
+      "total_cycles": 22,
+      "no_roll": 14,
+      "clean_pct": 63.6,
+      "total_net": -142273.62,
+      "clean_net": -10054.55
+    },
+    "Jul": {
+      "total_cycles": 16,
+      "no_roll": 12,
+      "clean_pct": 75.0,
+      "total_net": 123433.78,
+      "clean_net": 149000.1
+    },
+    "Aug": {
+      "total_cycles": 18,
+      "no_roll": 15,
+      "clean_pct": 83.3,
+      "total_net": -8058.31,
+      "clean_net": 143843.72
+    },
+    "Sep": {
+      "total_cycles": 8,
+      "no_roll": 7,
+      "clean_pct": 87.5,
+      "total_net": 104891.67,
+      "clean_net": 108025.09
+    },
+    "Oct": {
+      "total_cycles": 14,
+      "no_roll": 11,
+      "clean_pct": 78.6,
+      "total_net": 447541.28,
+      "clean_net": 357971.0
+    },
+    "Nov": {
+      "total_cycles": 14,
+      "no_roll": 11,
+      "clean_pct": 78.6,
+      "total_net": 83247.85,
+      "clean_net": 54459.13
+    },
+    "Dec": {
+      "total_cycles": 8,
+      "no_roll": 4,
+      "clean_pct": 50.0,
+      "total_net": 80737.69,
+      "clean_net": 71827.73
+    }
+  },
+  "worst_rolled": [
+    {
+      "key": "KE NOV25",
+      "net": -147526.39,
+      "rolls": 2,
+      "trades": 24,
+      "duration": 71,
+      "structure": "P: sell=906 buy=906"
+    },
+    {
+      "key": "SB OCT25",
+      "net": -10581.2,
+      "rolls": 2,
+      "trades": 12,
+      "duration": 71,
+      "structure": "P: sell=150 buy=150"
+    },
+    {
+      "key": "SI DEC22",
+      "net": 84813.64,
+      "rolls": 2,
+      "trades": 6,
+      "duration": 37,
+      "structure": "C: sell=1 buy=1 | P: sell=6 buy=6"
+    }
+  ],
+  "best_clean": [
+    {
+      "key": "SI MAY24",
+      "net": 399751.2,
+      "trades": 21,
+      "duration": 48,
+      "structure": "P: sell=135 buy=135",
+      "entry": "2024-02-20"
+    },
+    {
+      "key": "KE DEC25",
+      "net": 236520.17,
+      "trades": 96,
+      "duration": 42,
+      "structure": "P: sell=1292 buy=1292",
+      "entry": "2025-10-08"
+    },
+    {
+      "key": "KE FEB26",
+      "net": 194795.31,
+      "trades": 27,
+      "duration": 70,
+      "structure": "P: sell=1107 buy=1107",
+      "entry": "2025-11-14"
+    },
+    {
+      "key": "ZL U5",
+      "net": 177468.0,
+      "trades": 9,
+      "duration": 29,
+      "structure": "FUT SELL=70 BUY=70",
+      "entry": "2025-02-10"
+    },
+    {
+      "key": "ZM OCT25",
+      "net": 145366.72,
+      "trades": 30,
+      "duration": 86,
+      "structure": "C: sell=5 buy=5 | P: sell=547 buy=547",
+      "entry": "2025-05-19"
+    },
+    {
+      "key": "ZL N5",
+      "net": 130917.6,
+      "trades": 16,
+      "duration": 70,
+      "structure": "FUT SELL=80 BUY=80",
+      "entry": "2024-10-07"
+    },
+    {
+      "key": "SB N5",
+      "net": 125227.2,
+      "trades": 14,
+      "duration": 150,
+      "structure": "FUT SELL=220 BUY=220",
+      "entry": "2024-09-13"
+    },
+    {
+      "key": "SI MAR24",
+      "net": 114575.86,
+      "trades": 33,
+      "duration": 54,
+      "structure": "P: sell=56 buy=56",
+      "entry": "2024-01-03"
+    },
+    {
+      "key": "ZS N4",
+      "net": 97596.5,
+      "trades": 9,
+      "duration": 0,
+      "structure": "FUT SELL=345 BUY=345",
+      "entry": "2024-04-22"
+    },
+    {
+      "key": "HE Z5",
+      "net": 86313.0,
+      "trades": 120,
+      "duration": 205,
+      "structure": "FUT SELL=125 BUY=125",
+      "entry": "2025-01-06"
+    }
+  ]
+}

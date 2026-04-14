@@ -399,11 +399,12 @@ export default function LivestockRiskTab() {
 
   const fetchData = (isRefresh = false) => {
     if (isRefresh) setRevalidating(true);
+    const cb = `?t=${Date.now()}`;
     Promise.all([
-      fetch("/data/processed/bottleneck.json").then(r => r.json()),
-      fetch("/data/processed/cot.json").then(r => r.json()).catch(() => null),
-      fetch("/data/processed/livestock_psd.json").then(r => r.json()).catch(() => null),
-      fetch("/data/processed/livestock_weekly.json").then(r => r.json()).catch(() => null),
+      fetch(`/data/processed/bottleneck.json${cb}`).then(r => r.json()),
+      fetch(`/data/processed/cot.json${cb}`).then(r => r.json()).catch(() => null),
+      fetch(`/data/processed/livestock_psd.json${cb}`).then(r => r.json()).catch(() => null),
+      fetch(`/data/processed/livestock_weekly.json${cb}`).then(r => r.json()).catch(() => null),
     ]).then(([bj, cj, pj, wj]) => {
       const comms = bj.commodities || {};
       if (Object.keys(comms).length > 0) {
