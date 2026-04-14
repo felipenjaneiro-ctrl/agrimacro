@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-04-14T17:58:49.718146",
+  "net_liq": 1345464.39,
+  "risk_level": "HIGH",
+  "risk_notes": [
+    "Margem 71% > 65% \u2014 overallocated",
+    "Posicao individual com 22.5% risk \u2014 concentrado"
+  ],
+  "portfolio_greeks": {
+    "delta": -19.19,
+    "theta": -97.8326,
+    "vega": 142.677
+  },
+  "cascade_10pct": {
+    "loss": 292.0,
+    "pct_of_capital": 0
+  },
+  "most_vulnerable": {
+    "sym": "CC",
+    "contract": "CON6",
+    "worst_loss": -302278.0,
+    "vuln_pct": 22.5,
+    "scenario": "IV Crush -30%"
+  },
+  "positions": {
+    "CC CON6": {
+      "worst_loss": -302278.0,
+      "vuln_pct": 22.47,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "CL LOM6": {
+      "worst_loss": -11510.0,
+      "vuln_pct": 0.86,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "CL LON6": {
+      "worst_loss": -16851.0,
+      "vuln_pct": 1.25,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "GF GFJ6": {
+      "worst_loss": -34670.0,
+      "vuln_pct": 2.58,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "SI SOK6": {
+      "worst_loss": -541.0,
+      "vuln_pct": 0.04,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "SI SOM6": {
+      "worst_loss": -533.0,
+      "vuln_pct": 0.04,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "ZL OZLK6": {
+      "worst_loss": -8100.0,
+      "vuln_pct": 0.6,
+      "worst_scenario": "IV Crush -30%"
+    },
+    "ZL OZLM6": {
+      "worst_loss": -53549.0,
+      "vuln_pct": 3.98,
+      "worst_scenario": "IV Crush -30%"
+    }
+  }
+}
