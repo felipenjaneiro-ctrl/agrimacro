@@ -178,12 +178,7 @@ Regras:
     sections.push(truncate(weather, 1500));
   }
 
-  // === PORTFÓLIO ===
-  const portfolio = loadJSON("ibkr_portfolio.json");
-  if (portfolio && !portfolio.is_fallback) {
-    sections.push("\n=== PORTFÓLIO IBKR ===");
-    sections.push(truncate(portfolio, 2000));
-  }
+  // (Portfolio IBKR moved to enriched context section below with structured labels)
 
   // === SENTIMENTO GROK ===
   for (const gf of ["grok_sentiment.json", "grok_news.json", "grok_macro.json"]) {
@@ -225,6 +220,118 @@ Regras:
     sections.push("\n=== AÇÚCAR E ÁLCOOL BRASIL ===");
     sections.push(truncate(sugarAlcohol, 2000));
   }
+
+  // ═══════════════════════════════════════════════════════
+  // ENRICHED CONTEXT — 5 seções com labels específicos
+  // ═══════════════════════════════════════════════════════
+
+  // 1. COMMODITY DNA — drivers rankeados por underlying
+  try {
+    const dnaStatic = loadJSON("commodity_dna_static.json");
+    const dnaDynamic = loadJSON("commodity_dna.json");
+    if (dnaStatic?.commodities || dnaDynamic?.commodities) {
+      sections.push("\n=== COMMODITY DNA — DRIVERS RANKEADOS ===");
+      const staticC = dnaStatic?.commodities || {};
+      const dynC = dnaDynamic?.commodities || {};
+      const allSyms = [...new Set([...Object.keys(staticC), ...Object.keys(dynC)])].sort();
+      for (const sym of allSyms) {
+        const st = staticC[sym];
+        const dy = dynC[sym];
+        if (st?.drivers_ranked) {
+          const top3 = st.drivers_ranked.slice(0, 3);
+          const driverStr = top3.map((d: any) => `${d.driver} (${d.weight})`).join(" | ");
+          const signal = dy?.composite_signal || "";
+          sections.push(`DNA ${sym} (${st.name || sym}): ${signal ? signal + " — " : ""}${driverStr}`);
+        }
+      }
+    }
+  } catch {}
+
+  // 2. OPTIONS INTELLIGENCE — IV, IV Rank, Skew, Term Structure
+  try {
+    const chain = loadJSON("options_chain.json");
+    if (chain?.underlyings) {
+      sections.push("\n=== OPTIONS INTELLIGENCE — IV + SKEW + TERM STRUCTURE ===");
+      for (const [sym, data] of Object.entries(chain.underlyings) as any[]) {
+        const ivr = data.iv_rank || {};
+        const sk = data.skew || {};
+        const ts = data.term_structure || {};
+        const iv = ivr.current_iv ? (ivr.current_iv * 100).toFixed(1) + "%" : null;
+        const rank = ivr.rank_52w != null ? `Rank=${ivr.rank_52w.toFixed(0)}%` : (ivr.history_days ? `Rank=building(${ivr.history_days}d)` : null);
+        const skew = sk.skew_pct != null ? `Skew=${sk.skew_pct > 0 ? "+" : ""}${sk.skew_pct}%` : null;
+        const term = ts.structure || null;
+        const parts = [`IV=${iv || "?"}`, rank, skew, term ? `Term=${term}` : null].filter(Boolean);
+        sections.push(`IV ${sym}: ${parts.join(" | ")}`);
+      }
+    }
+  } catch {}
+
+  // 3. COT POSITIONING — índice + sinal por commodity
+  try {
+    const cotData = loadJSON("cot.json");
+    if (cotData?.commodities) {
+      sections.push("\n=== COT POSITIONING (CFTC) ===");
+      for (const [sym, data] of Object.entries(cotData.commodities) as any[]) {
+        const dis = data.disaggregated || {};
+        const leg = data.legacy || {};
+        if (dis.cot_index != null) {
+          const label = dis.cot_index >= 80 ? "CROWDED LONG" : dis.cot_index <= 20 ? "CROWDED SHORT" : dis.cot_index >= 65 ? "longs acumulando" : dis.cot_index <= 35 ? "shorts acumulando" : "neutro";
+          const w52 = dis.cot_index_52w != null ? ` | 52w=${dis.cot_index_52w.toFixed(0)}` : "";
+          sections.push(`COT ${sym}: idx=${dis.cot_index.toFixed(0)} (${label})${w52}`);
+        } else if (leg.latest?.noncomm_net != null) {
+          sections.push(`COT ${sym}: net=${leg.latest.noncomm_net} (legacy)`);
+        }
+      }
+    }
+  } catch {}
+
+  // 4. SAZONALIDADE — retorno médio do mês atual por commodity
+  try {
+    const seasonData = loadJSON("seasonality.json");
+    if (seasonData) {
+      const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+      const curMonth = new Date().getMonth();
+      sections.push(`\n=== SAZONALIDADE — ${months[curMonth].toUpperCase()} ===`);
+      for (const sym of Object.keys(seasonData).sort()) {
+        const s = seasonData[sym];
+        if (!s?.monthly_returns) continue;
+        const v = s.monthly_returns[curMonth];
+        const avg = typeof v === "number" ? v : v?.avg ?? null;
+        if (avg == null) continue;
+        const pct = typeof v === "object" ? v?.positive_pct : null;
+        const deviation = Math.abs(avg) >= 2 ? " **FORTE**" : Math.abs(avg) >= 1 ? " *moderado*" : "";
+        sections.push(`Sazonalidade ${sym} ${months[curMonth]}: desvio ${avg >= 0 ? "+" : ""}${avg.toFixed(2)}% vs historico${pct != null ? ` (${pct}% positivo)` : ""}${deviation}`);
+      }
+    }
+  } catch {}
+
+  // 5. POSIÇÕES IBKR — resumo estruturado
+  try {
+    const port = loadJSON("ibkr_portfolio.json");
+    if (port?.positions && !port.is_fallback) {
+      sections.push("\n=== PORTFOLIO IBKR — POSIÇÕES ABERTAS ===");
+      const summ = port.summary || {};
+      sections.push(`Net Liquidation: $${summ.NetLiquidation || "?"} | Cash: $${summ.TotalCashValue || "?"} | Unrealized P&L: $${summ.UnrealizedPnL || "?"}`);
+      // Group by symbol
+      const bySymbol: Record<string, any[]> = {};
+      for (const p of port.positions) {
+        if (p.sec_type !== "FOP" && p.sec_type !== "FUT") continue;
+        if (!bySymbol[p.symbol]) bySymbol[p.symbol] = [];
+        bySymbol[p.symbol].push(p);
+      }
+      const lines: string[] = [];
+      for (const sym of Object.keys(bySymbol).sort()) {
+        const legs = bySymbol[sym];
+        const parts = legs.map((l: any) => {
+          const ls = l.local_symbol || "";
+          const pos = l.position > 0 ? `+${l.position}` : `${l.position}`;
+          return `${pos}x ${ls}`;
+        });
+        lines.push(`Portfolio IBKR: ${sym} — ${parts.join(", ")}`);
+      }
+      sections.push(lines.join("\n"));
+    }
+  } catch {}
 
   // === TESE DO USUÁRIO ===
   sections.push("\n=== TESE DO USUÁRIO ===");
