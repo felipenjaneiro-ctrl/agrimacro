@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-04-14T18:24:50.728789",
+  "tagline": "Vender tempo, colher theta, nunca rolar.",
+  "track_record": {
+    "trades": 2493,
+    "pnl_net": 510919.32,
+    "win_rate": 23.3,
+    "period": "2022 a 2026",
+    "no_roll_wr": 67.6
+  },
+  "formats": {
+    "full": "C:\\Users\\felip\\OneDrive\\\u00c1rea de Trabalho\\agrimacro\\pipeline\\manifesto_full.txt",
+    "onepager": "C:\\Users\\felip\\OneDrive\\\u00c1rea de Trabalho\\agrimacro\\pipeline\\manifesto_onepager.txt",
+    "elevator": "C:\\Users\\felip\\OneDrive\\\u00c1rea de Trabalho\\agrimacro\\pipeline\\manifesto_elevator.txt"
+  }
+}

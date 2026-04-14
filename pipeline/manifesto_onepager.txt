@@ -1,0 +1,21 @@
+AGRIMACRO — Strategy One-Pager
+"Vender tempo, colher theta, nunca rolar."
+
+WHAT: Premium selling em opcoes de commodities agricolas.
+HOW:  Butterfly + ratio balanceada (22x22). Credito na abertura.
+WHY:  Tempo e aliado. 67.6% win rate sem rolls (2493 trades).
+
+EDGE: CLEAN + UND_POS = 72.6% WR. Melhor mes: Nov.
+RISK: 60/25/15 capital split. Max loss = 2x credito. Nunca rolar.
+
+TOP UNDERLYINGS: SI (prata), KE (trigo KC), HE (suino), ZW (trigo).
+AVOID: KC (cafe), NG (gas) sem confluencia forte.
+
+HARD STOPS:
+1. Curva forward desfavoravel = NAO OPERAR
+2. IV < 20% = NAO VENDER premium
+3. WASDE day = FECHAR graos 24h antes
+4. Loss > 2x credito = STOP mecanico
+5. NUNCA rolar. NUNCA adicionar a perdedor.
+
+TRACK RECORD: 2022 a 2026 | 2493 trades | $510,919 net

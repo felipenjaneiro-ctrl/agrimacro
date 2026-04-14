@@ -1,0 +1,114 @@
+
+=================================================================
+AGRIMACRO — MANIFESTO DA ESTRATEGIA
+=================================================================
+"Vender tempo, colher theta, nunca rolar."
+
+Gerado em: 2026-04-14
+Baseado em: 2493 trades reais (2022 a 2026)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. QUEM SOMOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Operador de opcoes sobre futuros de commodities agricolas.
+Estilo: premium seller — vendemos volatilidade, coletamos theta.
+Instrumento: FOP (futures options on commodities).
+Estrutura: butterfly + ratio balanceada (22x22).
+Conta: IBKR TWS. Sessao: Pre-market scan 6:30 AM ET, execucao 9:00-10:30 AM ET.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. FILOSOFIA CENTRAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+O mercado paga um premio por incerteza. Nos vendemos essa incerteza.
+O tempo e nosso aliado — cada dia que passa, nosso lucro cresce.
+Nao tentamos adivinhar direcao. Construimos posicoes que lucram
+com a PASSAGEM DO TEMPO, nao com o MOVIMENTO DO PRECO.
+
+Principios inegociaveis:
+- NUNCA rolar posicao. Dados reais: 0 rolls = 67.6% WR.
+  Cada roll piora o resultado em ~$12K (comprovado em 183 ciclos).
+- Fechar a 50% do max profit. Nao esperar expiracao.
+- Max loss = 2x credito recebido. Stop mecanico, sem excecao.
+- Credito liquido positivo na abertura. OBRIGATORIO.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. EDGE COMPROVADO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2493 trades | P&L net: $510,919 | Win rate: 23.3%
+
+Melhor combinacao: CLEAN + UND_POS = 72.6% WR
+Melhor mes de entrada: Nov
+Underlying mais previsivel: SI
+
+Sem rolls:   WR=67.6%, net positivo
+Com 1 roll:  WR=34.2%, net negativo
+Conclusao:   ROLAR DESTROI EDGE. Comprovado estatisticamente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. ESTRUTURA DE ENTRADA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{
+  "total_long": "3 ATM + 18 OTM15 + 1 ATM = 22 compradas",
+  "total_short": "18 OTM30 + 4 OTM30 = 22 vendidas",
+  "balance": "22x22 — posicao perfeitamente balanceada",
+  "greeks": "Delta-neutro na abertura. Theta positivo — tempo trabalha a favor.",
+  "premium": "CREDITO LIQUIDO positivo (obrigatorio na abertura)"
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. REGRAS ABSOLUTAS (HARD STOP)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+R01: NUNCA vender opcao sem checar a curva forward primeiro
+    Razao: Backwardation forte = mercado em stress = risco de squeeze. Perdi $8K em NG ignorando isso.
+
+R02: IV Rank < 25% = NAO vender premium. Esperar.
+    Razao: Premium coletado e muito baixo vs risco. Theta nao compensa gamma risk em IV baixa.
+
+R03: WASDE day = fechar ou reduzir posicao em graos 24h antes
+    Razao: WASDE pode mover ZS/ZC 5-8% em minutos. Nao vale o theta de 1 dia extra.
+
+R06: Max loss por trade = 2x credito recebido. Stop mecanico.
+    Razao: Sem stop, um trade ruim pode apagar 5 trades bons. Disciplina > otimismo.
+
+R07: Nao adicionar a posicao perdedora. Nunca.
+    Razao: Averaging down em opcoes vendidas aumenta risco exponencialmente. Aprendi com CL em Jan/25.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. GESTAO DE CAPITAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Capital dividido em 3 blocos: trades ativos, reserva estrategica, e caixa operacional. Nunca comprometer mais de 60% em trades simultaneos.
+
+- Trades ativos: max 60% do capital
+- Reserva estrategica: 25% em T-Bills
+- Caixa operacional: 15%
+- Max por underlying: 15%
+- Max por setor: 30%
+- Regime VEGA: limite expande para 65% quando IV >= 40%
+
+Drawdown protocol: 5%=reduz, 10%=fecha 50%, 15%=cash total, 20%=review
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. CHECKLIST DE ENTRADA (10 filtros)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [ ] Underlying no tier 1 ou 2 (SI, KE, HE, ZW, ZC, SB, GC)
+  [ ] Mes favoravel (Nov, May, Jul, Oct preferencialmente)
+  [ ] Credito liquido positivo na abertura (obrigatorio)
+  [ ] Curva forward sem backwardation forte (obrigatorio)
+  [ ] IV Rank > 50% (quando disponivel)
+  [ ] Estrutura 22x22 butterfly+ratio balanceada
+  [ ] DTE 30-60 dias (sweet spot de duracao)
+  [ ] NAO rolar — se precisar, fechar e reentrar novo ciclo
+  [ ] Max loss = 2x credito recebido (stop mecanico)
+  [ ] Fechar a 50% do max profit
+
+GO se >= 7/10. CONDITIONAL se 5-6. NO-GO se < 5 ou mandatory falha.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Vender tempo, colher theta, nunca rolar."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
