@@ -472,6 +472,16 @@ def main():
         results["opportunity_scan"] = {"status": "WARN", "error": str(e)}
         log(f"Opportunity scan failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 28f/{total_steps}: Running vega monitor...")
+    try:
+        from skill_vega_monitor import run_vega_monitor
+        run_vega_monitor()
+        results["vega_monitor"] = {"status": "OK"}
+        log("Vega monitor complete", "OK")
+    except BaseException as e:
+        results["vega_monitor"] = {"status": "WARN", "error": str(e)}
+        log(f"Vega monitor failed (non-blocking): {e}", "WARN")
+
     log(f"Step 29/{total_steps}: Generating PDF report (v4 with Options Intelligence)...")
     try:
         from patch_report_v4 import build_pdf_v4

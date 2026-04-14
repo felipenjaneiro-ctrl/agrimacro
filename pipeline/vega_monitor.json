@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-04-14T18:07:12.338017",
+  "vix": {
+    "value": 19.9,
+    "level": "NORMAL",
+    "change_pct": 3.48
+  },
+  "iv_scan": {
+    "above_50": 3,
+    "above_35": 5,
+    "total": 16,
+    "highest": {
+      "sym": "CC",
+      "iv": 44.080000000000005,
+      "rank": null,
+      "skew": -7.4,
+      "term": "BACKWARDATION"
+    }
+  },
+  "reserve": {
+    "target": 337500,
+    "current": 340000,
+    "available": 340000,
+    "deployable": 170000
+  },
+  "portfolio_vega": 142.68,
+  "opportunities": [
+    {
+      "sym": "SI",
+      "direction": "PUT",
+      "iv_pct": 55.0,
+      "score": 30,
+      "notes": [
+        "IV ALTA 55% (+20)",
+        "Historico +$509,632 (+10)",
+        "Clean WR=68% (+5)",
+        "Ja ativo no portfolio (-5)"
+      ],
+      "can_deploy": true,
+      "already_active": true
+    },
+    {
+      "sym": "SB",
+      "direction": "PUT",
+      "iv_pct": 40.0,
+      "score": 25,
+      "notes": [
+        "IV ELEVADA 40% (+10)",
+        "Historico +$93,511 (+10)",
+        "Clean WR=75% (+5)"
+      ],
+      "can_deploy": true,
+      "already_active": false
+    },
+    {
+      "sym": "CC",
+      "direction": "PUT",
+      "iv_pct": 44.1,
+      "score": 15,
+      "notes": [
+        "IV ELEVADA 44% (+10)",
+        "Historico +$4,968 (+5)",
+        "COT=0 crowded short -> SELL PUT (+5)",
+        "Ja ativo no portfolio (-5)"
+      ],
+      "can_deploy": true,
+      "already_active": true
+    }
+  ],
+  "alerts": [
+    "3 underlyings com IV >= 50% \u2014 ambiente de alta vol generalizada"
+  ],
+  "action_required": true
+}
