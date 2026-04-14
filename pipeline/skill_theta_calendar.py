@@ -193,8 +193,9 @@ def run_theta_calendar():
             spreads[key]["sold"] += abs(int(pos))
         else:
             spreads[key]["bought"] += int(pos)
-        spreads[key]["delta"] += d * abs(pos)
-        spreads[key]["theta"] += th * abs(pos)
+        # Greeks SIGN-AWARE: pos > 0 = long, pos < 0 = short
+        spreads[key]["delta"] += d * pos
+        spreads[key]["theta"] += th * pos
 
     # Resolve DTEs and build timeline
     timeline = []

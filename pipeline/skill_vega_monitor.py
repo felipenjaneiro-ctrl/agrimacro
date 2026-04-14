@@ -166,7 +166,7 @@ def run_vega_monitor():
     for p in portfolio.get("positions", []):
         if p.get("sec_type") in ("FOP", "FUT"):
             v = p.get("vega") or 0
-            pos = abs(p.get("position", 0))
+            pos = p.get("position", 0)  # sign-aware: long=+, short=-
             total_vega += v * pos
             if p.get("position", 0) != 0:
                 active_syms.add(p["symbol"])

@@ -133,10 +133,14 @@ def main():
 
         key = (sym, grp)
         d = positions[key]
+        # Greeks must be SIGN-AWARE: sold positions flip the sign
+        # pos > 0 = long, pos < 0 = short
+        # delta per contract * position = net delta contribution
+        # For puts: delta is negative per contract, sold put = positive delta contribution
         d["delta"] += (p.get("delta") or 0) * pos
-        d["gamma"] += (p.get("gamma") or 0) * abs(pos)
-        d["theta"] += (p.get("theta") or 0) * abs(pos)
-        d["vega"] += (p.get("vega") or 0) * abs(pos)
+        d["gamma"] += (p.get("gamma") or 0) * pos   # gamma: long = +, short = -
+        d["theta"] += (p.get("theta") or 0) * pos   # theta: long puts = -, short puts = +
+        d["vega"] += (p.get("vega") or 0) * pos     # vega: long = +, short = -
         d["legs"] += 1
         if pos < 0:
             d["sold"] += abs(int(pos))
@@ -164,14 +168,29 @@ def main():
         if key in positions and t.get("dte"):
             positions[key]["dte"] = t["dte"]
 
-    # Determine direction from delta
-    for key, d in positions.items():
-        if d["delta"] > 0.5:
-            d["direction"] = "LONG"
-        elif d["delta"] < -0.5:
-            d["direction"] = "SHORT"
+    # Determine option type from local_symbol (C or P), not from delta
+    for (sym, grp), d in positions.items():
+        has_calls = False
+        has_puts = False
+        for p in portfolio.get("positions", []):
+            if p.get("symbol") != sym or p.get("sec_type") not in ("FOP", "OPT"):
+                continue
+            ls = p.get("local_symbol", "")
+            parts = ls.split()
+            if len(parts) >= 2:
+                right_part = parts[1]
+                if right_part.startswith("C"):
+                    has_calls = True
+                elif right_part.startswith("P"):
+                    has_puts = True
+        if has_calls and not has_puts:
+            d["direction"] = "CALL_SPREAD"
+        elif has_puts and not has_calls:
+            d["direction"] = "PUT_SPREAD"
+        elif has_calls and has_puts:
+            d["direction"] = "MIXED"
         else:
-            d["direction"] = "NEUTRAL"
+            d["direction"] = "FUT" if d.get("sold", 0) > 0 or d.get("bought", 0) > 0 else "UNKNOWN"
 
     # ── Price momentum (5d) for each active underlying ──
     momentum = {}

@@ -133,8 +133,9 @@ def analyze_spread(sym, legs, options_data, greeks_data):
         ls = leg.get("local_symbol", "")
         parsed = parse_local_symbol(ls)
 
-        total_delta += d * abs(pos)
-        total_theta += th * abs(pos)
+        # Greeks are SIGN-AWARE: pos > 0 = long, pos < 0 = short
+        total_delta += d * pos   # delta * position (sign matters)
+        total_theta += th * pos  # theta: short options = positive theta
         total_qty += abs(pos)
 
         if pos < 0:

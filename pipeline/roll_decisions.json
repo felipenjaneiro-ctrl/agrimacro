@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-14T17:21:16.865814",
+  "generated_at": "2026-04-14T19:23:11.350462",
   "total_spreads": 8,
   "critical": 0,
   "high": 0,
@@ -58,12 +58,9 @@
       "reasons": [
         "DTE=34 \u2014 Theta trabalhando. Fase produtiva."
       ],
-      "warnings": [
-        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
-      ],
+      "warnings": [],
       "management_actions": [
         "Manter \u2014 nao mexer em posicao que esta funcionando",
-        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
         "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
       ],
       "structure": "SELL 16x C12300 | SELL 24x C12400 | SELL 16x C12500 | BUY 16x C12800 | BUY 24x C12900 | BUY 16x C13000",
@@ -79,12 +76,9 @@
       "reasons": [
         "DTE=42 \u2014 Theta trabalhando. Fase produtiva."
       ],
-      "warnings": [
-        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
-      ],
+      "warnings": [],
       "management_actions": [
         "Manter \u2014 nao mexer em posicao que esta funcionando",
-        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
         "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
       ],
       "structure": "BUY 2x P5500 | SELL 2x P6000 | BUY 18x P6100 | SELL 22x P6500 | BUY 4x P6900",
@@ -100,12 +94,9 @@
       "reasons": [
         "DTE=68 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [
-        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
-      ],
+      "warnings": [],
       "management_actions": [
         "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
-        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
         "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
       ],
       "structure": "SELL 30x C11700 | BUY 30x C13300 | BUY 5x C9800",
@@ -121,12 +112,9 @@
       "reasons": [
         "DTE=92 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [
-        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
-      ],
+      "warnings": [],
       "management_actions": [
         "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
-        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
         "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
       ],
       "structure": "BUY 18x P2500 | SELL 4x P2650 | SELL 18x P2700 | BUY 4x P2900",
@@ -142,12 +130,9 @@
       "reasons": [
         "DTE=999 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [
-        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
-      ],
+      "warnings": [],
       "management_actions": [
         "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
-        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
         "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
       ],
       "structure": "BUY 16x C6700 | SELL 72x C7000 | SELL 16x C7100 | BUY 72x C7300",
@@ -163,12 +148,9 @@
       "reasons": [
         "DTE=999 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [
-        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
-      ],
+      "warnings": [],
       "management_actions": [
         "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
-        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
         "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
       ],
       "structure": "BUY 1x P7000 | SELL 1x P7500",
