@@ -166,63 +166,118 @@ def analyze_spread(sym, legs, options_data, greeks_data):
         action = "SELL" if pos < 0 else "BUY"
         structure_parts.append(f"{action} {abs(pos):.0f}x {parsed['right'] or 'FUT'}{parsed['strike_str']}")
 
-    # ── Decision Logic ──
+    # ── Decision Logic (v2 — profit-target + parallel pipeline) ──
     urgency = "LOW"
     action = "HOLD"
     reasons = []
     warnings = []
+    management_actions = []
 
-    # DTE checks
+    # Profit estimation (using avg_cost vs current — simplified from theta)
+    # Positive theta = collecting premium = position is working
+    theta_daily = total_theta
+    is_theta_positive = theta_daily > 0
+
+    # ── Phase 1: DTE-based urgency ──
     if dte <= 5:
         urgency = "CRITICAL"
         action = "CLOSE"
         reasons.append(f"DTE={dte} — CRITICO. Gamma risk extremo. Fechar HOJE.")
+        management_actions.append("Executar ordem de fechamento imediatamente")
+        management_actions.append("Se profit > 0: fechar e registrar como win")
+        management_actions.append("Se loss: aceitar e nao re-entrar (R07)")
     elif dte <= 10:
         urgency = "HIGH"
         action = "CLOSE"
-        reasons.append(f"DTE={dte} — menos de 10 dias. Gamma acelera. Recomendado fechar.")
+        reasons.append(f"DTE={dte} — Alto risco gamma. Recomendado fechar esta semana.")
+        management_actions.append("Fechar posicao ate sexta-feira")
+        management_actions.append("Paralelamente: analisar proximo vencimento para novo ciclo")
+    elif dte <= 14:
+        urgency = "MEDIUM"
+        if is_theta_positive:
+            action = "CLOSE_ON_TARGET"
+            reasons.append(f"DTE={dte} — Zona de gamma mas theta positivo. Fechar se atingir 50% do max profit.")
+            management_actions.append("Se profit >= 50% do max: FECHAR (R08)")
+            management_actions.append("Se profit < 25%: FECHAR e aceitar resultado (R09)")
+            management_actions.append("PARALELO: analisar proximo vencimento (DTE 45+) para novo ciclo")
+        else:
+            action = "CLOSE"
+            reasons.append(f"DTE={dte} — Theta negativo com DTE < 14. Posicao perdendo tempo.")
+            management_actions.append("Fechar para liberar capital e margem")
     elif dte <= 21:
         urgency = "MEDIUM"
-        reasons.append(f"DTE={dte} — zona de gamma. Monitorar diariamente.")
-        # R09: DTE < 21 with low profit = close
-        if total_theta < 0:
-            action = "CLOSE"
-            reasons.append("Theta negativo com DTE < 21 — posicao perdendo tempo.")
-        else:
-            action = "MONITOR"
+        action = "MONITOR_CLOSE"
+        reasons.append(f"DTE={dte} — Zona de transicao. Monitorar target de 50% profit.")
+        management_actions.append("Se profit >= 50%: FECHAR (R08 — nao esperar os ultimos 20%)")
+        management_actions.append("Se profit < 25% e DTE < 17: considerar fechar cedo")
+        management_actions.append("PARALELO: preparar novo ciclo no proximo vencimento")
+    elif dte <= 30:
+        urgency = "LOW"
+        action = "HOLD"
+        reasons.append(f"DTE={dte} — Theta acelerando. Melhor fase de coleta de premium.")
+        management_actions.append("Manter posicao — theta no sweet spot")
+        management_actions.append("Se profit >= 50%: considerar fechar antecipado (capital rotation)")
     elif dte <= 45:
         urgency = "LOW"
         action = "HOLD"
-        reasons.append(f"DTE={dte} — theta trabalhando. Manter.")
+        reasons.append(f"DTE={dte} — Theta trabalhando. Fase produtiva.")
+        management_actions.append("Manter — nao mexer em posicao que esta funcionando")
     else:
         urgency = "LOW"
         action = "HOLD"
-        reasons.append(f"DTE={dte} — distante do vencimento. Theta lento mas seguro.")
+        reasons.append(f"DTE={dte} — Distante do vencimento. Theta lento mas seguro.")
+        management_actions.append("Paciencia — theta vai acelerar a partir de DTE 30")
 
-    # Delta check — is position getting directional?
-    if abs(total_delta) > 0.5 * total_qty and total_qty > 0:
-        warnings.append(f"Delta total {total_delta:.2f} — posicao ficando direcional. Considerar ajuste.")
+    # ── Phase 2: Delta drift detection ──
+    if total_qty > 0 and abs(total_delta) > 0.5 * total_qty:
+        delta_pct = abs(total_delta) / total_qty * 100
+        warnings.append(f"Delta drift: {total_delta:+.2f} ({delta_pct:.0f}% do qty) — posicao direcional")
         if urgency == "LOW":
             urgency = "MEDIUM"
+        management_actions.append(f"AJUSTE: considerar vender delta oposto para re-neutralizar")
 
-    # Rule 1 from cross_analysis: never roll
-    roll_note = "NAO ROLAR — cross_analysis mostra que cada roll piora resultado em ~$12K. Se precisar agir, FECHAR e abrir ciclo novo."
+    # ── Phase 3: Capital opportunity cost ──
+    if dte > 30 and not is_theta_positive:
+        warnings.append("Theta negativo com DTE > 30 — capital parado sem retorno")
+        management_actions.append("AVALIAR: fechar para realocar capital em oportunidade com score >= 8")
 
-    # Next expiry available?
+    # ── Phase 4: Parallel pipeline (new cycle analysis) ──
     next_exp = None
     und_data = options_data.get("underlyings", {}).get(sym, {})
     exps = sorted(und_data.get("expirations", {}).items())
     current_found = False
     for exp_key, exp_data in exps:
         if current_found:
-            next_exp = {
-                "expiry": exp_key,
-                "contract": exp_data.get("contract", ""),
-                "dte": exp_data.get("days_to_exp", 0),
-            }
-            break
+            next_dte = exp_data.get("days_to_exp", 0)
+            if next_dte >= 30:
+                next_exp = {
+                    "expiry": exp_key,
+                    "contract": exp_data.get("contract", ""),
+                    "dte": next_dte,
+                }
+                break
         if exp_data.get("contract", "") == contract_code:
             current_found = True
+
+    if next_exp and dte <= 21:
+        management_actions.append(
+            f"PROXIMO CICLO: {next_exp['contract']} (DTE={next_exp['dte']}d) — "
+            f"analisar entrada com skill_entry_timing.py {sym} {direction}"
+        )
+
+    # ── Roll policy ──
+    roll_note = (
+        "REGRA ABSOLUTA: NAO ROLAR. Cross-analysis comprova que cada roll piora resultado em ~$12K. "
+        "Se DTE < 14, FECHAR posicao atual. Se quiser continuar no underlying, abrir NOVO CICLO "
+        "no proximo vencimento como trade independente."
+    )
+
+    # ── Close-for-opportunity logic ──
+    if action == "HOLD" and dte > 30:
+        management_actions.append(
+            "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, "
+            "considerar fechar esta posicao low-risk para liberar capital"
+        )
 
     return {
         "sym": sym,
@@ -234,6 +289,7 @@ def analyze_spread(sym, legs, options_data, greeks_data):
         "action": action,
         "reasons": reasons,
         "warnings": warnings,
+        "management_actions": management_actions,
         "roll_note": roll_note,
         "next_expiry": next_exp,
         "legs": len(legs),
@@ -302,30 +358,52 @@ def run_specific(sym, direction, strike, dte_input):
         "structure": f"SELL {direction} @{strike}",
     }
 
-    # DTE logic
+    management_actions = []
+
     if dte_input <= 5:
         decision["urgency"] = "CRITICAL"
         decision["action"] = "CLOSE"
         decision["reasons"].append(f"DTE={dte_input} — CRITICO. Gamma risk extremo. Fechar HOJE.")
+        management_actions.append("Executar ordem de fechamento imediatamente")
     elif dte_input <= 10:
         decision["urgency"] = "HIGH"
         decision["action"] = "CLOSE"
         decision["reasons"].append(f"DTE={dte_input} — Alto risco gamma. Recomendado fechar esta semana.")
+        management_actions.append("Fechar posicao ate sexta-feira")
+        management_actions.append("Paralelamente: analisar proximo vencimento para novo ciclo")
+    elif dte_input <= 14:
+        decision["urgency"] = "MEDIUM"
+        decision["action"] = "CLOSE_ON_TARGET"
+        decision["reasons"].append(f"DTE={dte_input} — Zona de gamma. Fechar se >= 50% profit.")
+        management_actions.append("Se profit >= 50%: FECHAR (R08)")
+        management_actions.append("Se profit < 25%: FECHAR e aceitar resultado (R09)")
+        management_actions.append("PARALELO: analisar proximo vencimento para novo ciclo")
     elif dte_input <= 21:
         decision["urgency"] = "MEDIUM"
-        decision["action"] = "MONITOR"
-        decision["reasons"].append(f"DTE={dte_input} — Zona de gamma. Monitorar diariamente.")
-        decision["reasons"].append("Se profit > 50%: fechar. Se profit < 25%: fechar e nao rolar.")
+        decision["action"] = "MONITOR_CLOSE"
+        decision["reasons"].append(f"DTE={dte_input} — Monitorar target de 50% profit.")
+        management_actions.append("Se profit >= 50%: FECHAR (R08)")
+        management_actions.append("PARALELO: preparar novo ciclo no proximo vencimento")
+    elif dte_input <= 30:
+        decision["urgency"] = "LOW"
+        decision["action"] = "HOLD"
+        decision["reasons"].append(f"DTE={dte_input} — Theta acelerando. Melhor fase de coleta.")
+        management_actions.append("Manter — theta no sweet spot")
+        management_actions.append("Se profit >= 50%: considerar fechar (capital rotation)")
     elif dte_input <= 45:
         decision["urgency"] = "LOW"
         decision["action"] = "HOLD"
-        decision["reasons"].append(f"DTE={dte_input} — Theta acelerando. Bom momento, manter.")
+        decision["reasons"].append(f"DTE={dte_input} — Theta trabalhando. Fase produtiva.")
     else:
         decision["urgency"] = "LOW"
         decision["action"] = "HOLD"
         decision["reasons"].append(f"DTE={dte_input} — Distante. Theta lento. Paciencia.")
 
-    decision["roll_note"] = "NAO ROLAR — fechar e abrir ciclo novo se necessario (cross_analysis: roll piora avg em $12K)"
+    decision["management_actions"] = management_actions
+    decision["roll_note"] = (
+        "REGRA ABSOLUTA: NAO ROLAR. Fechar atual e abrir NOVO CICLO no proximo vencimento "
+        "como trade independente (cross_analysis: roll piora avg em $12K)."
+    )
 
     # Check next available expiry
     und_data = options_data.get("underlyings", {}).get(sym, {})
@@ -367,6 +445,10 @@ def main():
         if decision.get("warnings"):
             for w in decision["warnings"]:
                 print(f"    !! {w}")
+        if decision.get("management_actions"):
+            print(f"  Acoes:")
+            for ma in decision["management_actions"]:
+                print(f"    - {ma}")
         print(f"  Roll: {decision['roll_note']}")
         if decision.get("next_expiry"):
             ne = decision["next_expiry"]
@@ -455,6 +537,7 @@ def main():
             "direction": d["direction"], "dte": d["dte"],
             "urgency": d["urgency"], "action": d["action"],
             "reasons": d["reasons"], "warnings": d.get("warnings", []),
+            "management_actions": d.get("management_actions", []),
             "structure": d["structure"],
             "next_expiry": d.get("next_expiry"),
         } for d in decisions],
@@ -466,7 +549,11 @@ def main():
 
 def _print_decision(d, brief=False):
     urgency_icon = {"CRITICAL": "!!!", "HIGH": "!! ", "MEDIUM": "!  ", "LOW": "   "}.get(d["urgency"], "   ")
-    action_str = {"CLOSE": "FECHAR", "HOLD": "MANTER", "MONITOR": "MONITORAR"}.get(d["action"], d["action"])
+    action_map = {
+        "CLOSE": "FECHAR", "HOLD": "MANTER", "MONITOR": "MONITORAR",
+        "CLOSE_ON_TARGET": "FECHAR NO TARGET", "MONITOR_CLOSE": "MONITORAR P/ FECHAR",
+    }
+    action_str = action_map.get(d["action"], d["action"])
 
     print(f"\n  {urgency_icon} {d['sym']:>4} ({d['name']:>10}) | {d['direction']:>5} | "
           f"DTE={d['dte']:>3} | {action_str}")
@@ -479,9 +566,13 @@ def _print_decision(d, brief=False):
             print(f"      -> {r}")
         for w in d.get("warnings", []):
             print(f"      !! {w}")
+        if d.get("management_actions"):
+            print(f"      Acoes:")
+            for ma in d["management_actions"]:
+                print(f"        - {ma}")
         if d.get("next_expiry"):
             ne = d["next_expiry"]
-            print(f"      Proximo: {ne['contract']} (DTE={ne['dte']}d)")
+            print(f"      Proximo venc: {ne['contract']} (DTE={ne['dte']}d)")
         print(f"      Roll: {d['roll_note']}")
 
 

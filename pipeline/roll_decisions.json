@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-14T17:14:51.193468",
+  "generated_at": "2026-04-14T17:21:16.865814",
   "total_spreads": 8,
   "critical": 0,
   "high": 0,
@@ -12,12 +12,17 @@
       "direction": "CALL",
       "dte": 15,
       "urgency": "MEDIUM",
-      "action": "CLOSE",
+      "action": "MONITOR_CLOSE",
       "reasons": [
-        "DTE=15 \u2014 zona de gamma. Monitorar diariamente.",
-        "Theta negativo com DTE < 21 \u2014 posicao perdendo tempo."
+        "DTE=15 \u2014 Zona de transicao. Monitorar target de 50% profit."
       ],
       "warnings": [],
+      "management_actions": [
+        "Se profit >= 50%: FECHAR (R08 \u2014 nao esperar os ultimos 20%)",
+        "Se profit < 25% e DTE < 17: considerar fechar cedo",
+        "PARALELO: preparar novo ciclo no proximo vencimento",
+        "PROXIMO CICLO: GFK6 (DTE=36d) \u2014 analisar entrada com skill_entry_timing.py GF CALL"
+      ],
       "structure": "BUY 12x C3710 | SELL 66x C3760 | BUY 54x C3810",
       "next_expiry": {
         "expiry": "20260521",
@@ -33,9 +38,13 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=29 \u2014 theta trabalhando. Manter."
+        "DTE=29 \u2014 Theta acelerando. Melhor fase de coleta de premium."
       ],
       "warnings": [],
+      "management_actions": [
+        "Manter posicao \u2014 theta no sweet spot",
+        "Se profit >= 50%: considerar fechar antecipado (capital rotation)"
+      ],
       "structure": "SELL 60x C7800 | BUY 60x C8200",
       "next_expiry": null
     },
@@ -47,9 +56,16 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=34 \u2014 theta trabalhando. Manter."
+        "DTE=34 \u2014 Theta trabalhando. Fase produtiva."
       ],
-      "warnings": [],
+      "warnings": [
+        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
+      ],
+      "management_actions": [
+        "Manter \u2014 nao mexer em posicao que esta funcionando",
+        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
+        "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
+      ],
       "structure": "SELL 16x C12300 | SELL 24x C12400 | SELL 16x C12500 | BUY 16x C12800 | BUY 24x C12900 | BUY 16x C13000",
       "next_expiry": null
     },
@@ -61,9 +77,16 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=42 \u2014 theta trabalhando. Manter."
+        "DTE=42 \u2014 Theta trabalhando. Fase produtiva."
       ],
-      "warnings": [],
+      "warnings": [
+        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
+      ],
+      "management_actions": [
+        "Manter \u2014 nao mexer em posicao que esta funcionando",
+        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
+        "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
+      ],
       "structure": "BUY 2x P5500 | SELL 2x P6000 | BUY 18x P6100 | SELL 22x P6500 | BUY 4x P6900",
       "next_expiry": null
     },
@@ -75,9 +98,16 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=68 \u2014 distante do vencimento. Theta lento mas seguro."
+        "DTE=68 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [],
+      "warnings": [
+        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
+      ],
+      "management_actions": [
+        "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
+        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
+        "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
+      ],
       "structure": "SELL 30x C11700 | BUY 30x C13300 | BUY 5x C9800",
       "next_expiry": null
     },
@@ -89,9 +119,16 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=92 \u2014 distante do vencimento. Theta lento mas seguro."
+        "DTE=92 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [],
+      "warnings": [
+        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
+      ],
+      "management_actions": [
+        "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
+        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
+        "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
+      ],
       "structure": "BUY 18x P2500 | SELL 4x P2650 | SELL 18x P2700 | BUY 4x P2900",
       "next_expiry": null
     },
@@ -103,9 +140,16 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=999 \u2014 distante do vencimento. Theta lento mas seguro."
+        "DTE=999 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [],
+      "warnings": [
+        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
+      ],
+      "management_actions": [
+        "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
+        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
+        "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
+      ],
       "structure": "BUY 16x C6700 | SELL 72x C7000 | SELL 16x C7100 | BUY 72x C7300",
       "next_expiry": null
     },
@@ -117,9 +161,16 @@
       "urgency": "LOW",
       "action": "HOLD",
       "reasons": [
-        "DTE=999 \u2014 distante do vencimento. Theta lento mas seguro."
+        "DTE=999 \u2014 Distante do vencimento. Theta lento mas seguro."
       ],
-      "warnings": [],
+      "warnings": [
+        "Theta negativo com DTE > 30 \u2014 capital parado sem retorno"
+      ],
+      "management_actions": [
+        "Paciencia \u2014 theta vai acelerar a partir de DTE 30",
+        "AVALIAR: fechar para realocar capital em oportunidade com score >= 8",
+        "OPORTUNIDADE: se nova entrada score >= 8 (Grade A) aparecer, considerar fechar esta posicao low-risk para liberar capital"
+      ],
       "structure": "BUY 1x P7000 | SELL 1x P7500",
       "next_expiry": null
     }
