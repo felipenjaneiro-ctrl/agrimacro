@@ -281,6 +281,41 @@ function buildContext(): string {
     ctx += "\n";
   }
 
+  // 8b. Commodity DNA — static driver hierarchy per commodity
+  const dnaStatic = loadJSON("commodity_dna_static.json");
+  if (dnaStatic?.commodities) {
+    ctx += "\n=== COMMODITY DNA — DRIVERS ESTRUTURAIS POR COMMODITY ===\n";
+    ctx += "Hierarquia fixa de drivers rankeados por importancia. Use para contextualizar analises.\n\n";
+
+    Object.entries(dnaStatic.commodities).forEach(([sym, data]: any) => {
+      const drivers = data.drivers_ranked || [];
+      const top3 = drivers.slice(0, 3);
+      const driverStr = top3
+        .map((d: any) => `${d.rank}. ${d.driver} (${d.weight})`)
+        .join(" | ");
+      ctx += `${sym} (${data.name}): ${driverStr}\n`;
+    });
+
+    ctx += "\n";
+  }
+
+  // 8c. Commodity DNA — dynamic signals (current market conditions)
+  const dnaDynamic = loadJSON("commodity_dna.json");
+  if (dnaDynamic?.commodities) {
+    ctx += "\n=== COMMODITY DNA — SINAIS ATUAIS ===\n";
+
+    Object.entries(dnaDynamic.commodities).forEach(([sym, data]: any) => {
+      const drivers = data.drivers_ranked || [];
+      if (!drivers.length) return;
+      const top = drivers[0];
+      const bullish = data.bullish_drivers || 0;
+      const bearish = data.bearish_drivers || 0;
+      ctx += `${sym}: ${data.composite_signal} | #1=${top.driver}: ${top.signal} | Bull=${bullish} Bear=${bearish}\n`;
+    });
+
+    ctx += "\n";
+  }
+
   // 9a. Crop Progress
   const cropProg = loadJSON("crop_progress.json");
   if (cropProg?.crops && !cropProg.is_fallback) {
