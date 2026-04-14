@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-04-14T17:27:18.936222",
+  "portfolio_state": {
+    "net_liq": 1345464.39,
+    "active_pct": 70.9,
+    "positions": 5
+  },
+  "sizing": {
+    "sym": "KE",
+    "name": "Trigo KC",
+    "direction": "PUT",
+    "sector": "Graos",
+    "entry_score": 7,
+    "score_label": "60% SIZE (score 6-7)",
+    "score_mult": 0.6,
+    "vol_adj": 1.0,
+    "recommended_contracts": 0,
+    "butterfly_sold": 0,
+    "margin_per_contract": 1500,
+    "est_margin": 0,
+    "est_risk": 33637.0,
+    "multiplier": 50,
+    "max_by_risk": 22,
+    "max_by_available": 0,
+    "raw_before_adj": 0,
+    "net_liq": 1345464.39,
+    "current_active_pct": 70.9,
+    "max_active_pct": 60,
+    "available_margin": -146721.0,
+    "available_und": 201820.0,
+    "available_sector": 181639.0,
+    "effective_available": 0,
+    "existing_und_margin": 0,
+    "existing_sector_margin": 222000,
+    "sector_syms": [
+      "ZL"
+    ],
+    "positions_count": 5,
+    "violations": [
+      "LIMITE DE CAPITAL: 70.9% em uso (max=60%)"
+    ],
+    "warnings": [],
+    "can_trade": false
+  }
+}
