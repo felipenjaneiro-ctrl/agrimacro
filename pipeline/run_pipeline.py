@@ -442,6 +442,16 @@ def main():
         results["intelligence_frame"] = {"status": "WARN", "error": str(e)}
         log(f"Intelligence engine failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 28c/{total_steps}: Running entry timing scan...")
+    try:
+        from skill_entry_timing import main as run_entry_scan
+        run_entry_scan()
+        results["entry_timing"] = {"status": "OK"}
+        log("Entry timing scan complete", "OK")
+    except BaseException as e:
+        results["entry_timing"] = {"status": "WARN", "error": str(e)}
+        log(f"Entry timing scan failed (non-blocking): {e}", "WARN")
+
     log(f"Step 29/{total_steps}: Generating PDF report (v4 with Options Intelligence)...")
     try:
         from patch_report_v4 import build_pdf_v4
