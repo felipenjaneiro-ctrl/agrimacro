@@ -189,6 +189,25 @@ def execute_orders(payload):
                     "error": str(e)[:200],
                 })
 
+        # Record in trade journal if any legs submitted
+        submitted = [r for r in results if r["status"] == "submitted"]
+        if submitted:
+            try:
+                from skill_trade_journal import open_trade
+                underlying = legs[0].get("symbol", "?")
+                is_put = any(l.get("type", "").lower() == "put" for l in legs)
+                direction = "PUT" if is_put else "CALL"
+                open_trade(
+                    underlying=underlying,
+                    direction=direction,
+                    legs=[{"action": l.get("action"), "type": l.get("type"),
+                           "strike": l.get("strike"), "quantity": l.get("quantity")}
+                          for l in legs],
+                    tese=note,
+                )
+            except Exception as journal_err:
+                print(f"  [WARN] Journal recording failed: {journal_err}")
+
         return {
             "status": "ok",
             "account": account,
@@ -197,7 +216,7 @@ def execute_orders(payload):
             "timestamp": datetime.now().isoformat(),
             "order_type": order_type,
             "note": note,
-            "legs_submitted": len([r for r in results if r["status"] == "submitted"]),
+            "legs_submitted": len(submitted),
             "legs_failed": len([r for r in results if r["status"] == "error"]),
             "results": results,
         }

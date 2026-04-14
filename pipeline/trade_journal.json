@@ -1,0 +1,83 @@
+{
+  "trades": [
+    {
+      "id": "SI_PUT_20260414_181734",
+      "underlying": "SI",
+      "name": "Prata",
+      "sector": "Metais",
+      "direction": "PUT",
+      "status": "OPEN",
+      "opened_at": "2026-04-14T18:17:34.356721",
+      "closed_at": null,
+      "dte_at_open": null,
+      "tese": "Prata IV alta 55%, contango OK, tier 1, score 10",
+      "legs": [],
+      "context_at_open": {
+        "price": 79.625,
+        "price_date": "2026-04-14",
+        "momentum_5d": 8.91,
+        "momentum_20d": -1.7,
+        "iv": 0.55,
+        "iv_rank_52w": null,
+        "iv_high_52w": null,
+        "iv_low_52w": null,
+        "iv_history_days": 1,
+        "skew_pct": null,
+        "put_25d_iv": null,
+        "call_25d_iv": null,
+        "term_structure": "FLAT",
+        "term_points": [
+          {
+            "expiry": "20260427",
+            "dte": 42,
+            "iv": 0.55
+          }
+        ],
+        "cot_index": null,
+        "cot_index_52w": null,
+        "cot_index_26w": null,
+        "seasonality_month": "Apr",
+        "seasonality_avg": 0.62,
+        "seasonality_positive_pct": null,
+        "fwd_curve_shape": "CONTANGO",
+        "fwd_curve_diff_pct": 4.5,
+        "fwd_curve_front": {
+          "contract": "SIF27",
+          "price": 81.635
+        },
+        "fwd_curve_back": {
+          "contract": "SIZ29",
+          "price": 85.275
+        },
+        "vix": 19.9,
+        "vix_level": "normal",
+        "sp500": null,
+        "treasury_10y": null,
+        "net_liq": 1345464.39,
+        "buying_power": 3374226.26,
+        "cash": 212445.15,
+        "portfolio_generated": "2026-04-14 17:46",
+        "active_positions": [
+          "CC",
+          "CL",
+          "GF",
+          "SI",
+          "ZL"
+        ],
+        "active_count": 5,
+        "spreads": {},
+        "warnings": [
+          "[WARN] IV Rank 52w nao disponivel \u2014 historico em construcao (1 dias)",
+          "[WARN] Skew nao disponivel \u2014 sem 25-delta puts/calls para SI",
+          "[WARN] COT disaggregated nao disponivel para SI"
+        ],
+        "warnings_count": 3,
+        "captured_at": "2026-04-14T18:17:34.347304"
+      },
+      "context_at_close": null,
+      "pnl": null,
+      "notes": []
+    }
+  ],
+  "version": "1.0"
+}
