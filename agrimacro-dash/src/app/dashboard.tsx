@@ -1271,6 +1271,7 @@ export default function Dashboard() {
   const [psdData, setPsdData] = useState<any>(null);
   const [physicalBrData, setPhysicalBrData] = useState<any>(null);
   const [imeaData, setImeaData] = useState<any>(null);
+  const [commodityDna, setCommodityDna] = useState<any>(null);
   // INTEL state
   const [weatherData, setWeatherData] = useState<any>(null);
   const [bcbData, setBcbData] = useState<any>(null);
@@ -1359,6 +1360,7 @@ export default function Dashboard() {
       fetch("/data/processed/drought_monitor.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setDroughtData(d);}).catch(()=>console.warn("No drought data")),
       fetch("/data/processed/fertilizer_prices.json").then(r=>r.json()).then(d=>{if(!d?.is_fallback) setFertilizerData(d);}).catch(()=>console.warn("No fertilizer data")),
       fetch("/data/processed/intelligence_frame.json").then(r=>r.json()).then(setIntelFrame).catch(()=>console.warn("No intelligence frame")),
+      fetch("/data/processed/commodity_dna.json").then(r=>r.json()).then(setCommodityDna).catch(()=>console.warn("No commodity DNA")),
       fetch("/data/processed/price_validation.json").then(r=>r.json()).then(setPriceValidation).catch(()=>console.warn("No price validation")),
       fetch("/data/processed/bottleneck.json").then(r=>r.json()).then(d=>{if(d?.commodities)setBottleneckData(d.commodities);}).catch(()=>console.warn("No bottleneck")),
     ]).finally(()=>{setErrors(errs);setLoading(false);});
@@ -4210,6 +4212,95 @@ export default function Dashboard() {
   };
 
   // -- INTEL: Central de Inteligência -----------------------------------------
+  // ═══════════════════════════════════════════════════════
+  // Per-commodity deep dive prompt (used by purple buttons)
+  // ═══════════════════════════════════════════════════════
+  const buildCommodityPromptTop = (sym: string) => {
+    const sections: string[] = [];
+    const name = COMMODITIES.find(c => c.sym === sym)?.name || sym;
+    const monthNames2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    const curMonth2 = new Date().getMonth();
+
+    sections.push(`Analise completa da commodity ${sym} (${name}) usando o framework Council AgriMacro v2.2 com 5 conselheiros adversariais. Cada conselheiro DEVE cruzar Analise Tecnica + Analise Fundamental antes de emitir veredicto. Chairman entrega proximo passo concreto com threshold.`);
+
+    // 1. DNA
+    try {
+      const dy = commodityDna?.commodities?.[sym];
+      if (dy?.drivers_ranked) {
+        sections.push(`\nCOMMODITY DNA ${sym}:`);
+        if (dy.composite_signal) sections.push(`Sinal composto: ${dy.composite_signal} (${dy.bullish_drivers} bull / ${dy.bearish_drivers} bear)`);
+        (dy.drivers_ranked as any[]).slice(0, 5).forEach((d: any) => sections.push(`  ${d.driver}: ${d.signal || d.value || ""}`));
+      }
+    } catch {}
+
+    // 2. Options
+    try {
+      const und: any = optionsChain?.underlyings?.[sym];
+      if (und) {
+        sections.push(`\nOPTIONS ${sym}:`);
+        const ivr = und.iv_rank || {};
+        const sk = und.skew || {};
+        const ts = und.term_structure || {};
+        sections.push(`  IV: ${ivr.current_iv ? (ivr.current_iv * 100).toFixed(1) + "%" : "N/A"} | Rank: ${ivr.rank_52w != null ? ivr.rank_52w.toFixed(0) + "%" : "N/A"} | Skew: ${sk.skew_pct != null ? (sk.skew_pct > 0 ? "+" : "") + sk.skew_pct + "%" : "N/A"} | Term: ${ts.structure || "N/A"}`);
+      } else { sections.push(`\nOPTIONS ${sym}: N/A`); }
+    } catch {}
+
+    // 3. COT
+    try {
+      const c: any = cot?.commodities?.[sym];
+      const dis: any = c?.disaggregated || {};
+      if (dis.cot_index != null) {
+        const label = dis.cot_index >= 80 ? "CROWDED LONG" : dis.cot_index <= 20 ? "CROWDED SHORT" : "neutro";
+        sections.push(`\nCOT ${sym}: idx=${dis.cot_index.toFixed(0)} (${label})${dis.cot_index_52w != null ? " | 52w=" + dis.cot_index_52w.toFixed(0) : ""}`);
+      } else { sections.push(`\nCOT ${sym}: N/A`); }
+    } catch {}
+
+    // 4. Seasonality
+    try {
+      const s2: any = season?.[sym];
+      if (s2?.monthly_returns) {
+        const mr = s2.monthly_returns[curMonth2];
+        const avg = typeof mr === "number" ? mr : mr?.avg ?? null;
+        sections.push(`\nSAZONALIDADE ${sym} ${monthNames2[curMonth2]}: ${avg != null ? (avg >= 0 ? "+" : "") + avg.toFixed(2) + "%" : "N/A"}`);
+      } else { sections.push(`\nSAZONALIDADE ${sym}: N/A`); }
+    } catch {}
+
+    // 5. Spreads
+    try {
+      if (spreads?.spreads) {
+        const symTerms: Record<string, string[]> = {ZS:["soy","crush"],ZC:["corn","zc_"],ZW:["wheat","ke_zw"],ZL:["oil","zl_","crush"],ZM:["meal","crush"],KE:["ke_"],LE:["cattle","feedlot"],GF:["feeder","feedlot"],CL:["crude","cl","oil"],CC:["cocoa"],SB:["sugar"],KC:["coffee"]};
+        const terms = symTerms[sym] || [sym.toLowerCase()];
+        const related = Object.entries(spreads.spreads).filter(([k, v]: any) => terms.some(t => (v.name || k).toLowerCase().includes(t) || k.toLowerCase().includes(t)));
+        if (related.length) {
+          sections.push(`\nSPREADS ${sym}:`);
+          related.forEach(([k, v]: any) => sections.push(`  ${v.name || k}: z=${v.zscore_1y?.toFixed(2) || "?"} | ${v.regime || "?"}`));
+        }
+      }
+    } catch {}
+
+    // 6. Portfolio
+    try {
+      const myPos = (portfolio?.positions || []).filter((p: any) => p.symbol === sym && (p.sec_type === "FOP" || p.sec_type === "FUT"));
+      if (myPos.length) {
+        sections.push(`\nPOSICAO ${sym}:`);
+        myPos.forEach((p: any) => sections.push(`  ${p.position > 0 ? "+" : ""}${p.position}x ${p.local_symbol}${p.delta != null ? " d=" + p.delta.toFixed(4) : ""}`));
+      } else { sections.push(`\nPOSICAO ${sym}: nenhuma`); }
+    } catch {}
+
+    // 7. Price
+    try {
+      const bars = prices?.[sym];
+      if (Array.isArray(bars) && bars.length) {
+        const last = bars[bars.length - 1];
+        const p5 = bars.length >= 6 ? bars[bars.length - 6] : null;
+        sections.push(`\nPRECO ${sym}: $${last.close} (${last.date})${p5 ? " | 5d=" + ((last.close - p5.close) / p5.close * 100).toFixed(1) + "%" : ""}`);
+      }
+    } catch {}
+
+    sections.push(`\nSe algum dado "N/A", escreva explicitamente. Nunca fabricar. 5 conselheiros + Chairman com threshold.`);
+    return sections.join("\n");
+  };
+
   const renderIntelPage = () => {
     const panelStyle:any = {background:"#142332",borderRadius:10,padding:20,marginBottom:20,border:"1px solid rgba(148,163,184,.12)"};
     const sectionTitle = (t:string) => <div style={{fontSize:14,fontWeight:700,color:"#DCB432",marginBottom:14,letterSpacing:0.5}}>{t}</div>;
@@ -4852,6 +4943,153 @@ export default function Dashboard() {
       // Analysis request
       sections.push("\n=== ANÁLISE SOLICITADA ===");
       sections.push("Com base em todos os dados acima:\n1. Quais são os maiores riscos para o portfólio atual dado o ambiente de mercado?\n2. Quais posições estão alinhadas com os sinais multifatoriais?\n3. Quais estão em conflito com os sinais (maior risco)?\n4. Recomendações de ajuste de exposição (apresentar como análise de risco, sem ser prescritivo)\n5. O que monitorar nas próximas 24-48 horas?\n\nResponda em português brasileiro, tom institucional e analítico.");
+
+      return sections.join("\n");
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // Per-commodity deep dive prompt (purple buttons)
+    // ═══════════════════════════════════════════════════════
+    const buildCommodityPrompt = (sym: string) => {
+      const sections: string[] = [];
+      const name = COMMODITIES.find(c => c.sym === sym)?.name || sym;
+      const monthNames = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      const curMonth = new Date().getMonth();
+
+      sections.push(`Analise completa da commodity ${sym} (${name}) usando o framework Council AgriMacro v2.2 com 5 conselheiros adversariais. Cada conselheiro DEVE cruzar Analise Tecnica + Analise Fundamental antes de emitir veredicto. Chairman entrega proximo passo concreto com threshold.`);
+
+      // 1. COMMODITY DNA
+      try {
+        const dnaStatic = (window as any).__dnaStatic || null;
+        const dnaDynamic = commodityDna;
+        const st = dnaStatic?.commodities?.[sym];
+        const dy = dnaDynamic?.commodities?.[sym];
+        if (st?.drivers_ranked || dy?.drivers_ranked) {
+          sections.push(`\nCOMMODITY DNA ${sym}:`);
+          if (dy?.composite_signal) sections.push(`Sinal composto: ${dy.composite_signal} (${dy.bullish_drivers} bull / ${dy.bearish_drivers} bear)`);
+          const drivers = st?.drivers_ranked || dy?.drivers_ranked || [];
+          drivers.forEach((d: any) => sections.push(`  ${d.rank || "-"}. ${d.driver} (${d.weight || d.strength || "?"})${d.description ? " — " + d.description.slice(0, 100) : ""}`));
+        }
+      } catch {}
+
+      // 2. OPTIONS (IV, Skew, Term Structure)
+      try {
+        const und = optionsChain?.underlyings?.[sym];
+        if (und) {
+          sections.push(`\nOPTIONS INTELLIGENCE ${sym}:`);
+          const ivr = und.iv_rank || {};
+          const sk = und.skew || {};
+          const ts = und.term_structure || {};
+          sections.push(`  IV ATM: ${ivr.current_iv ? (ivr.current_iv * 100).toFixed(1) + "%" : "N/A"}`);
+          sections.push(`  IV Rank 52w: ${ivr.rank_52w != null ? ivr.rank_52w.toFixed(0) + "%" : "N/A (building, " + (ivr.history_days || 0) + " dias)"}`);
+          sections.push(`  Skew (put25d vs call25d): ${sk.skew_pct != null ? (sk.skew_pct > 0 ? "+" : "") + sk.skew_pct + "%" : "N/A"}`);
+          sections.push(`  Term Structure: ${ts.structure || "N/A"}`);
+          if (ts.points?.length) {
+            sections.push(`  Curva IV: ${ts.points.map((p: any) => p.dte + "d=" + (p.iv * 100).toFixed(0) + "%").join(" | ")}`);
+          }
+        } else {
+          sections.push(`\nOPTIONS INTELLIGENCE ${sym}: N/A (sem dados de options chain)`);
+        }
+      } catch {}
+
+      // 3. COT POSITIONING
+      try {
+        const c = cot?.commodities?.[sym];
+        if (c) {
+          sections.push(`\nCOT POSITIONING ${sym}:`);
+          const dis: any = c.disaggregated || {};
+          const leg: any = c.legacy || {};
+          if (dis.cot_index != null) {
+            const label = dis.cot_index >= 80 ? "CROWDED LONG" : dis.cot_index <= 20 ? "CROWDED SHORT" : dis.cot_index >= 65 ? "longs acumulando" : dis.cot_index <= 35 ? "shorts acumulando" : "neutro";
+            sections.push(`  COT Index (156w): ${dis.cot_index.toFixed(0)} — ${label}`);
+            if (dis.cot_index_52w != null) sections.push(`  COT Index (52w): ${dis.cot_index_52w.toFixed(0)}`);
+            if (dis.cot_index_26w != null) sections.push(`  COT Index (26w): ${dis.cot_index_26w.toFixed(0)}`);
+          } else if (leg.latest) {
+            sections.push(`  Legacy net: ${leg.latest.noncomm_net} (sem disaggregated)`);
+          } else {
+            sections.push(`  N/A`);
+          }
+        } else {
+          sections.push(`\nCOT POSITIONING ${sym}: N/A`);
+        }
+      } catch {}
+
+      // 4. SAZONALIDADE
+      try {
+        const s: any = season?.[sym];
+        if (s?.monthly_returns) {
+          const mr = s.monthly_returns[curMonth];
+          const avg = typeof mr === "number" ? mr : mr?.avg ?? null;
+          sections.push(`\nSAZONALIDADE ${sym} ${monthNames[curMonth]}:`);
+          if (avg != null) {
+            const strength = Math.abs(avg) >= 2 ? "FORTE" : Math.abs(avg) >= 1 ? "moderado" : "fraco";
+            sections.push(`  Desvio ${avg >= 0 ? "+" : ""}${avg.toFixed(2)}% vs historico (${strength})`);
+          } else {
+            sections.push(`  N/A`);
+          }
+        } else {
+          sections.push(`\nSAZONALIDADE ${sym}: N/A`);
+        }
+      } catch {}
+
+      // 5. SPREADS related
+      try {
+        if (spreads?.spreads) {
+          const related: string[] = [];
+          Object.entries(spreads.spreads).forEach(([k, v]: any) => {
+            const nameStr = (v.name || k).toLowerCase();
+            const symLower = sym.toLowerCase();
+            const symNames: Record<string, string[]> = {
+              ZS: ["soy", "soja", "crush"], ZC: ["corn", "milho", "zc_"], ZW: ["wheat", "trigo", "ke_zw", "feed_wheat"],
+              ZL: ["oil", "oleo", "zl_", "crush"], ZM: ["meal", "farelo", "crush"], KE: ["ke_", "wheat"],
+              LE: ["cattle", "feedlot", "crush"], GF: ["feeder", "feedlot"], CL: ["crude", "cl", "oil"],
+              CC: ["cocoa", "cacau"], SB: ["sugar", "acucar"], KC: ["coffee", "cafe"],
+            };
+            const terms = symNames[sym] || [sym.toLowerCase()];
+            if (terms.some(t => nameStr.includes(t) || k.toLowerCase().includes(t))) {
+              related.push(`  ${v.name || k}: ${v.current?.toFixed(4) || "?"} ${v.unit || ""} | z=${v.zscore_1y?.toFixed(2) || "?"} | ${v.regime || "?"}`);
+            }
+          });
+          if (related.length) {
+            sections.push(`\nSPREADS relacionados a ${sym}:`);
+            related.forEach(r => sections.push(r));
+          }
+        }
+      } catch {}
+
+      // 6. PORTFOLIO position for this commodity
+      try {
+        if (portfolio?.positions) {
+          const myPos = portfolio.positions.filter((p: any) => p.symbol === sym && (p.sec_type === "FOP" || p.sec_type === "FUT"));
+          if (myPos.length) {
+            sections.push(`\nPOSICAO PORTFOLIO ${sym}:`);
+            myPos.forEach((p: any) => {
+              const pos = p.position > 0 ? `+${p.position}` : `${p.position}`;
+              const d = p.delta != null ? ` delta=${p.delta.toFixed(4)}` : "";
+              const iv = p.iv != null ? ` iv=${(p.iv * 100).toFixed(0)}%` : "";
+              sections.push(`  ${pos}x ${p.local_symbol}${d}${iv}`);
+            });
+          } else {
+            sections.push(`\nPOSICAO PORTFOLIO ${sym}: Nenhuma posicao aberta`);
+          }
+        }
+      } catch {}
+
+      // 7. Price context
+      try {
+        const bars = prices?.[sym];
+        if (Array.isArray(bars) && bars.length) {
+          const last = bars[bars.length - 1];
+          const prev5 = bars.length >= 6 ? bars[bars.length - 6] : null;
+          const prev20 = bars.length >= 21 ? bars[bars.length - 21] : null;
+          sections.push(`\nPRECO ${sym}:`);
+          sections.push(`  Atual: $${last.close} (${last.date})`);
+          if (prev5) sections.push(`  Momentum 5d: ${((last.close - prev5.close) / prev5.close * 100).toFixed(1)}%`);
+          if (prev20) sections.push(`  Momentum 20d: ${((last.close - prev20.close) / prev20.close * 100).toFixed(1)}%`);
+        }
+      } catch {}
+
+      sections.push(`\nAnalise esta commodity usando os dados acima. Se algum dado nao estiver disponivel, escrever "N/A" — nunca fabricar. Formato: 5 conselheiros com veredicto, Chairman com proximo passo concreto e threshold.`);
 
       return sections.join("\n");
     };
@@ -6156,7 +6394,32 @@ export default function Dashboard() {
 
         {/* Content */}
         <div style={{flex:1,overflow:"auto",padding:24}}>
-          {loading ? <LoadingSpinner /> : viewMode==="intel" ? renderIntelPage() : viewMode==="commodity" ? (tab==="Visão Geral" ? renderTab() : renderCommodityView()) : renderTab()}
+          {loading ? <LoadingSpinner /> : viewMode==="intel" ? renderIntelPage() : viewMode==="commodity" ? (tab==="Visão Geral" ? (<>
+            {/* Deep Dive button for selected commodity */}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <button onClick={async()=>{
+                if(intelCouncilLoading) return;
+                setIntelCouncilLoading(true);
+                try {
+                  const prompt = buildCommodityPromptTop(selected);
+                  const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{role:"user",content:prompt}]})});
+                  const d = await res.json();
+                  if(res.ok && d.response){
+                    const entry={text:`**[${selected}]** ${d.response}`,time:new Date().toLocaleString("pt-BR")};
+                    setIntelCouncil(entry);
+                    setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                  } else setIntelCouncil({text:"ERRO: "+(d.error||"API error"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});}
+                setIntelCouncilLoading(false);
+              }} disabled={intelCouncilLoading} style={{
+                padding:"6px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
+                background:"rgba(124,58,237,.12)",color:"#a78bfa",
+                border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
+              }}>{intelCouncilLoading?`Analisando ${selected}...`:`Deep Dive ${selected}`}</button>
+              <span style={{fontSize:9,color:"#64748b"}}>DNA + IV + COT + Sazonalidade + Spreads + Portfolio</span>
+            </div>
+            {renderTab()}
+          </>) : renderCommodityView()) : renderTab()}
         </div>
       </div>
     </div>
