@@ -1,0 +1,188 @@
+{
+  "generated_at": "2026-04-14T17:54:01.403548",
+  "regime": "VEGA",
+  "active_pct": 70.9,
+  "best_opportunity": {
+    "sym": "SB",
+    "direction": "CALL",
+    "grade": "C",
+    "score": 53,
+    "max_score": 95
+  },
+  "top_puts": [
+    {
+      "sym": "SI",
+      "direction": "PUT",
+      "grade": "C",
+      "score": 53,
+      "pct": 55.8
+    },
+    {
+      "sym": "SB",
+      "direction": "PUT",
+      "grade": "C",
+      "score": 50,
+      "pct": 52.6
+    },
+    {
+      "sym": "ZW",
+      "direction": "PUT",
+      "grade": "C",
+      "score": 45,
+      "pct": 47.4
+    },
+    {
+      "sym": "CC",
+      "direction": "PUT",
+      "grade": "D",
+      "score": 40,
+      "pct": 42.1
+    },
+    {
+      "sym": "ZC",
+      "direction": "PUT",
+      "grade": "D",
+      "score": 36,
+      "pct": 37.9
+    }
+  ],
+  "top_calls": [
+    {
+      "sym": "SB",
+      "direction": "CALL",
+      "grade": "C",
+      "score": 53,
+      "pct": 55.8
+    },
+    {
+      "sym": "SI",
+      "direction": "CALL",
+      "grade": "C",
+      "score": 53,
+      "pct": 55.8
+    },
+    {
+      "sym": "ZW",
+      "direction": "CALL",
+      "grade": "C",
+      "score": 45,
+      "pct": 47.4
+    },
+    {
+      "sym": "CL",
+      "direction": "CALL",
+      "grade": "C",
+      "score": 43,
+      "pct": 45.3
+    },
+    {
+      "sym": "KE",
+      "direction": "CALL",
+      "grade": "D",
+      "score": 41,
+      "pct": 43.2
+    }
+  ],
+  "blocked": [
+    {
+      "sym": "ZS",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-4.9%)",
+        "IV=14% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "ZS",
+      "direction": "CALL",
+      "blockers": [
+        "IV=14% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "ZL",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-10.2%)"
+      ]
+    },
+    {
+      "sym": "LE",
+      "direction": "PUT",
+      "blockers": [
+        "IV=15% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "LE",
+      "direction": "CALL",
+      "blockers": [
+        "IV=15% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "GF",
+      "direction": "PUT",
+      "blockers": [
+        "IV=11% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "GF",
+      "direction": "CALL",
+      "blockers": [
+        "IV=11% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "HE",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-3.2%)",
+        "IV=5% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "HE",
+      "direction": "CALL",
+      "blockers": [
+        "IV=5% \u2014 insuficiente para premium selling"
+      ]
+    },
+    {
+      "sym": "KC",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-3.5%)"
+      ]
+    },
+    {
+      "sym": "CT",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-5.8%)"
+      ]
+    },
+    {
+      "sym": "CL",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-12.7%)"
+      ]
+    },
+    {
+      "sym": "NG",
+      "direction": "PUT",
+      "blockers": [
+        "Curva STRONG BACKWARDATION (-6.4%)"
+      ]
+    },
+    {
+      "sym": "GC",
+      "direction": "CALL",
+      "blockers": [
+        "Curva CONTANGO forte (+10.5%)"
+      ]
+    }
+  ]
+}

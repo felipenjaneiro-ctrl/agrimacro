@@ -462,6 +462,16 @@ def main():
         results["theta_calendar"] = {"status": "WARN", "error": str(e)}
         log(f"Theta calendar failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 28e/{total_steps}: Running opportunity scanner...")
+    try:
+        from skill_opportunity_scanner import main as run_opp_scan
+        run_opp_scan()
+        results["opportunity_scan"] = {"status": "OK"}
+        log("Opportunity scan complete", "OK")
+    except BaseException as e:
+        results["opportunity_scan"] = {"status": "WARN", "error": str(e)}
+        log(f"Opportunity scan failed (non-blocking): {e}", "WARN")
+
     log(f"Step 29/{total_steps}: Generating PDF report (v4 with Options Intelligence)...")
     try:
         from patch_report_v4 import build_pdf_v4
