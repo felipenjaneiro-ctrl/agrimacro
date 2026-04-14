@@ -1,0 +1,1296 @@
+{
+  "generated_at": "2026-04-14T16:30:54.863525",
+  "description": "Commodity DNA \u2014 perfil de drivers rankeados por forca de sinal para cada commodity",
+  "month": "Apr",
+  "commodities": {
+    "ZC": {
+      "name": "Milho",
+      "sector": "Graos",
+      "price": 443.0,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 3,
+      "bearish_drivers": 4,
+      "total_drivers": 11,
+      "drivers_ranked": [
+        {
+          "driver": "Spread: Corn/Meal Ratio",
+          "value": "Z=-2.70 (EXTREMO)",
+          "signal": "Milho barato vs farelo \u2192 mais demanda por milho na ra\u00e7\u00e3o.",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=79/100 (52w=85)",
+          "signal": "Longs acumulando",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Spread: Feedlot Margin",
+          "value": "Z=-1.87 (COMPRESS\u00c3O)",
+          "signal": "Margem comprimida. Risco de abate precoce \u2192 bearish LE m\u00e9dio prazo.",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Corn/Soy Ratio",
+          "value": "Z=-1.59 (COMPRESS\u00c3O)",
+          "signal": "Milho barato vs soja. Produtores tendem a plantar mais milho.",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=17.6%",
+          "signal": "IV BAIXA (18%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "CONTANGO",
+          "signal": "Mercado calmo, IV sobe com prazo",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-2.4%",
+          "signal": "Queda de 2.4% em 20 dias",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=67% (14 ciclos)",
+          "signal": "Historico ok: 67% WR, net $44,362",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Spread: Feed Wheat Ratio (ZW/ZC)",
+          "value": "Z=1.17 (DISSON\u00c2NCIA)",
+          "signal": "Trigo perdendo espa\u00e7o na ra\u00e7\u00e3o (est\u00e1vel). Milho mais competitivo.",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+1.39%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "ZW(+0.64), KE(+0.63), ZS(+0.58)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -2.42,
+        "60d": 3.14,
+        "200d": -0.11
+      }
+    },
+    "ZS": {
+      "name": "Soja",
+      "sector": "Graos",
+      "price": 1156.5,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 3,
+      "total_drivers": 9,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=88/100 (52w=82)",
+          "signal": "CROWDED LONG",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Soy Crush Margin",
+          "value": "Z=3.50 (EXTREMO)",
+          "signal": "Margem no pico (+3.5\u03c3). Ind\u00fastria pagando muito pela soja. Aten\u00e7\u00e3o: revers\u00e3o poss\u00edvel.",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Spread: Corn/Soy Ratio",
+          "value": "Z=-1.59 (COMPRESS\u00c3O)",
+          "signal": "Milho barato vs soja. Produtores tendem a plantar mais milho.",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+2.30%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=14.3%",
+          "signal": "IV BAIXA (14%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "CONTANGO",
+          "signal": "Mercado calmo, IV sobe com prazo",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=62% (19 ciclos)",
+          "signal": "Historico ok: 62% WR, net $-181,232",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+0.1%",
+          "signal": "Alta de 0.1% em 20 dias",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "ZM(+0.61), ZC(+0.58), ZL(+0.57)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 0.11,
+        "60d": 8.41,
+        "200d": 9.44
+      }
+    },
+    "ZW": {
+      "name": "Trigo CBOT",
+      "sector": "Graos",
+      "price": 593.25,
+      "composite_signal": "BULLISH",
+      "bullish_drivers": 4,
+      "bearish_drivers": 2,
+      "total_drivers": 10,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=91/100 (52w=90)",
+          "signal": "CROWDED LONG",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: KC-CBOT Wheat Spread",
+          "value": "Z=2.68 (EXTREMO)",
+          "signal": "Pr\u00eamio de prote\u00edna extremo (caindo). Trigo duro muito demandado.",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=83% (6 ciclos)",
+          "signal": "Historico forte: 83% WR, net $95,853",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=30.4%",
+          "signal": "IV MODERADA (30%)",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-13.6%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Feed Wheat Ratio (ZW/ZC)",
+          "value": "Z=1.17 (DISSON\u00c2NCIA)",
+          "signal": "Trigo perdendo espa\u00e7o na ra\u00e7\u00e3o (est\u00e1vel). Milho mais competitivo.",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "-0.36%",
+          "signal": "Historicamente queda em Apr",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-0.7%",
+          "signal": "Queda de 0.7% em 20 dias",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "KE(+0.93), ZC(+0.64), ZS(+0.48)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -0.67,
+        "60d": 15.19,
+        "200d": 2.15
+      }
+    },
+    "KE": {
+      "name": "Trigo KC",
+      "sector": "Graos",
+      "price": 624.75,
+      "composite_signal": "BULLISH",
+      "bullish_drivers": 4,
+      "bearish_drivers": 1,
+      "total_drivers": 6,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=95/100 (52w=95)",
+          "signal": "CROWDED LONG",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: KC-CBOT Wheat Spread",
+          "value": "Z=2.68 (EXTREMO)",
+          "signal": "Pr\u00eamio de prote\u00edna extremo (caindo). Trigo duro muito demandado.",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=69% (15 ciclos)",
+          "signal": "Historico ok: 69% WR, net $224,962",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+1.15%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+1.3%",
+          "signal": "Alta de 1.3% em 20 dias",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "ZW(+0.93), ZC(+0.63), ZS(+0.45)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 1.34,
+        "60d": 18.21,
+        "200d": 6.43
+      }
+    },
+    "ZM": {
+      "name": "Farelo de Soja",
+      "sector": "Graos",
+      "price": 329.5,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 4,
+      "bearish_drivers": 4,
+      "total_drivers": 10,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=82/100 (52w=94)",
+          "signal": "CROWDED LONG",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Soy Crush Margin",
+          "value": "Z=3.50 (EXTREMO)",
+          "signal": "Margem no pico (+3.5\u03c3). Ind\u00fastria pagando muito pela soja. Aten\u00e7\u00e3o: revers\u00e3o poss\u00edvel.",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Spread: Corn/Meal Ratio",
+          "value": "Z=-2.70 (EXTREMO)",
+          "signal": "Milho barato vs farelo \u2192 mais demanda por milho na ra\u00e7\u00e3o.",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+5.5%",
+          "signal": "Alta de 5.5% em 20 dias",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+2.38%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=23.9%",
+          "signal": "IV BAIXA (24%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-10.5%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=64% (16 ciclos)",
+          "signal": "Historico ok: 64% WR, net $-14,570",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "ZS(+0.61), ZC(+0.46), ZW(+0.42)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 5.54,
+        "60d": 12.11,
+        "200d": 11.36
+      }
+    },
+    "ZL": {
+      "name": "Oleo de Soja",
+      "sector": "Graos",
+      "price": 66.37,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 3,
+      "bearish_drivers": 3,
+      "total_drivers": 8,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=100/100 (52w=100)",
+          "signal": "CROWDED LONG",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Soy Crush Margin",
+          "value": "Z=3.50 (EXTREMO)",
+          "signal": "Margem no pico (+3.5\u03c3). Ind\u00fastria pagando muito pela soja. Aten\u00e7\u00e3o: revers\u00e3o poss\u00edvel.",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Spread: Soybean Oil / Crude Ratio",
+          "value": "Z=-3.16 (EXTREMO)",
+          "signal": "Petr\u00f3leo relativamente caro. Biodiesel de soja ganha espa\u00e7o.",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+2.17%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=25.9%",
+          "signal": "IV BAIXA (26%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+3.8%",
+          "signal": "Alta de 3.8% em 20 dias",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "ZS(+0.57), CL(+0.40), ZC(+0.27)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=54% (11 ciclos)",
+          "signal": "Historico fraco: 54% WR, net $-78,948",
+          "strength": 1,
+          "direction": "BEARISH"
+        }
+      ],
+      "momentum": {
+        "20d": 3.8,
+        "60d": 24.29,
+        "200d": 22.43
+      }
+    },
+    "LE": {
+      "name": "Boi Gordo",
+      "sector": "Pecuaria",
+      "price": 251.35,
+      "composite_signal": "BEARISH",
+      "bullish_drivers": 2,
+      "bearish_drivers": 5,
+      "total_drivers": 10,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=81/100 (52w=95)",
+          "signal": "CROWDED LONG",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+8.4%",
+          "signal": "Alta de 8.4% em 20 dias",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=80% (8 ciclos)",
+          "signal": "Historico forte: 80% WR, net $-88,556",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Feedlot Margin",
+          "value": "Z=-1.87 (COMPRESS\u00c3O)",
+          "signal": "Margem comprimida. Risco de abate precoce \u2192 bearish LE m\u00e9dio prazo.",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=14.6%",
+          "signal": "IV BAIXA (15%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Cattle Crush Margin",
+          "value": "Z=-0.93 (NORMAL)",
+          "signal": "Margem normal de confinamento. Sem press\u00e3o excepcional.",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+0.67%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "+7.0%",
+          "signal": "Puts mais caros \u2014 demanda por protecao",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "GF(+0.92), HE(+0.25), ZM(-0.19)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 8.4,
+        "60d": 6.28,
+        "200d": 20.86
+      }
+    },
+    "GF": {
+      "name": "Feeder Cattle",
+      "sector": "Pecuaria",
+      "price": 374.375,
+      "composite_signal": "BEARISH",
+      "bullish_drivers": 2,
+      "bearish_drivers": 4,
+      "total_drivers": 10,
+      "drivers_ranked": [
+        {
+          "driver": "Momentum (20d)",
+          "value": "+8.3%",
+          "signal": "Alta de 8.3% em 20 dias",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Spread: Feedlot Margin",
+          "value": "Z=-1.87 (COMPRESS\u00c3O)",
+          "signal": "Margem comprimida. Risco de abate precoce \u2192 bearish LE m\u00e9dio prazo.",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=11.0%",
+          "signal": "IV BAIXA (11%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "+10.4%",
+          "signal": "Puts mais caros \u2014 demanda por protecao",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "CONTANGO",
+          "signal": "Mercado calmo, IV sobe com prazo",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=67% (9 ciclos)",
+          "signal": "Historico ok: 67% WR, net $-79,908",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=63/100 (52w=33)",
+          "signal": "Neutro",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Spread: Cattle Crush Margin",
+          "value": "Z=-0.93 (NORMAL)",
+          "signal": "Margem normal de confinamento. Sem press\u00e3o excepcional.",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+0.92%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "LE(+0.92), HE(+0.29), ZM(-0.24)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 8.34,
+        "60d": 4.36,
+        "200d": 30.35
+      }
+    },
+    "HE": {
+      "name": "Suino",
+      "sector": "Pecuaria",
+      "price": 102.475,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 2,
+      "total_drivers": 9,
+      "drivers_ranked": [
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+9.06%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=100% (6 ciclos)",
+          "signal": "Historico forte: 100% WR, net $123,578",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=69/100 (52w=48)",
+          "signal": "Longs acumulando",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=4.9%",
+          "signal": "IV BAIXA (5%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "CONTANGO",
+          "signal": "Mercado calmo, IV sobe com prazo",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-4.5%",
+          "signal": "Queda de 4.5% em 20 dias",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Spread: Cattle Crush Margin",
+          "value": "Z=-0.93 (NORMAL)",
+          "signal": "Margem normal de confinamento. Sem press\u00e3o excepcional.",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-7.4%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "GF(+0.29), LE(+0.25), CC(+0.12)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -4.45,
+        "60d": -5.92,
+        "200d": -3.33
+      }
+    },
+    "SB": {
+      "name": "Acucar",
+      "sector": "Softs",
+      "price": 14.15,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 3,
+      "total_drivers": 8,
+      "drivers_ranked": [
+        {
+          "driver": "Historico de trades",
+          "value": "WR=75% (11 ciclos)",
+          "signal": "Historico forte: 75% WR, net $93,247",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=40.0%",
+          "signal": "IV MODERADA (40%)",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-13.6%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=39/100 (52w=62)",
+          "signal": "Neutro",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "-0.87%",
+          "signal": "Historicamente queda em Apr",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-1.7%",
+          "signal": "Queda de 1.7% em 20 dias",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "CC(+0.14), CL(+0.13), ZL(+0.10)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -1.74,
+        "60d": -2.01,
+        "200d": -16.96
+      }
+    },
+    "KC": {
+      "name": "Cafe",
+      "sector": "Softs",
+      "price": 298.9,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 1,
+      "total_drivers": 6,
+      "drivers_ranked": [
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=34.3%",
+          "signal": "IV MODERADA (34%)",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+3.5%",
+          "signal": "Alta de 3.5% em 20 dias",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=58/100 (52w=33)",
+          "signal": "Neutro",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+1.20%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "CC(+0.23), CT(+0.21), GF(+0.15)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=40% (5 ciclos)",
+          "signal": "Historico fraco: 40% WR, net $-180,073",
+          "strength": 1,
+          "direction": "BEARISH"
+        }
+      ],
+      "momentum": {
+        "20d": 3.53,
+        "60d": -11.93,
+        "200d": 11.34
+      }
+    },
+    "CT": {
+      "name": "Algodao",
+      "sector": "Softs",
+      "price": 76.47,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 1,
+      "total_drivers": 7,
+      "drivers_ranked": [
+        {
+          "driver": "Momentum (20d)",
+          "value": "+9.0%",
+          "signal": "Alta de 9.0% em 20 dias",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=23.4%",
+          "signal": "IV BAIXA (23%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-13.4%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=46/100 (52w=100)",
+          "signal": "Neutro",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "-0.11%",
+          "signal": "Historicamente queda em Apr",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "KC(+0.21), SI(+0.18), DX(-0.16)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 8.99,
+        "60d": 11.18,
+        "200d": 2.85
+      }
+    },
+    "CC": {
+      "name": "Cacau",
+      "sector": "Softs",
+      "price": 3630.0,
+      "composite_signal": "BULLISH",
+      "bullish_drivers": 4,
+      "bearish_drivers": 1,
+      "total_drivers": 8,
+      "drivers_ranked": [
+        {
+          "driver": "COT Positioning",
+          "value": "Index=0/100 (52w=0)",
+          "signal": "CROWDED SHORT",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+2.41%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=44.1%",
+          "signal": "IV MODERADA (44%)",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "+3.6%",
+          "signal": "Alta de 3.6% em 20 dias",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=60% (5 ciclos)",
+          "signal": "Historico ok: 60% WR, net $4,947",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-7.4%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "KC(+0.23), ZL(-0.16), SB(+0.14)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": 3.63,
+        "60d": -30.26,
+        "200d": -59.32
+      }
+    },
+    "CL": {
+      "name": "Petroleo",
+      "sector": "Energia",
+      "price": 92.18,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 2,
+      "total_drivers": 9,
+      "drivers_ranked": [
+        {
+          "driver": "Spread: Soybean Oil / Crude Ratio",
+          "value": "Z=-3.16 (EXTREMO)",
+          "signal": "Petr\u00f3leo relativamente caro. Biodiesel de soja ganha espa\u00e7o.",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+3.14%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=97.5%",
+          "signal": "IV ALTA (97%) \u2014 premium selling favoravel",
+          "strength": 3,
+          "direction": "SELL_VOL"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=75% (5 ciclos)",
+          "signal": "Historico forte: 75% WR, net $679",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=34/100 (52w=55)",
+          "signal": "Shorts acumulando",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-7.2%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-0.5%",
+          "signal": "Queda de 0.5% em 20 dias",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "ZL(+0.40), ZW(+0.33), NG(+0.31)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -0.48,
+        "60d": 57.68,
+        "200d": 49.79
+      }
+    },
+    "NG": {
+      "name": "Gas Natural",
+      "sector": "Energia",
+      "price": 2.598,
+      "composite_signal": "BEARISH",
+      "bullish_drivers": 1,
+      "bearish_drivers": 3,
+      "total_drivers": 8,
+      "drivers_ranked": [
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+5.05%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 3,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=52.3%",
+          "signal": "IV ALTA (52%) \u2014 premium selling favoravel",
+          "strength": 3,
+          "direction": "SELL_VOL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-11.7%",
+          "signal": "Queda de 11.7% em 20 dias",
+          "strength": 3,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=28/100 (52w=18)",
+          "signal": "Shorts acumulando",
+          "strength": 2,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Estrutura de termo IV",
+          "value": "BACKWARDATION",
+          "signal": "Stress no curto prazo",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=57% (8 ciclos)",
+          "signal": "Historico ok: 57% WR, net $-24,739",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Skew (put vs call IV)",
+          "value": "-6.2%",
+          "signal": "Calls mais caros \u2014 demanda por upside",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "CL(+0.31), KE(+0.18), ZW(+0.15)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -11.72,
+        "60d": 27.35,
+        "200d": -12.11
+      }
+    },
+    "GC": {
+      "name": "Ouro",
+      "sector": "Metais",
+      "price": 4864.2,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 1,
+      "total_drivers": 6,
+      "drivers_ranked": [
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=24.1%",
+          "signal": "IV BAIXA (24%) \u2014 evitar venda de premium",
+          "strength": 2,
+          "direction": "BUY_VOL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-3.6%",
+          "signal": "Queda de 3.6% em 20 dias",
+          "strength": 2,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=67% (9 ciclos)",
+          "signal": "Historico ok: 67% WR, net $21,842",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "COT Positioning",
+          "value": "Index=48/100",
+          "signal": "Neutro",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+1.10%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "SI(+0.75), DX(-0.35), GF(+0.15)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -3.61,
+        "60d": 3.83,
+        "200d": 39.24
+      }
+    },
+    "SI": {
+      "name": "Prata",
+      "sector": "Metais",
+      "price": 79.72,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 2,
+      "bearish_drivers": 1,
+      "total_drivers": 5,
+      "drivers_ranked": [
+        {
+          "driver": "IV / Volatilidade",
+          "value": "IV=55.0%",
+          "signal": "IV ALTA (55%) \u2014 premium selling favoravel",
+          "strength": 3,
+          "direction": "SELL_VOL"
+        },
+        {
+          "driver": "Historico de trades",
+          "value": "WR=68% (32 ciclos)",
+          "signal": "Historico ok: 68% WR, net $512,219",
+          "strength": 2,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "+0.62%",
+          "signal": "Historicamente alta em Apr",
+          "strength": 1,
+          "direction": "BULLISH"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-1.6%",
+          "signal": "Queda de 1.6% em 20 dias",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "GC(+0.75), DX(-0.34), CT(+0.18)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -1.58,
+        "60d": -14.17,
+        "200d": 108.88
+      }
+    },
+    "DX": {
+      "name": "Dolar Index",
+      "sector": "FX",
+      "price": 97.9,
+      "composite_signal": "MIXED",
+      "bullish_drivers": 0,
+      "bearish_drivers": 1,
+      "total_drivers": 3,
+      "drivers_ranked": [
+        {
+          "driver": "Sazonalidade (Apr)",
+          "value": "-0.41%",
+          "signal": "Historicamente queda em Apr",
+          "strength": 1,
+          "direction": "NEUTRAL"
+        },
+        {
+          "driver": "Momentum (20d)",
+          "value": "-1.4%",
+          "signal": "Queda de 1.4% em 20 dias",
+          "strength": 1,
+          "direction": "BEARISH"
+        },
+        {
+          "driver": "Correlacoes principais",
+          "value": "GC(-0.35), SI(-0.34), CL(+0.29)",
+          "signal": "Monitorar pares correlacionados",
+          "strength": 1,
+          "direction": "INFO"
+        }
+      ],
+      "momentum": {
+        "20d": -1.44,
+        "60d": -0.3,
+        "200d": 2.12
+      }
+    }
+  }
+}
