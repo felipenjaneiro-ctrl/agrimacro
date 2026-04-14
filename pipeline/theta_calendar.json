@@ -1,0 +1,152 @@
+{
+  "generated_at": "2026-04-14T17:48:34.726962",
+  "scan_date": "2026-04-14",
+  "positions": 8,
+  "total_margin": 954000,
+  "total_theta_daily": -97.8326,
+  "in_decision_window": 1,
+  "action_needed": 0,
+  "timeline": [
+    {
+      "sym": "GF",
+      "contract": "GFJ6",
+      "dte": 15,
+      "phase": "DECISION",
+      "expiry_date": "2026-04-29",
+      "sold": 66,
+      "bought": 66,
+      "delta": 42.54,
+      "theta": -63.5928,
+      "margin_est": 165000,
+      "wasde_conflict": null,
+      "next_expiry": {
+        "contract": "GFK6",
+        "dte": 36
+      }
+    },
+    {
+      "sym": "ZL",
+      "contract": "OZLK6",
+      "dte": 29,
+      "phase": "HARVEST",
+      "expiry_date": "2026-05-13",
+      "sold": 60,
+      "bought": 60,
+      "delta": 7.06,
+      "theta": -1.608,
+      "margin_est": 90000,
+      "wasde_conflict": "2026-05-12",
+      "next_expiry": {
+        "contract": "ZLN6",
+        "dte": 90
+      }
+    },
+    {
+      "sym": "CL",
+      "contract": "LOM6",
+      "dte": 34,
+      "phase": "PRODUCTIVE",
+      "expiry_date": "2026-05-18",
+      "sold": 56,
+      "bought": 56,
+      "delta": 4.75,
+      "theta": -1.284,
+      "margin_est": 196000,
+      "wasde_conflict": null,
+      "next_expiry": {
+        "contract": "CLN6",
+        "dte": 68
+      }
+    },
+    {
+      "sym": "SI",
+      "contract": "SOK6",
+      "dte": 42,
+      "phase": "PRODUCTIVE",
+      "expiry_date": "2026-05-26",
+      "sold": 24,
+      "bought": 24,
+      "delta": -0.31,
+      "theta": -0.08,
+      "margin_est": 192000,
+      "wasde_conflict": null,
+      "next_expiry": null
+    },
+    {
+      "sym": "CL",
+      "contract": "LON6",
+      "dte": 68,
+      "phase": "DISTANT",
+      "expiry_date": "2026-06-21",
+      "sold": 30,
+      "bought": 35,
+      "delta": 8.17,
+      "theta": -1.2775,
+      "margin_est": 105000,
+      "wasde_conflict": null,
+      "next_expiry": {
+        "contract": "CLQ6",
+        "dte": 97
+      }
+    },
+    {
+      "sym": "CC",
+      "contract": "CON6",
+      "dte": 92,
+      "phase": "DISTANT",
+      "expiry_date": "2026-07-15",
+      "sold": 22,
+      "bought": 22,
+      "delta": -2.9,
+      "theta": -24.5162,
+      "margin_est": 66000,
+      "wasde_conflict": null,
+      "next_expiry": {
+        "contract": "CCU6",
+        "dte": 153
+      }
+    },
+    {
+      "sym": "ZL",
+      "contract": "OZLM6",
+      "dte": null,
+      "phase": "UNKNOWN",
+      "expiry_date": null,
+      "sold": 88,
+      "bought": 88,
+      "delta": 63.74,
+      "theta": -5.4344,
+      "margin_est": 132000,
+      "wasde_conflict": null,
+      "next_expiry": null
+    },
+    {
+      "sym": "SI",
+      "contract": "SOM6",
+      "dte": null,
+      "phase": "UNKNOWN",
+      "expiry_date": null,
+      "sold": 1,
+      "bought": 1,
+      "delta": -0.4,
+      "theta": -0.0397,
+      "margin_est": 8000,
+      "wasde_conflict": null,
+      "next_expiry": null
+    }
+  ],
+  "wasde_upcoming": [
+    "2026-05-12",
+    "2026-06-11",
+    "2026-07-10"
+  ],
+  "decision_window": [
+    {
+      "sym": "GF",
+      "contract": "GFJ6",
+      "dte": 15,
+      "phase": "DECISION",
+      "action": "Zona de decisao \u2014 monitorar target 50%"
+    }
+  ]
+}

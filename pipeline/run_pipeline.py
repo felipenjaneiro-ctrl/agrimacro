@@ -452,6 +452,16 @@ def main():
         results["entry_timing"] = {"status": "WARN", "error": str(e)}
         log(f"Entry timing scan failed (non-blocking): {e}", "WARN")
 
+    log(f"Step 28d/{total_steps}: Running theta calendar...")
+    try:
+        from skill_theta_calendar import run_theta_calendar
+        run_theta_calendar()
+        results["theta_calendar"] = {"status": "OK"}
+        log("Theta calendar generated", "OK")
+    except BaseException as e:
+        results["theta_calendar"] = {"status": "WARN", "error": str(e)}
+        log(f"Theta calendar failed (non-blocking): {e}", "WARN")
+
     log(f"Step 29/{total_steps}: Generating PDF report (v4 with Options Intelligence)...")
     try:
         from patch_report_v4 import build_pdf_v4
