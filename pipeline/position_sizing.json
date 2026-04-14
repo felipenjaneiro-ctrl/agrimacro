@@ -1,45 +1,49 @@
 {
-  "generated_at": "2026-04-14T17:27:18.936222",
+  "generated_at": "2026-04-14T17:36:19.435464",
   "portfolio_state": {
-    "net_liq": 1345464.39,
+    "net_liq": 1345464.38,
     "active_pct": 70.9,
     "positions": 5
   },
   "sizing": {
-    "sym": "KE",
-    "name": "Trigo KC",
+    "sym": "SI",
+    "name": "Prata",
     "direction": "PUT",
-    "sector": "Graos",
-    "entry_score": 7,
-    "score_label": "60% SIZE (score 6-7)",
-    "score_mult": 0.6,
+    "sector": "Metais",
+    "entry_score": 10,
+    "score_label": "FULL SIZE (score >= 10)",
+    "score_mult": 1.0,
     "vol_adj": 1.0,
+    "regime": "VEGA",
+    "regime_limit": 65,
     "recommended_contracts": 0,
     "butterfly_sold": 0,
-    "margin_per_contract": 1500,
+    "margin_per_contract": 8000,
     "est_margin": 0,
     "est_risk": 33637.0,
-    "multiplier": 50,
-    "max_by_risk": 22,
+    "multiplier": 5000,
+    "max_by_risk": 4,
     "max_by_available": 0,
     "raw_before_adj": 0,
-    "net_liq": 1345464.39,
+    "net_liq": 1345464.38,
     "current_active_pct": 70.9,
-    "max_active_pct": 60,
-    "available_margin": -146721.0,
-    "available_und": 201820.0,
-    "available_sector": 181639.0,
+    "max_active_pct": 65,
+    "available_margin": -79448.0,
+    "available_und": 1820.0,
+    "available_sector": 203639.0,
     "effective_available": 0,
-    "existing_und_margin": 0,
-    "existing_sector_margin": 222000,
+    "existing_und_margin": 200000,
+    "existing_sector_margin": 200000,
     "sector_syms": [
-      "ZL"
+      "SI"
     ],
     "positions_count": 5,
     "violations": [
-      "LIMITE DE CAPITAL: 70.9% em uso (max=60%)"
+      "CAPITAL: 70.9% > 65% (regime VEGA). Liberar ~$79,382 fechando posicao existente."
     ],
-    "warnings": [],
+    "warnings": [
+      "CAPITAL ACIMA DO LIMITE VEGA: 70.9% em uso (limite VEGA=65%, normal=60%). Excede em 5.9pp. Fechar 1 posicao para liberar margem antes de nova entrada."
+    ],
     "can_trade": false
   }
 }

@@ -136,7 +136,49 @@ def get_portfolio_state(portfolio):
     }
 
 
-def calculate_sizing(sym, direction, entry_score, state, skill_data):
+def detect_regime(state, options_data):
+    """
+    Detect capital regime: NORMAL (60% limit) or VEGA (65% limit).
+    VEGA regime activates when:
+      - At least one active underlying has IV >= 40%
+      - OR VIX-equivalent conditions (high vol environment)
+    This is based on capital_management.vega_opportunity rules.
+    """
+    regime = "NORMAL"
+    regime_limit = 60
+    regime_reasons = []
+    high_iv_positions = []
+
+    for sym, data in state["by_sym"].items():
+        if data["sold"] == 0:
+            continue  # no short exposure
+
+        und = options_data.get("underlyings", {}).get(sym, {})
+        ivr = und.get("iv_rank", {})
+        cur_iv = ivr.get("current_iv")
+
+        if cur_iv is not None:
+            iv_pct = cur_iv * 100
+            if iv_pct >= 40:
+                high_iv_positions.append({"sym": sym, "iv": iv_pct})
+
+    if high_iv_positions:
+        regime = "VEGA"
+        regime_limit = 65
+        iv_strs = [f"{p['sym']} IV={p['iv']:.0f}%" for p in high_iv_positions]
+        regime_reasons.append(f"Regime VEGA ativo: {', '.join(iv_strs)}")
+        regime_reasons.append("Limite expandido de 60% para 65% — posicoes ativas em IV alta justificam premium collection adicional")
+        regime_reasons.append("Condicao: pelo menos 1 underlying com IV >= 40% no portfolio")
+
+    return {
+        "regime": regime,
+        "limit_pct": regime_limit,
+        "reasons": regime_reasons,
+        "high_iv_positions": high_iv_positions,
+    }
+
+
+def calculate_sizing(sym, direction, entry_score, state, skill_data, regime_info=None):
     """
     Calculate position size for a new trade.
     Returns sizing recommendation with all checks.
@@ -145,8 +187,13 @@ def calculate_sizing(sym, direction, entry_score, state, skill_data):
     cm = skill_data.get("capital_management", {})
     active_trades = cm.get("active_trades", {})
 
-    # Capital limits
-    max_active_pct = cm.get("active_trades_max_pct", 60)
+    # Capital limits — regime-aware
+    base_max_pct = cm.get("active_trades_max_pct", 60)
+    if regime_info and regime_info["regime"] == "VEGA":
+        max_active_pct = regime_info["limit_pct"]  # 65%
+    else:
+        max_active_pct = base_max_pct  # 60%
+
     max_per_und_pct = active_trades.get("max_per_underlying_pct", 15)
     max_per_sector_pct = active_trades.get("max_per_sector_pct", 30)
     max_positions = active_trades.get("max_simultaneous_positions", 12)
@@ -221,9 +268,23 @@ def calculate_sizing(sym, direction, entry_score, state, skill_data):
     if state["positions_count"] >= max_positions:
         violations.append(f"LIMITE DE POSICOES: {state['positions_count']}/{max_positions} (maximo atingido)")
 
-    # Active margin limit
+    # Active margin limit — regime-aware messaging
+    regime_name = regime_info["regime"] if regime_info else "NORMAL"
     if current_active_pct >= max_active_pct:
-        violations.append(f"LIMITE DE CAPITAL: {current_active_pct:.1f}% em uso (max={max_active_pct}%)")
+        over_pct = current_active_pct - max_active_pct
+        if regime_name == "VEGA":
+            # In VEGA regime, being over is less severe — provide context
+            warnings.append(
+                f"CAPITAL ACIMA DO LIMITE VEGA: {current_active_pct:.1f}% em uso (limite VEGA={max_active_pct}%, normal=60%). "
+                f"Excede em {over_pct:.1f}pp. Fechar 1 posicao para liberar margem antes de nova entrada."
+            )
+            # Still a violation but with better context
+            violations.append(
+                f"CAPITAL: {current_active_pct:.1f}% > {max_active_pct}% (regime {regime_name}). "
+                f"Liberar ~${over_pct * net_liq / 100:,.0f} fechando posicao existente."
+            )
+        else:
+            violations.append(f"LIMITE DE CAPITAL: {current_active_pct:.1f}% em uso (max={max_active_pct}%)")
 
     # Per-underlying check
     if current_und_margin > 0:
@@ -261,6 +322,8 @@ def calculate_sizing(sym, direction, entry_score, state, skill_data):
         "score_label": score_label,
         "score_mult": score_mult,
         "vol_adj": adj,
+        "regime": regime_name,
+        "regime_limit": max_active_pct,
 
         # Sizing result
         "recommended_contracts": adjusted_contracts,
@@ -305,18 +368,20 @@ def main():
 
     portfolio = jload(PROC / "ibkr_portfolio.json")
     skill_data = jload(BASE / "pipeline" / "trade_skill_base.json")
+    options_data = jload(PROC / "options_chain.json")
 
     if not portfolio.get("positions"):
         print("\n  Portfolio nao disponivel.")
         return
 
     state = get_portfolio_state(portfolio)
+    regime_info = detect_regime(state, options_data)
 
     args = sys.argv[1:]
 
     # No args: show capital summary
     if not args or (len(args) == 1 and args[0].lower() == "summary"):
-        _print_capital_summary(state, skill_data)
+        _print_capital_summary(state, skill_data, regime_info)
         return
 
     # Specific sizing: SYM DIRECTION SCORE
@@ -332,7 +397,7 @@ def main():
             print(f"  [ERR] Direction must be PUT or CALL")
             return
 
-        sizing = calculate_sizing(sym, direction, score, state, skill_data)
+        sizing = calculate_sizing(sym, direction, score, state, skill_data, regime_info)
         _print_sizing(sizing, state)
 
         # Save
@@ -351,23 +416,44 @@ def main():
         return
 
     # Default: summary
-    _print_capital_summary(state, skill_data)
+    _print_capital_summary(state, skill_data, regime_info)
 
 
-def _print_capital_summary(state, skill_data):
+def _print_capital_summary(state, skill_data, regime_info=None):
     cm = skill_data.get("capital_management", {})
-    max_active = cm.get("active_trades_max_pct", 60)
-    max_active_usd = state["net_liq"] * max_active / 100
+    base_max = cm.get("active_trades_max_pct", 60)
+
+    regime_name = regime_info["regime"] if regime_info else "NORMAL"
+    regime_limit = regime_info["limit_pct"] if regime_info else base_max
+    max_active_usd = state["net_liq"] * regime_limit / 100
+    available = max(0, max_active_usd - state["total_margin_est"])
+    over = state["total_margin_est"] - max_active_usd
 
     print(f"\n  CAPITAL SUMMARY")
+    print(f"  {'='*50}")
+
+    # Regime display
+    if regime_name == "VEGA":
+        print(f"  Regime:            VEGA (limite expandido {base_max}% -> {regime_limit}%)")
+        for r in regime_info.get("reasons", []):
+            print(f"    -> {r}")
+    else:
+        print(f"  Regime:            NORMAL (limite {regime_limit}%)")
+
     print(f"  {'='*50}")
     print(f"  Net Liquidation:   ${state['net_liq']:>12,.2f}")
     print(f"  Buying Power:      ${state['buying_power']:>12,.2f}")
     print(f"  Cash:              ${state['cash']:>12,.2f}")
     print(f"  Gross Position:    ${state['gross_pos']:>12,.2f}")
     print(f"  Est. Margin Used:  ${state['total_margin_est']:>12,.2f} ({state['active_pct']:.1f}%)")
-    print(f"  Max Active (60%):  ${max_active_usd:>12,.2f}")
-    print(f"  Available:         ${max(0, max_active_usd - state['total_margin_est']):>12,.2f}")
+    print(f"  Limite ({regime_name} {regime_limit}%): ${max_active_usd:>12,.2f}")
+
+    if over > 0:
+        print(f"  Excesso:           ${over:>12,.2f} ({state['active_pct'] - regime_limit:.1f}pp acima)")
+        print(f"  Para liberar:      Fechar ~${over:,.0f} em margem (~1 posicao)")
+    else:
+        print(f"  Disponivel:        ${available:>12,.2f}")
+
     print(f"  Positions:         {state['positions_count']}/12")
 
     print(f"\n  PER UNDERLYING:")
@@ -425,8 +511,8 @@ def _print_sizing(sizing, state):
     print(f"    Raw (pre-ajuste):    {sizing['raw_before_adj']} contratos")
     print(f"    Final (ajustado):    {sizing['recommended_contracts']} contratos")
 
-    print(f"\n  LIMITES:")
-    print(f"    Capital ativo:       {sizing['current_active_pct']:.1f}% / {sizing['max_active_pct']}%")
+    print(f"\n  LIMITES ({sizing['regime']} regime, limite={sizing['regime_limit']}%):")
+    print(f"    Capital ativo:       {sizing['current_active_pct']:.1f}% / {sizing['regime_limit']}%")
     print(f"    Disponivel total:    ${sizing['available_margin']:,.0f}")
     print(f"    Disponivel {sym}:     ${sizing['available_und']:,.0f} (max 15%)")
     print(f"    Disponivel {sizing['sector']}:  ${sizing['available_sector']:,.0f} (max 30%)")
