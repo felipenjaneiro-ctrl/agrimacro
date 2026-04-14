@@ -1,0 +1,480 @@
+{
+  "generated_at": "2026-04-14T16:10:54.071625",
+  "total_cycles": 183,
+  "win_rate_by_rolls": {
+    "0": {
+      "count": 142,
+      "winners": 96,
+      "win_rate": 67.6,
+      "avg_net": 7138.34,
+      "total_net": 1013643.89,
+      "avg_duration": 42.4
+    },
+    "1": {
+      "count": 38,
+      "winners": 13,
+      "win_rate": 34.2,
+      "avg_net": -11890.26,
+      "total_net": -451829.92,
+      "avg_duration": 37.1
+    },
+    "2+": {
+      "count": 3,
+      "winners": 1,
+      "win_rate": 33.3,
+      "avg_net": -24431.32,
+      "total_net": -73293.95,
+      "avg_duration": 59.7
+    }
+  },
+  "win_rate_by_grade": {
+    "B": {
+      "count": 47,
+      "winners": 32,
+      "win_rate": 68.1,
+      "avg_net": 13951.69,
+      "total_net": 655729.54,
+      "clean_pct": 100.0
+    },
+    "C": {
+      "count": 102,
+      "winners": 65,
+      "win_rate": 63.7,
+      "avg_net": 3175.89,
+      "total_net": 323940.55,
+      "clean_pct": 87.3
+    },
+    "D": {
+      "count": 34,
+      "winners": 13,
+      "win_rate": 38.2,
+      "avg_net": -14445.59,
+      "total_net": -491150.07,
+      "clean_pct": 17.6
+    }
+  },
+  "indicator_combinations": {
+    "SEASON only": {
+      "count": 12,
+      "win_rate": 50.0,
+      "avg_net": -28968.95,
+      "total_net": -347627.39
+    },
+    "CLEAN only": {
+      "count": 142,
+      "win_rate": 67.6,
+      "avg_net": 7138.34,
+      "total_net": 1013643.89
+    },
+    "UND_POS only": {
+      "count": 107,
+      "win_rate": 66.4,
+      "avg_net": 10621.92,
+      "total_net": 1136545.25
+    },
+    "SEASON + CLEAN": {
+      "count": 8,
+      "win_rate": 62.5,
+      "avg_net": -20879.25,
+      "total_net": -167034.03
+    },
+    "CLEAN + UND_POS": {
+      "count": 84,
+      "win_rate": 72.6,
+      "avg_net": 15914.45,
+      "total_net": 1336813.47
+    },
+    "DUR_OK + CLEAN": {
+      "count": 61,
+      "win_rate": 67.2,
+      "avg_net": 15462.61,
+      "total_net": 943219.5
+    }
+  },
+  "underlying_predictability": {
+    "CC": {
+      "name": "Cocoa",
+      "cycles": 5,
+      "win_rate": 60.0,
+      "clean_pct": 100.0,
+      "clean_wr": 60.0,
+      "season_wr": null,
+      "total_net": 4947.32,
+      "clean_net": 4947.32,
+      "avg_duration": 18.2,
+      "predictability": 0.345
+    },
+    "CL": {
+      "name": "Crude Oil",
+      "cycles": 5,
+      "win_rate": 60.0,
+      "clean_pct": 80.0,
+      "clean_wr": 75.0,
+      "season_wr": null,
+      "total_net": 678.59,
+      "clean_net": 22146.59,
+      "avg_duration": 8.0,
+      "predictability": 0.387
+    },
+    "GC": {
+      "name": "Gold",
+      "cycles": 9,
+      "win_rate": 77.8,
+      "clean_pct": 66.7,
+      "clean_wr": 66.7,
+      "season_wr": null,
+      "total_net": 21841.68,
+      "clean_net": 20122.08,
+      "avg_duration": 12.4,
+      "predictability": 0.341
+    },
+    "GF": {
+      "name": "Feeder Cattle",
+      "cycles": 9,
+      "win_rate": 44.4,
+      "clean_pct": 66.7,
+      "clean_wr": 66.7,
+      "season_wr": null,
+      "total_net": -79907.66,
+      "clean_net": -74815.02,
+      "avg_duration": 33.8,
+      "predictability": 0.191
+    },
+    "HE": {
+      "name": "Lean Hogs",
+      "cycles": 6,
+      "win_rate": 100.0,
+      "clean_pct": 83.3,
+      "clean_wr": 100.0,
+      "season_wr": null,
+      "total_net": 123577.54,
+      "clean_net": 103182.18,
+      "avg_duration": 112.0,
+      "predictability": 0.302
+    },
+    "KC": {
+      "name": "Coffee",
+      "cycles": 5,
+      "win_rate": 40.0,
+      "clean_pct": 100.0,
+      "clean_wr": 40.0,
+      "season_wr": 66.7,
+      "total_net": -180072.86,
+      "clean_net": -180072.86,
+      "avg_duration": 59.6,
+      "predictability": 0.051
+    },
+    "KE": {
+      "name": "KC Wheat",
+      "cycles": 15,
+      "win_rate": 60.0,
+      "clean_pct": 86.7,
+      "clean_wr": 69.2,
+      "season_wr": null,
+      "total_net": 224962.46,
+      "clean_net": 418423.99,
+      "avg_duration": 51.5,
+      "predictability": 0.484
+    },
+    "LE": {
+      "name": "Live Cattle",
+      "cycles": 8,
+      "win_rate": 62.5,
+      "clean_pct": 62.5,
+      "clean_wr": 80.0,
+      "season_wr": 100.0,
+      "total_net": -88555.6,
+      "clean_net": -72032.72,
+      "avg_duration": 33.1,
+      "predictability": 0.267
+    },
+    "NG": {
+      "name": "Natural Gas",
+      "cycles": 8,
+      "win_rate": 50.0,
+      "clean_pct": 87.5,
+      "clean_wr": 57.1,
+      "season_wr": 0.0,
+      "total_net": -24738.88,
+      "clean_net": 28126.16,
+      "avg_duration": 43.5,
+      "predictability": 0.348
+    },
+    "OJ": {
+      "name": "Orange Juice",
+      "cycles": 3,
+      "win_rate": 66.7,
+      "clean_pct": 66.7,
+      "clean_wr": 100.0,
+      "season_wr": null,
+      "total_net": 12309.5,
+      "clean_net": 30597.86,
+      "avg_duration": 22.3,
+      "predictability": 0.477
+    },
+    "SB": {
+      "name": "Sugar",
+      "cycles": 11,
+      "win_rate": 54.5,
+      "clean_pct": 72.7,
+      "clean_wr": 75.0,
+      "season_wr": null,
+      "total_net": 93246.96,
+      "clean_net": 131794.16,
+      "avg_duration": 51.0,
+      "predictability": 0.266
+    },
+    "SI": {
+      "name": "Silver",
+      "cycles": 32,
+      "win_rate": 62.5,
+      "clean_pct": 68.8,
+      "clean_wr": 68.2,
+      "season_wr": null,
+      "total_net": 512219.24,
+      "clean_net": 447627.44,
+      "avg_duration": 41.1,
+      "predictability": 0.507
+    },
+    "ZC": {
+      "name": "Corn",
+      "cycles": 14,
+      "win_rate": 64.3,
+      "clean_pct": 85.7,
+      "clean_wr": 66.7,
+      "season_wr": null,
+      "total_net": 44362.0,
+      "clean_net": 59571.89,
+      "avg_duration": 45.1,
+      "predictability": 0.409
+    },
+    "ZL": {
+      "name": "Soy Oil",
+      "cycles": 11,
+      "win_rate": 54.5,
+      "clean_pct": 100.0,
+      "clean_wr": 54.5,
+      "season_wr": null,
+      "total_net": -78947.62,
+      "clean_net": -78947.62,
+      "avg_duration": 42.3,
+      "predictability": 0.295
+    },
+    "ZM": {
+      "name": "Soy Meal",
+      "cycles": 16,
+      "win_rate": 56.2,
+      "clean_pct": 68.8,
+      "clean_wr": 63.6,
+      "season_wr": null,
+      "total_net": -14570.24,
+      "clean_net": 103101.12,
+      "avg_duration": 53.1,
+      "predictability": 0.434
+    },
+    "ZS": {
+      "name": "Soybeans",
+      "cycles": 19,
+      "win_rate": 47.4,
+      "clean_pct": 68.4,
+      "clean_wr": 61.5,
+      "season_wr": 20.0,
+      "total_net": -181232.37,
+      "clean_net": -48528.64,
+      "avg_duration": 31.6,
+      "predictability": 0.379
+    },
+    "ZW": {
+      "name": "Wheat",
+      "cycles": 6,
+      "win_rate": 83.3,
+      "clean_pct": 100.0,
+      "clean_wr": 83.3,
+      "season_wr": null,
+      "total_net": 95852.56,
+      "clean_net": 95852.56,
+      "avg_duration": 33.3,
+      "predictability": 0.262
+    }
+  },
+  "best_entry_months": {
+    "Jan": {
+      "cycles": 18,
+      "win_rate": 66.7,
+      "clean_pct": 77.8,
+      "clean_wr": 71.4,
+      "total_net": -234926.39,
+      "clean_net": -188730.22,
+      "avg_grade": 2.4
+    },
+    "Feb": {
+      "cycles": 18,
+      "win_rate": 55.6,
+      "clean_pct": 77.8,
+      "clean_wr": 64.3,
+      "total_net": 617748.63,
+      "clean_net": 638191.51,
+      "avg_grade": 2.8
+    },
+    "Mar": {
+      "cycles": 10,
+      "win_rate": 50.0,
+      "clean_pct": 60.0,
+      "clean_wr": 66.7,
+      "total_net": -480352.87,
+      "clean_net": -330315.47,
+      "avg_grade": 3.0
+    },
+    "Apr": {
+      "cycles": 17,
+      "win_rate": 52.9,
+      "clean_pct": 94.1,
+      "clean_wr": 56.2,
+      "total_net": -114382.43,
+      "clean_net": -104522.43,
+      "avg_grade": 2.5
+    },
+    "May": {
+      "cycles": 20,
+      "win_rate": 70.0,
+      "clean_pct": 90.0,
+      "clean_wr": 77.8,
+      "total_net": 10912.74,
+      "clean_net": 123948.28,
+      "avg_grade": 2.5
+    },
+    "Jun": {
+      "cycles": 22,
+      "win_rate": 40.9,
+      "clean_pct": 63.6,
+      "clean_wr": 57.1,
+      "total_net": -142273.62,
+      "clean_net": -10054.55,
+      "avg_grade": 2.6
+    },
+    "Jul": {
+      "cycles": 16,
+      "win_rate": 68.8,
+      "clean_pct": 75.0,
+      "clean_wr": 75.0,
+      "total_net": 123433.78,
+      "clean_net": 149000.1,
+      "avg_grade": 2.1
+    },
+    "Aug": {
+      "cycles": 18,
+      "win_rate": 61.1,
+      "clean_pct": 83.3,
+      "clean_wr": 73.3,
+      "total_net": -8058.31,
+      "clean_net": 143843.72,
+      "avg_grade": 2.6
+    },
+    "Sep": {
+      "cycles": 8,
+      "win_rate": 37.5,
+      "clean_pct": 87.5,
+      "clean_wr": 42.9,
+      "total_net": 104891.67,
+      "clean_net": 108025.09,
+      "avg_grade": 2.8
+    },
+    "Oct": {
+      "cycles": 14,
+      "win_rate": 71.4,
+      "clean_pct": 78.6,
+      "clean_wr": 63.6,
+      "total_net": 447541.28,
+      "clean_net": 357971.0,
+      "avg_grade": 2.7
+    },
+    "Nov": {
+      "cycles": 14,
+      "win_rate": 78.6,
+      "clean_pct": 78.6,
+      "clean_wr": 81.8,
+      "total_net": 83247.85,
+      "clean_net": 54459.13,
+      "avg_grade": 3.1
+    },
+    "Dec": {
+      "cycles": 8,
+      "win_rate": 62.5,
+      "clean_pct": 50.0,
+      "clean_wr": 75.0,
+      "total_net": 80737.69,
+      "clean_net": 71827.73,
+      "avg_grade": 1.8
+    }
+  },
+  "key_findings": {
+    "roll_impact": "0 rolls: WR=67.6% vs 1 roll: WR=34.2%",
+    "best_combo": "CLEAN + UND_POS",
+    "best_combo_wr": 72.6,
+    "most_predictable": "SI",
+    "best_month": "Nov",
+    "best_month_clean_wr": 81.8
+  },
+
+  "rule_1_never_roll": {
+    "finding": "Rolagem destrói edge sistematicamente",
+    "evidence": "0 rolls: WR=67.6%, avg +$7,138. 1 roll: WR=34.2%, avg -$11,890. 2+ rolls: WR=33.3%, avg -$24,431.",
+    "rule": "Se o trade precisa de roll, feche e aceite a perda. Cada roll adicional piora o resultado medio em ~$12K.",
+    "net_impact": "Sem rolls: +$1,013,644. Com rolls: -$525,124. Delta = $1,538,768 em 183 ciclos."
+  },
+
+  "rule_2_grade_predicts_outcome": {
+    "finding": "Entry grade B (score 4+) prediz resultado com 68% de acerto",
+    "evidence": "Grade B: WR=68.1%, 100% clean, avg +$13,952. Grade D: WR=38.2%, 18% clean, avg -$14,446.",
+    "rule": "So entrar com score >= 4 (Grade B). Score < 2 (Grade D) tem WR abaixo de 40% — nao vale o risco.",
+    "grade_scale": "A(6+)=ideal B(4-5)=go C(2-3)=marginal D(0-1)=skip"
+  },
+
+  "rule_3_most_predictable_underlyings": {
+    "finding": "SI, KE, HE e ZW sao os mais previsiveis e lucrativos",
+    "tier_1_go": ["SI (pred=0.507, clean_WR=68%, +$512K)", "KE (pred=0.484, clean_WR=69%, +$225K)"],
+    "tier_2_good": ["HE (WR=100%, clean_WR=100%, +$124K, poucos ciclos)", "ZW (WR=83%, clean_WR=83%, +$96K)", "ZC (pred=0.409, clean_WR=67%, +$44K)"],
+    "tier_3_caution": ["ZS (clean_WR=62%, net negativo)", "NG (clean_WR=57%, season_WR=0%)", "KC (clean_WR=40%, net -$180K)"],
+    "rule": "Priorizar SI e KE. ZW e HE quando ha setup. Evitar KC e NG sem confluencia forte."
+  },
+
+  "rule_4_best_entry_months": {
+    "finding": "Nov, May e Jul tem os melhores clean WR",
+    "best_months": [
+      {"month": "Nov", "clean_wr": 81.8, "wr": 78.6, "net": 83248, "reason": "Pre-safra BR, IV tipicamente elevada em softs e grains"},
+      {"month": "May", "clean_wr": 77.8, "wr": 70.0, "net": 10913, "reason": "Pos-plantio EUA, weather premium comecando"},
+      {"month": "Jul", "clean_wr": 75.0, "wr": 68.8, "net": 123434, "reason": "Pico do weather premium, driving season CL"},
+      {"month": "Oct", "clean_wr": 63.6, "wr": 71.4, "net": 447541, "reason": "Maior net absoluto — colheita EUA + pre-inverno NG"}
+    ],
+    "worst_months": [
+      {"month": "Sep", "clean_wr": 42.9, "reason": "Transicao de safra, incerteza alta"},
+      {"month": "Jun", "clean_wr": 57.1, "reason": "Meio do weather premium — moves bruscos"},
+      {"month": "Mar", "clean_wr": 66.7, "net": -480353, "reason": "WASDE de marco + planting intentions = alta vol nao favoravel"}
+    ],
+    "rule": "Concentrar entradas em Nov/May/Jul/Oct. Evitar Mar e Sep. Jun com sizing reduzido."
+  },
+
+  "rule_5_best_combination": {
+    "finding": "CLEAN + UND_POS = 72.6% WR, $1.34M em 84 ciclos",
+    "description": "A melhor combinacao de indicadores e: underlying com historico positivo + sem rolagem (fechar antes de precisar rolar).",
+    "evidence": {
+      "CLEAN_UND_POS": {"wr": 72.6, "count": 84, "total_net": 1336813},
+      "DUR_OK_CLEAN": {"wr": 67.2, "count": 61, "total_net": 943220},
+      "SEASON_alone": {"wr": 50.0, "count": 12, "total_net": -347627, "note": "Sazonalidade sozinha NAO funciona — precisa de confirmacao"}
+    },
+    "entry_checklist": [
+      "Underlying no tier 1 ou 2 (SI, KE, HE, ZW, ZC, SB, GC)",
+      "Mes favoravel (Nov, May, Jul, Oct preferencialmente)",
+      "Credito liquido positivo na abertura (obrigatorio)",
+      "Curva forward sem backwardation forte (obrigatorio)",
+      "IV Rank > 50% (quando disponivel)",
+      "Estrutura 22x22 butterfly+ratio balanceada",
+      "DTE 30-60 dias (sweet spot de duracao)",
+      "NAO rolar — se precisar, fechar e reentrar novo ciclo",
+      "Max loss = 2x credito recebido (stop mecanico)",
+      "Fechar a 50% do max profit"
+    ],
+    "expected_wr": "72-75% quando todos os criterios sao atendidos",
+    "rule": "Seguir o checklist. Cada item removido reduz WR em ~3-5pp. Sazonalidade sozinha nao basta."
+  }
+}
