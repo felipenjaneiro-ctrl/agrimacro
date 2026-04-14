@@ -85,12 +85,35 @@ def jload(path):
 
 
 def get_portfolio_state(portfolio):
-    """Calculate current portfolio capital allocation."""
+    """Calculate current portfolio capital allocation from real portfolio data."""
     summ = portfolio.get("summary", {})
     net_liq = float(summ.get("NetLiquidation", 0))
     buying_power = float(summ.get("BuyingPower", 0))
     cash = float(summ.get("TotalCashValue", 0))
     gross_pos = float(summ.get("GrossPositionValue", 0))
+
+    warnings = []
+    if net_liq <= 0:
+        warnings.append("[WARN] NetLiquidation = 0 — portfolio.json pode estar desatualizado")
+    gen_at = portfolio.get("generated_at", "")
+    if gen_at:
+        try:
+            from datetime import datetime as _dt
+            gen_dt = _dt.fromisoformat(gen_at.replace("Z", "+00:00")) if "T" in gen_at else _dt.strptime(gen_at, "%Y-%m-%d %H:%M")
+            age_hours = (_dt.now() - gen_dt.replace(tzinfo=None)).total_seconds() / 3600
+            if age_hours > 24:
+                warnings.append(f"[WARN] portfolio.json tem {age_hours:.0f}h — considerar refresh via IBKR")
+        except Exception:
+            pass
+
+    # Detect T-Bills in portfolio for reserve tracking
+    tbill_value = 0
+    for p in portfolio.get("positions", []):
+        ls = p.get("local_symbol", "")
+        sym_p = p.get("symbol", "")
+        st = p.get("sec_type", "")
+        if st == "BILL" or "BILL" in sym_p.upper() or "US-T" in sym_p.upper() or "IBCID" in ls.upper():
+            tbill_value += abs(p.get("market_value", 0))
 
     positions = portfolio.get("positions", [])
 
@@ -130,6 +153,8 @@ def get_portfolio_state(portfolio):
         "total_margin_est": total_margin_est,
         "active_pct": round(active_pct, 1),
         "positions_count": positions_count,
+        "tbill_value": tbill_value,
+        "warnings": warnings,
         "by_sym": dict(by_sym),
         "by_sector": {k: {"syms": list(v["syms"]), "margin_est": v["margin_est"]}
                       for k, v in by_sector.items()},
@@ -455,6 +480,17 @@ def _print_capital_summary(state, skill_data, regime_info=None):
         print(f"  Disponivel:        ${available:>12,.2f}")
 
     print(f"  Positions:         {state['positions_count']}/12")
+
+    # T-Bills (real from portfolio)
+    tbill = state.get("tbill_value", 0)
+    if tbill > 0:
+        print(f"  T-Bills (real):    ${tbill:>12,.2f} (reserva estrategica)")
+    else:
+        print(f"  T-Bills:           [WARN] nao detectados no portfolio")
+
+    # Warnings
+    for w in state.get("warnings", []):
+        print(f"  {w}")
 
     print(f"\n  PER UNDERLYING:")
     for sym in sorted(state["by_sym"]):

@@ -197,7 +197,7 @@ def run_pretrade_checklist(und, direction):
         filters.append({
             "id": "F2", "name": "IV >= 20%",
             "mandatory": True, "passed": True,
-            "detail": "IV data nao disponivel — verificar manualmente no TWS",
+            "detail": "[WARN] IV data nao disponivel — verificar manualmente no TWS",
         })
 
     # ══════════════════════════════════════════════════
@@ -307,7 +307,7 @@ def run_pretrade_checklist(und, direction):
         filters.append({
             "id": "F6", "name": "COT vs Direcao",
             "mandatory": False, "passed": True,
-            "detail": "COT nao disponivel — neutro.",
+            "detail": "[WARN] COT nao disponivel — dado ausente, tratado como neutro.",
         })
 
     # ══════════════════════════════════════════════════
@@ -388,7 +388,7 @@ def run_pretrade_checklist(und, direction):
         filters.append({
             "id": "F8", "name": "DTE 25-70d",
             "mandatory": False, "passed": False,
-            "detail": "Sem dados de options chain — executar collect_options_chain.py.",
+            "detail": "[WARN] Sem dados de options chain — executar collect_options_chain.py.",
         })
 
     # ══════════════════════════════════════════════════

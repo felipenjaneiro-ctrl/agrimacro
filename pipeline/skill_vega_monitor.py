@@ -121,24 +121,44 @@ def run_vega_monitor():
 
     # ── Strategic Reserve ──
     reserve_target = reserve_config.get("target_usd", 337500)
-    reserve_current = reserve_config.get("current_value", 340000)
     max_deploy_per_event = vega_config.get("max_deploy_per_event", 170000)
     reserve_yield = reserve_config.get("yield_approx", "?")
 
-    # Check if reserve has been partially deployed (estimate from portfolio cash)
+    # Detect actual T-Bills value from portfolio positions
+    tbill_value = 0
+    for p in portfolio.get("positions", []):
+        ls = p.get("local_symbol", "")
+        sym = p.get("symbol", "")
+        st = p.get("sec_type", "")
+        # IBKR T-Bills: sec_type=BILL or symbol contains "US-T" or local_symbol contains "IBCID"
+        if st == "BILL" or "BILL" in sym.upper() or "US-T" in sym.upper() or "IBCID" in ls.upper():
+            tbill_value += abs(p.get("market_value", 0))
+
+    if tbill_value > 0:
+        reserve_current = tbill_value
+        reserve_source = "portfolio.json (T-Bills real)"
+    else:
+        reserve_current = reserve_config.get("current_value", 0)
+        reserve_source = "trade_skill_base.json (config)"
+        if reserve_current > 0:
+            print(f"  [WARN] T-Bills nao encontrados no portfolio — usando valor do config: ${reserve_current:,.0f}")
+        else:
+            print(f"  [WARN] Reserva estrategica nao detectada (sem T-Bills no portfolio, sem config)")
+
+    # Available for deployment: reserve minus what we need for operations
     cash = float(portfolio.get("summary", {}).get("TotalCashValue", 0))
-    # Reserve available = min(reserve_current, cash that isn't operational)
     operational_target = net_liq * cm.get("operational_cash_pct", 15) / 100
-    reserve_available = max(0, reserve_current - max(0, operational_target - cash))
-    # Cap at configured max
-    reserve_available = min(reserve_available, reserve_current)
-    deployable = min(reserve_available, max_deploy_per_event)
+    reserve_available = reserve_current  # T-Bills can be liquidated
+    # But cap deployment at configured max per event
+    deployable_cap = max_deploy_per_event
+    deployable = min(reserve_available, deployable_cap)
 
     print(f"\n  RESERVA ESTRATEGICA")
+    print(f"  Fonte:       {reserve_source}")
     print(f"  Target:      ${reserve_target:,.0f}")
-    print(f"  Atual:       ${reserve_current:,.0f} ({reserve_yield})")
+    print(f"  Atual:       ${reserve_current:,.0f}")
     print(f"  Disponivel:  ${reserve_available:,.0f}")
-    print(f"  Max deploy:  ${deployable:,.0f} por evento")
+    print(f"  Max deploy:  ${deployable:,.0f} por evento (cap=${deployable_cap:,.0f})")
 
     # ── Current Vega Exposure ──
     total_vega = 0
@@ -370,7 +390,8 @@ def run_vega_monitor():
         },
         "reserve": {
             "target": reserve_target,
-            "current": reserve_current,
+            "current": round(reserve_current),
+            "source": reserve_source,
             "available": round(reserve_available),
             "deployable": round(deployable),
         },

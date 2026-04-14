@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-14T18:07:12.338017",
+  "generated_at": "2026-04-14T18:12:21.987238",
   "vix": {
     "value": 19.9,
     "level": "NORMAL",
@@ -19,8 +19,9 @@
   },
   "reserve": {
     "target": 337500,
-    "current": 340000,
-    "available": 340000,
+    "current": 1187844,
+    "source": "portfolio.json (T-Bills real)",
+    "available": 1187844,
     "deployable": 170000
   },
   "portfolio_vega": 142.68,
