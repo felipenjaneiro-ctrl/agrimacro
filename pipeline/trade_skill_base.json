@@ -894,5 +894,95 @@
         "premium": "CREDITO LIQUIDO positivo (obrigatorio na abertura)"
       }
     }
+  },
+
+  "capital_management": {
+    "rule": "Capital dividido em 3 blocos: trades ativos, reserva estrategica, e caixa operacional. Nunca comprometer mais de 60% em trades simultaneos.",
+    "account_size": 1350000,
+    "active_trades_max_pct": 60,
+    "strategic_reserve_pct": 25,
+    "operational_cash_pct": 15,
+
+    "active_trades": {
+      "description": "Maximo 60% do capital em margem de trades ativos ($810K em conta de $1.35M)",
+      "max_margin_usd": 810000,
+      "max_simultaneous_positions": 12,
+      "max_per_underlying_pct": 15,
+      "max_per_sector_pct": 30,
+      "sizing_rules": [
+        "Cada trade = max 2.5% do capital em risco ($33,750)",
+        "Sizing base: credito recebido / (2x credito) = max loss aceitavel",
+        "CC (cacau): sizing 50% do padrao — vol extrema desde 2024",
+        "NG: sizing 75% do padrao — moves intraday de 10%+",
+        "Novos underlyings: sizing 25% ate ter 5+ ciclos de historico"
+      ]
+    },
+
+    "strategic_reserve": {
+      "description": "25% em T-Bills ou money market. So usar para oportunidades de vega extremo (VIX > 30 ou IV Rank > 90).",
+      "target_pct": 25,
+      "target_usd": 337500,
+      "current_vehicle": "T-Bills 3M via IBKR (auto-roll)",
+      "current_value": 340000,
+      "yield_approx": "5.1% annualized",
+      "deployment_rules": [
+        "So deploy se VIX > 30 OU IV Rank do underlying > 90%",
+        "Deploy max 50% da reserva por evento ($170K)",
+        "Recompor reserva em 30 dias apos deploy",
+        "Nunca deploy em mais de 2 underlyings simultaneamente"
+      ]
+    },
+
+    "operational_cash": {
+      "description": "15% em cash para margem de manutencao e ajustes intraday",
+      "target_pct": 15,
+      "target_usd": 202500,
+      "purpose": [
+        "Margem de manutencao para posicoes existentes",
+        "Ajustes defensivos (rolling width, adding hedge)",
+        "Comissoes e fees",
+        "Buffer contra margin calls em dias de alta vol"
+      ]
+    },
+
+    "vega_opportunity": {
+      "description": "Protocolo para deploy da reserva estrategica em eventos de vol extrema",
+      "conditions": [
+        "VIX > 30 (panic selling generalizado)",
+        "IV Rank do underlying > 90% (vol no topo historico)",
+        "Evento catalisa identificavel (WASDE surprise, geopolitica, weather)",
+        "Pelo menos 2 dos 5 entry checklist confirmados"
+      ],
+      "examples": [
+        "NG polar vortex: IV Rank 95%, storage draw record. Deploy $150K em puts curtas.",
+        "CL OPEC surprise cut: IV spike 40%+. Deploy $100K em strangles.",
+        "ZS weather premium Jul: IV Rank 88%. Deploy $120K em calls OTM."
+      ],
+      "max_deploy_per_event": 170000,
+      "recomposition_days": 30
+    },
+
+    "drawdown_protocol": {
+      "description": "Protocolo de reducao de risco quando drawdown atinge thresholds",
+      "levels": [
+        {"drawdown_pct": 5, "action": "Reduzir sizing em 25%. Nao abrir novas posicoes em underlyings correlacionados."},
+        {"drawdown_pct": 10, "action": "Fechar 50% das posicoes abertas (piores primeiro). So manter Grade A/B entries."},
+        {"drawdown_pct": 15, "action": "Fechar TODAS as posicoes. Cash 100%. Pausa de 5 dias uteis antes de reentrar."},
+        {"drawdown_pct": 20, "action": "Review completo da estrategia. Nao operar ate reuniao com mentor/conselho."}
+      ],
+      "measurement": "Drawdown medido do peak de equity nos ultimos 30 dias, nao do inicio do mes.",
+      "lesson": "Jan/25: drawdown de 6.2% sem protocolo custou $86K extras. Com protocolo, teria parado em -$40K."
+    },
+
+    "rebalancing": {
+      "frequency": "Mensal (primeiro dia util do mes)",
+      "steps": [
+        "Verificar alocacao: trades ativos vs reserva vs cash",
+        "Se trades > 65% do capital: fechar posicoes mais fracas",
+        "Se reserva < 20%: recompor antes de abrir novas posicoes",
+        "Revisar correlacao entre posicoes abertas (R11)",
+        "Atualizar sizing se account size mudou > 10%"
+      ]
+    }
   }
 }
