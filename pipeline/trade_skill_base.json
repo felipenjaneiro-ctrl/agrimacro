@@ -870,5 +870,29 @@
         "structure": "SELL P=906 BUY P=906"
       }
     ]
+  },
+
+  "strategy_complete": {
+    "description": "Estrutura padrao de entrada dual-trade: butterfly + ratio. Posicao balanceada, delta-neutro, theta positivo, credito liquido obrigatorio.",
+    "structure_dual_trade": {
+      "trade_1_butterfly": {
+        "leg_A": "BUY  3x PUT ATM",
+        "leg_B": "SELL 18x PUT OTM (delta ~30)",
+        "leg_C": "BUY  18x PUT OTM (delta ~15-20)",
+        "purpose": "3 ATMs dao protecao. 18 OTM15 limitam risco maximo. 18 OTM30 geram premio principal."
+      },
+      "trade_2_ratio": {
+        "leg_D": "BUY  1x PUT ATM",
+        "leg_E": "SELL 4x PUT OTM (delta ~30)",
+        "purpose": "Captura adicional de premio com protecao ATM."
+      },
+      "consolidated": {
+        "total_long": "3 ATM + 18 OTM15 + 1 ATM = 22 compradas",
+        "total_short": "18 OTM30 + 4 OTM30 = 22 vendidas",
+        "balance": "22x22 — posicao perfeitamente balanceada",
+        "greeks": "Delta-neutro na abertura. Theta positivo — tempo trabalha a favor.",
+        "premium": "CREDITO LIQUIDO positivo (obrigatorio na abertura)"
+      }
+    }
   }
 }
