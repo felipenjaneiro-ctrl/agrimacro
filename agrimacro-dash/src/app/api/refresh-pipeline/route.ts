@@ -19,6 +19,17 @@ const STEPS = [
   "generate_report_pdf.py",
 ];
 
+// External data collectors (in agrimacro-dash root, not pipeline/)
+const DASH_COLLECTORS = [
+  "collect_geoglam.py",
+  "collect_usda_nass.py",
+  "collect_fao_giews.py",
+  "collect_imf_pink.py",
+  "collect_mapa_br.py",
+  "collect_worldbank.py",
+  "collect_magpy_ar.py",
+];
+
 export async function POST() {
   const now = Date.now();
   if (now - lastRefresh < MIN_INTERVAL) {
@@ -46,6 +57,25 @@ export async function POST() {
     } catch (err: any) {
       results.push({ step, ok: false, time: Date.now() - t0, error: err.message?.slice(0, 200) });
       if (step === "generate_report_pdf.py") failed = true;
+    }
+  }
+
+  // Run external data collectors (non-blocking, in agrimacro-dash root)
+  const dashPath = join(process.cwd());
+  for (const step of DASH_COLLECTORS) {
+    const script = join(dashPath, step);
+    if (!existsSync(script)) continue;
+    const t0 = Date.now();
+    try {
+      execSync(`python "${script}"`, {
+        cwd: dashPath,
+        timeout: 30_000,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      results.push({ step, ok: true, time: Date.now() - t0 });
+    } catch (err: any) {
+      results.push({ step, ok: false, time: Date.now() - t0, error: err.message?.slice(0, 200) });
     }
   }
 

@@ -165,6 +165,40 @@ function buildSnapshot(): string {
     ctx += `Best month: ${kf.best_month} (clean WR=${kf.best_month_clean_wr}%)\n\n`;
   }
 
+  // External data sources (may be unavailable)
+  const geoglam = loadData("geoglam.json");
+  if (geoglam?.reports?.length) {
+    ctx += "=== GEOGLAM CROP MONITOR ===\n";
+    geoglam.reports.slice(0, 10).forEach((r: any) => ctx += `${r.region} ${r.crop}: ${r.condition} (${r.date})\n`);
+    ctx += "\n";
+  }
+  const imfPink = loadData("imf_pink.json");
+  if (imfPink?.commodities && !imfPink.status) {
+    const filled = Object.entries(imfPink.commodities).filter(([, v]: any) => (v as any[]).length > 0);
+    if (filled.length) {
+      ctx += "=== IMF COMMODITY PRICES ===\n";
+      filled.forEach(([name, series]: any) => {
+        const last = series[series.length - 1];
+        ctx += `${name}: ${last.price} (${last.date})\n`;
+      });
+      ctx += "\n";
+    }
+  }
+  const magpy = loadData("magpy_ar.json");
+  if (magpy?.crops && !magpy.status) {
+    ctx += "=== MAGYP ARGENTINA ===\n";
+    Object.entries(magpy.crops).forEach(([crop, camps]: any) => {
+      if (camps.length) ctx += `${crop}: ${camps[0].campaign} prod=${camps[0].production_ton}t\n`;
+    });
+    ctx += "\n";
+  }
+  const mapaBr = loadData("mapa_br.json");
+  if (mapaBr?.news?.length) {
+    ctx += "=== MAPA BRASIL (noticias) ===\n";
+    mapaBr.news.slice(0, 5).forEach((n: any) => ctx += `${n.title}\n`);
+    ctx += "\n";
+  }
+
   return ctx;
 }
 
