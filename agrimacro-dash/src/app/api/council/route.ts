@@ -28,178 +28,276 @@ function trunc(obj: any, max: number): string {
 // BUILD SNAPSHOT — All data for council context
 // ═══════════════════════════════════════════════════════
 function buildSnapshot(): string {
-  let ctx = "";
+  const parts: string[] = [];
 
-  // Portfolio
+  // ── BLOCO 1: PORTFOLIO IBKR (Carlos Lima, Ana Lima) ──
   const port = loadData("ibkr_portfolio.json");
   if (port?.summary) {
-    ctx += "=== PORTFOLIO ===\n";
-    ctx += `Net Liq: $${port.summary.NetLiquidation} | Cash: $${port.summary.TotalCashValue} | UnrPnL: $${port.summary.UnrealizedPnL}\n`;
+    parts.push("== PORTFOLIO IBKR ==");
+    parts.push(`Net Liq: $${port.summary.NetLiquidation} | Cash: $${port.summary.TotalCashValue} | BuyPow: $${port.summary.BuyingPower} | UnrPnL: $${port.summary.UnrealizedPnL}`);
     if (port.positions) {
-      ctx += `Positions (${port.positions.length}):\n`;
+      parts.push(`Posicoes (${port.positions.length}):`);
       port.positions.filter((p: any) => p.sec_type === "FOP" || p.sec_type === "FUT").forEach((p: any) => {
-        ctx += `  ${p.symbol} ${p.local_symbol}: ${p.position > 0 ? "+" : ""}${p.position} delta=${p.delta ?? "?"} iv=${p.iv ? (p.iv * 100).toFixed(0) + "%" : "?"}\n`;
+        parts.push(`  ${p.symbol} ${p.local_symbol}: ${p.position > 0 ? "+" : ""}${p.position} delta=${p.delta ?? "?"} theta=${p.theta ?? "?"} iv=${p.iv ? (p.iv * 100).toFixed(0) + "%" : "?"} avgCost=${p.avg_cost ?? "?"}`);
       });
     }
-    ctx += "\n";
+    // T-Bills / Reserve
+    const tbills = (port.positions || []).filter((p: any) => p.sec_type === "BILL" || (p.symbol || "").includes("US-T") || (p.local_symbol || "").includes("IBCID"));
+    if (tbills.length) {
+      const tbVal = tbills.reduce((s: number, t: any) => s + Math.abs(t.market_value || 0), 0);
+      parts.push(`T-Bills (reserva estrategica): $${tbVal.toFixed(0)}`);
+    }
+    // Portfolio greeks
+    const pg = port.portfolio_greeks;
+    if (pg) parts.push(`Portfolio Greeks: delta=${pg.total_delta} theta=$${pg.total_theta}/dia vega=${pg.total_vega}`);
   }
 
-  // Options Intelligence
+  // ── BLOCO 2: OPTIONS CHAIN (Lucia Chen, todos) ──
   const oc = loadData("options_chain.json");
   if (oc?.underlyings) {
-    ctx += "=== IV / SKEW / TERM STRUCTURE ===\n";
+    parts.push("== OPTIONS CHAIN: IV / SKEW / TERM STRUCTURE ==");
     Object.entries(oc.underlyings).forEach(([sym, data]: any) => {
       const ivr = data.iv_rank || {};
       const sk = data.skew || {};
       const ts = data.term_structure || {};
-      const iv = ivr.current_iv ? (ivr.current_iv * 100).toFixed(0) + "%" : "?";
-      const skew = sk.skew_pct != null ? `${sk.skew_pct > 0 ? "+" : ""}${sk.skew_pct}%` : "?";
-      ctx += `${sym}: IV=${iv} Term=${ts.structure || "?"} Skew=${skew}\n`;
+      const iv = ivr.current_iv ? (ivr.current_iv * 100).toFixed(1) + "%" : "?";
+      const rank = ivr.rank_52w != null ? `Rank=${ivr.rank_52w.toFixed(0)}%` : `Rank=building(${ivr.history_days || 0}d)`;
+      const skew = sk.skew_pct != null ? `Skew=${sk.skew_pct > 0 ? "+" : ""}${sk.skew_pct}%` : "Skew=?";
+      parts.push(`${sym}: IV=${iv} ${rank} ${skew} Term=${ts.structure || "?"} und=$${data.und_price || "?"}`);
     });
-    ctx += "\n";
   }
 
-  // COT
+  // ── BLOCO 3: COT POSITIONING (David Kowalski, todos) ──
   const cot = loadData("cot.json");
   if (cot?.commodities) {
-    ctx += "=== COT POSITIONING ===\n";
+    parts.push("== COT POSITIONING (CFTC) ==");
     Object.entries(cot.commodities).forEach(([sym, data]: any) => {
       const dis = data.disaggregated || {};
+      const leg = data.legacy || {};
       if (dis.cot_index != null) {
-        const label = dis.cot_index >= 80 ? "CROWDED LONG" : dis.cot_index <= 20 ? "CROWDED SHORT" : "neutral";
-        ctx += `${sym}: idx=${dis.cot_index.toFixed(0)} ${label}\n`;
+        const label = dis.cot_index >= 80 ? "CROWDED LONG" : dis.cot_index <= 20 ? "CROWDED SHORT" : dis.cot_index >= 65 ? "longs acumulando" : dis.cot_index <= 35 ? "shorts acumulando" : "neutro";
+        const w52 = dis.cot_index_52w != null ? ` 52w=${dis.cot_index_52w.toFixed(0)}` : "";
+        const w26 = dis.cot_index_26w != null ? ` 26w=${dis.cot_index_26w.toFixed(0)}` : "";
+        const mmNet = dis.latest?.managed_money_net != null ? ` MM_net=${dis.latest.managed_money_net}` : "";
+        parts.push(`${sym}: idx=${dis.cot_index.toFixed(0)} (${label})${w52}${w26}${mmNet}`);
+      } else if (leg.latest?.noncomm_net != null) {
+        parts.push(`${sym}: legacy net=${leg.latest.noncomm_net}`);
       }
     });
-    ctx += "\n";
   }
 
-  // Macro
+  // ── BLOCO 4: EIA ENERGIA (Sarah Mitchell) ──
+  const eia = loadData("eia_data.json");
+  if (eia) {
+    parts.push("== EIA ENERGIA ==");
+    const fields = ["wti_spot", "crude_stocks", "ethanol_production", "diesel_price", "natural_gas_spot", "gasoline_stocks", "refinery_utilization"];
+    for (const f of fields) {
+      if (eia[f]) parts.push(`${f}: ${eia[f].value} ${eia[f].unit || ""} (${eia[f].date || "?"})`);
+    }
+  }
+
+  // ── BLOCO 5: BCB / MACRO BR (Ana Rodrigues) ──
+  const bcb = loadData("bcb_data.json");
+  if (bcb) {
+    parts.push("== BCB / MACRO BRASIL ==");
+    const brl = bcb.brl_usd;
+    if (Array.isArray(brl) && brl.length) {
+      const last = brl[brl.length - 1];
+      parts.push(`BRL/USD: ${last.value} (${last.date})`);
+    }
+    const selic = bcb.selic_meta;
+    if (Array.isArray(selic) && selic.length) {
+      const last = selic[selic.length - 1];
+      parts.push(`Selic: ${last.value}% (${last.date})`);
+    }
+  }
+  const ibge = loadData("ibge_data.json");
+  if (ibge) {
+    if (ibge.ipca) parts.push(`IPCA: ${ibge.ipca.value}% (${ibge.ipca.date})`);
+    if (ibge.ipca_food) parts.push(`IPCA Alimentacao: ${ibge.ipca_food.value}% (${ibge.ipca_food.date})`);
+  }
+
+  // ── BLOCO 6: MACRO GLOBAL (Dr. Wei, Felipe Hernandez) ──
   const macro = loadData("macro_indicators.json");
   if (macro) {
-    ctx += "=== MACRO ===\n";
-    if (macro.vix) ctx += `VIX: ${macro.vix.value} (${macro.vix.level})\n`;
-    if (macro.sp500) ctx += `S&P500: ${macro.sp500.value}\n`;
-    if (macro.treasury_10y) ctx += `10Y: ${macro.treasury_10y.value}%\n`;
-    ctx += "\n";
+    parts.push("== MACRO GLOBAL ==");
+    if (macro.vix) parts.push(`VIX: ${macro.vix.value} (${macro.vix.level}, ${macro.vix.change_pct > 0 ? "+" : ""}${macro.vix.change_pct}%)`);
+    if (macro.sp500) parts.push(`S&P500: ${macro.sp500.value}`);
+    if (macro.treasury_10y) parts.push(`Treasury 10Y: ${macro.treasury_10y.value}%`);
   }
+  const fw = loadData("fedwatch.json");
+  if (fw?.probabilities) parts.push(`FedWatch: ${fw.market_expectation} | hold=${fw.probabilities.hold}% cut=${fw.probabilities.cut_25bps}% | FOMC=${fw.next_meeting}`);
 
-  // Spreads
+  // ── BLOCO 7: SPREADS + PARIDADES (Carlos Mera, Rodrigo Batista) ──
   const spreads = loadData("spreads.json");
   if (spreads?.spreads) {
-    ctx += "=== SPREADS ===\n";
+    parts.push("== SPREADS (z-scores) ==");
     Object.entries(spreads.spreads).forEach(([k, v]: any) => {
-      ctx += `${k}: z=${v.zscore_1y} ${v.regime}\n`;
+      parts.push(`${v.name || k}: ${v.current?.toFixed(4) || "?"} ${v.unit || ""} | z=${v.zscore_1y?.toFixed(2) || "?"} | ${v.regime} | ${v.trend || ""}`);
     });
-    ctx += "\n";
+  }
+  const parities = loadData("parities.json");
+  if (parities?.parities) {
+    parts.push("== PARIDADES ==");
+    Object.values(parities.parities).forEach((p: any) => {
+      if (p?.value != null) parts.push(`${p.name}: ${p.value} ${p.unit || ""} | z=${p.z_score ?? "?"} | ${p.signal || ""}`);
+    });
   }
 
-  // Commodity DNA dynamic
+  // ── BLOCO 8: CONAB + FISICO BR (Rodrigo Batista) ──
+  const conab = loadData("conab_data.json");
+  if (conab?.safras) {
+    parts.push("== CONAB SAFRA ==");
+    Object.entries(conab.safras).forEach(([crop, d]: any) => {
+      if (d.area_ha || d.producao_ton) parts.push(`${crop}: area=${d.area_ha}ha | prod=${d.producao_ton}t | prod/ha=${d.produtividade || "?"}kg/ha`);
+    });
+  }
+  const physBr = loadData("physical_br.json");
+  if (physBr) {
+    const products = physBr.products || physBr;
+    if (typeof products === "object") {
+      const lines: string[] = [];
+      Object.entries(products).forEach(([k, v]: any) => {
+        if (v?.price) lines.push(`${v.label || k}: R$${v.price} ${v.unit || ""}${v.change_pct != null ? ` (${v.change_pct >= 0 ? "+" : ""}${v.change_pct}%)` : ""}`);
+      });
+      if (lines.length) { parts.push("== FISICO BR (CEPEA) =="); lines.forEach(l => parts.push(l)); }
+    }
+  }
+
+  // ── BLOCO 9: CLIMA / WEATHER (todos) ──
+  const weather = loadData("weather_agro.json");
+  if (weather) {
+    if (weather.enso) parts.push(`== CLIMA == ENSO: ${weather.enso.status} (ONI=${weather.enso.oni_value})`);
+    if (weather.regions) {
+      Object.values(weather.regions).forEach((r: any) => {
+        (r.alerts || []).forEach((a: any) => parts.push(`Alerta ${r.label}: ${a.type} ${a.severity}`));
+      });
+    }
+  }
+
+  // ── BLOCO 10: NOTICIAS + CALENDARIO (Henrik Larsson, todos) ──
+  const news = loadData("news.json");
+  if (news?.items?.length) {
+    parts.push("== NOTICIAS RECENTES ==");
+    news.items.slice(0, 8).forEach((n: any) => parts.push(`- ${n.title} [${n.source || "?"}]`));
+  }
+  const calendar = loadData("calendar.json");
+  if (calendar?.events?.length) {
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = calendar.events.filter((e: any) => e.date >= today).slice(0, 8);
+    if (upcoming.length) {
+      parts.push("== CALENDARIO ECONOMICO (proximos 7 dias) ==");
+      upcoming.forEach((e: any) => parts.push(`${e.date}: ${e.name || e.event} — impacto: ${e.impact || "N/A"}`));
+    }
+  }
+
+  // ── BLOCO 11: FISICO INTERNACIONAL + ARGENTINA (Raj, Maria) ──
+  const physIntl = loadData("physical_intl.json");
+  if (physIntl) {
+    const keys = ["soy_fob_arg", "corn_fob_arg", "wheat_fob_arg", "soyoil_fob_arg", "soymeal_fob_arg", "soy_fob_gulf", "corn_fob_gulf"];
+    const intlLines: string[] = [];
+    for (const k of keys) {
+      if (physIntl[k]) intlLines.push(`${k}: $${physIntl[k].price || physIntl[k].value || physIntl[k]} ${physIntl[k].unit || ""}`);
+    }
+    if (physIntl.international) {
+      Object.entries(physIntl.international).forEach(([k, v]: any) => {
+        if (v?.price) intlLines.push(`${v.label || k}: $${v.price} ${v.unit || ""}`);
+      });
+    }
+    if (intlLines.length) { parts.push("== FISICO INTERNACIONAL =="); intlLines.forEach(l => parts.push(l)); }
+  }
+  const bilateral = loadData("bilateral_indicators.json");
+  if (bilateral?.summary) {
+    parts.push("== BILATERAL BR vs EUA ==");
+    if (bilateral.lcs?.status === "OK") parts.push(`LCS: Spread $${bilateral.lcs.spread_usd_mt?.toFixed(2)}/MT | Competitivo: ${bilateral.lcs.competitive_origin} | FOB BR=$${bilateral.lcs.br_fob?.toFixed(0)} EUA=$${bilateral.lcs.us_fob?.toFixed(0)}`);
+    if (bilateral.bci?.status === "OK") parts.push(`BCI: Score=${bilateral.bci.bci_score} (${bilateral.bci.bci_signal})`);
+  }
+
+  // ── BLOCO 12: COMMODITY DNA + DAILY READING (Chairman) ──
   const dna = loadData("commodity_dna.json");
   if (dna?.commodities) {
-    ctx += "=== COMMODITY DNA (sinais atuais) ===\n";
+    parts.push("== COMMODITY DNA (sinais atuais) ==");
     Object.entries(dna.commodities).forEach(([sym, data]: any) => {
       const top = data.drivers_ranked?.[0];
-      ctx += `${sym}: ${data.composite_signal} | #1=${top?.driver || "?"}: ${top?.signal?.slice(0, 60) || "?"}\n`;
+      parts.push(`${sym}: ${data.composite_signal} | #1=${top?.driver || "?"}: ${(top?.signal || "?").slice(0, 60)}`);
     });
-    ctx += "\n";
   }
+  const daily = loadData("daily_reading.json");
+  if (daily?.narrative) parts.push(`== LEITURA DO DIA ==\n${daily.narrative.substring(0, 600)}`);
 
-  // Skills output
+  // ── BLOCO 13: SKILLS OUTPUT (Ana Lima, todos) ──
   const timing = loadPipeline("entry_timing.json");
   if (timing) {
-    ctx += "=== ENTRY TIMING (hoje) ===\n";
-    if (timing.best_opportunity) {
-      const b = timing.best_opportunity;
-      ctx += `Best: ${b.sym} ${b.direction} Grade=${b.grade} (${b.score}/${b.max_score})\n`;
-    }
-    ctx += `Blocked: ${timing.blocked_count}\n\n`;
+    parts.push("== ENTRY TIMING ==");
+    if (timing.best_opportunity) { const b = timing.best_opportunity; parts.push(`Best: ${b.sym} ${b.direction} Grade=${b.grade} (${b.score}/${b.max_score})`); }
+    parts.push(`Blocked: ${timing.blocked_count}`);
   }
-
   const theta = loadPipeline("theta_calendar.json");
   if (theta) {
-    ctx += "=== THETA CALENDAR ===\n";
-    ctx += `Posicoes: ${theta.positions} | Decisao: ${theta.in_decision_window} | Acao: ${theta.action_needed}\n`;
-    (theta.timeline || []).slice(0, 5).forEach((t: any) => {
-      ctx += `  ${t.sym} ${t.contract}: DTE=${t.dte || "?"} ${t.phase}\n`;
-    });
-    ctx += "\n";
+    parts.push("== THETA CALENDAR ==");
+    parts.push(`Posicoes: ${theta.positions} | Decisao: ${theta.in_decision_window} | Acao: ${theta.action_needed}`);
+    (theta.timeline || []).slice(0, 8).forEach((t: any) => parts.push(`  ${t.sym} ${t.contract}: DTE=${t.dte || "?"} ${t.phase} delta=${t.delta ?? "?"} theta=${t.theta ?? "?"}`));
   }
-
   const opp = loadPipeline("opportunity_scan.json");
   if (opp) {
-    ctx += "=== OPPORTUNITY SCANNER ===\n";
-    if (opp.best_opportunity) {
-      ctx += `Best: ${opp.best_opportunity.sym} ${opp.best_opportunity.direction} Grade=${opp.best_opportunity.grade}\n`;
-    }
-    ctx += `Top PUTs: ${(opp.top_puts || []).slice(0, 3).map((p: any) => `${p.sym}(${p.grade})`).join(", ")}\n`;
-    ctx += `Top CALLs: ${(opp.top_calls || []).slice(0, 3).map((c: any) => `${c.sym}(${c.grade})`).join(", ")}\n`;
-    ctx += `Blocked: ${(opp.blocked || []).length}\n\n`;
+    parts.push("== OPPORTUNITY SCANNER ==");
+    if (opp.best_opportunity) parts.push(`Best: ${opp.best_opportunity.sym} ${opp.best_opportunity.direction} Grade=${opp.best_opportunity.grade}`);
+    parts.push(`Top PUTs: ${(opp.top_puts || []).slice(0, 3).map((p: any) => `${p.sym}(${p.grade})`).join(", ")}`);
+    parts.push(`Top CALLs: ${(opp.top_calls || []).slice(0, 3).map((c: any) => `${c.sym}(${c.grade})`).join(", ")}`);
+    parts.push(`Blocked: ${(opp.blocked || []).length}`);
   }
-
   const stress = loadPipeline("stress_test.json");
   if (stress) {
-    ctx += "=== STRESS TEST ===\n";
-    ctx += `Risk Level: ${stress.risk_level}\n`;
-    if (stress.most_vulnerable) {
-      ctx += `Most vulnerable: ${stress.most_vulnerable.sym} ${stress.most_vulnerable.contract} — worst $${stress.most_vulnerable.worst_loss?.toLocaleString()} (${stress.most_vulnerable.vuln_pct}%)\n`;
-    }
-    ctx += "\n";
+    parts.push("== STRESS TEST ==");
+    parts.push(`Risk Level: ${stress.risk_level}`);
+    if (stress.most_vulnerable) parts.push(`Most vulnerable: ${stress.most_vulnerable.sym} ${stress.most_vulnerable.contract} — worst $${stress.most_vulnerable.worst_loss?.toLocaleString()} (${stress.most_vulnerable.vuln_pct}%)`);
+    (stress.risk_notes || []).forEach((n: string) => parts.push(`  ! ${n}`));
   }
-
   const vega = loadPipeline("vega_monitor.json");
   if (vega) {
-    ctx += "=== VEGA MONITOR ===\n";
-    ctx += `Regime: ${vega.regime || "?"} | VIX: ${vega.vix?.value || "?"} (${vega.vix?.level || "?"})\n`;
-    ctx += `Opportunities: ${vega.opportunities?.length || 0}\n`;
-    ctx += `Reserve deployable: $${vega.reserve?.deployable?.toLocaleString() || "?"}\n\n`;
+    parts.push("== VEGA MONITOR ==");
+    parts.push(`Regime: ${vega.regime || "?"} | VIX: ${vega.vix?.value || "?"} (${vega.vix?.level || "?"})`);
+    parts.push(`Opportunities: ${vega.opportunities?.length || 0} | Reserve: $${vega.reserve?.deployable?.toLocaleString() || "?"}`);
   }
-
-  // Cross analysis key findings
   const cross = loadPipeline("cross_analysis.json");
   if (cross?.key_findings) {
-    ctx += "=== CROSS ANALYSIS (regras comprovadas) ===\n";
+    parts.push("== CROSS ANALYSIS ==");
     const kf = cross.key_findings;
-    ctx += `Roll impact: ${kf.roll_impact}\n`;
-    ctx += `Best combo: ${kf.best_combo} (WR=${kf.best_combo_wr}%)\n`;
-    ctx += `Most predictable: ${kf.most_predictable}\n`;
-    ctx += `Best month: ${kf.best_month} (clean WR=${kf.best_month_clean_wr}%)\n\n`;
+    parts.push(`Roll: ${kf.roll_impact} | Best combo: ${kf.best_combo} (WR=${kf.best_combo_wr}%) | Most predictable: ${kf.most_predictable} | Best month: ${kf.best_month}`);
   }
 
-  // External data sources (may be unavailable)
-  const geoglam = loadData("geoglam.json");
-  if (geoglam?.reports?.length) {
-    ctx += "=== GEOGLAM CROP MONITOR ===\n";
-    geoglam.reports.slice(0, 10).forEach((r: any) => ctx += `${r.region} ${r.crop}: ${r.condition} (${r.date})\n`);
-    ctx += "\n";
-  }
-  const imfPink = loadData("imf_pink.json");
-  if (imfPink?.commodities && !imfPink.status) {
-    const filled = Object.entries(imfPink.commodities).filter(([, v]: any) => (v as any[]).length > 0);
-    if (filled.length) {
-      ctx += "=== IMF COMMODITY PRICES ===\n";
-      filled.forEach(([name, series]: any) => {
-        const last = series[series.length - 1];
-        ctx += `${name}: ${last.price} (${last.date})\n`;
-      });
-      ctx += "\n";
-    }
-  }
-  const magpy = loadData("magpy_ar.json");
-  if (magpy?.crops && !magpy.status) {
-    ctx += "=== MAGYP ARGENTINA ===\n";
-    Object.entries(magpy.crops).forEach(([crop, camps]: any) => {
-      if (camps.length) ctx += `${crop}: ${camps[0].campaign} prod=${camps[0].production_ton}t\n`;
+  // ── BLOCO 14: STOCKS / PSD / SAZONALIDADE ──
+  const sw = loadData("stocks_watch.json");
+  if (sw?.commodities) {
+    parts.push("== ESTOQUES (stocks_watch) ==");
+    Object.entries(sw.commodities).forEach(([sym, d]: any) => {
+      if (d.stock_current != null) {
+        const dev = d.stock_avg ? ((d.stock_current - d.stock_avg) / d.stock_avg * 100).toFixed(1) : "?";
+        parts.push(`${sym}: ${d.stock_current} ${d.stock_unit || ""} | avg5y=${d.stock_avg || "?"} | dev=${dev}% | ${d.state || "?"}`);
+      }
     });
-    ctx += "\n";
   }
-  const mapaBr = loadData("mapa_br.json");
-  if (mapaBr?.news?.length) {
-    ctx += "=== MAPA BRASIL (noticias) ===\n";
-    mapaBr.news.slice(0, 5).forEach((n: any) => ctx += `${n.title}\n`);
-    ctx += "\n";
+  const psd = loadData("psd_ending_stocks.json");
+  if (psd?.commodities) {
+    parts.push("== PSD USDA ==");
+    Object.entries(psd.commodities).forEach(([sym, d]: any) => {
+      if (d.current != null) parts.push(`${sym}: ${d.current} ${d.unit || ""} | avg5y=${d.avg_5y || "?"} | dev=${d.deviation != null ? (d.deviation > 0 ? "+" : "") + d.deviation.toFixed(1) + "%" : "?"}`);
+    });
+  }
+  const season = loadData("seasonality.json");
+  if (season) {
+    const months = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    const cm = new Date().getMonth();
+    parts.push(`== SAZONALIDADE ${months[cm]} ==`);
+    Object.keys(season).sort().forEach(sym => {
+      const s = season[sym]; if (!s?.monthly_returns) return;
+      const v = s.monthly_returns[cm];
+      const avg = typeof v === "number" ? v : v?.avg ?? null;
+      if (avg != null) parts.push(`${sym}: ${avg >= 0 ? "+" : ""}${avg.toFixed(2)}%`);
+    });
   }
 
-  return ctx;
+  return parts.join("\n");
 }
 
 // ═══════════════════════════════════════════════════════
