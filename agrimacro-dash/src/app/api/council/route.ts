@@ -576,17 +576,97 @@ async function runChairman(
 }
 
 // ═══════════════════════════════════════════════════════
-// POST HANDLER
+// JOB STORE (in-memory, per-process)
 // ═══════════════════════════════════════════════════════
-export async function POST(req: NextRequest) {
+interface CouncilJob {
+  status: "running" | "complete" | "error";
+  stage: string;
+  detail: string;
+  response?: string;
+  error?: string;
+  snapshot_size?: number;
+  started_at: string;
+  completed_at?: string;
+}
+const jobs: Record<string, CouncilJob> = {};
+
+async function runFullCouncil(jobId: string) {
+  const job = jobs[jobId];
   try {
-    const { mode } = await req.json();
     const client = new Anthropic({ apiKey: getKey() });
     const snapshot = buildSnapshot();
     const compact = buildCompactSnapshot();
 
-    // ── QUICK MODE: single call, unchanged ──
+    const BATCH_SIZE = 4;
+    const BATCH_DELAY_MS = 12000;
+    const allReports: string[] = [];
+
+    // Stage 1: 12 specialists in batches
+    for (let i = 0; i < SPECIALISTS.length; i += BATCH_SIZE) {
+      const batch = SPECIALISTS.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(SPECIALISTS.length / BATCH_SIZE);
+      job.stage = "specialists";
+      job.detail = `Especialistas batch ${batchNum}/${totalBatches} (${batch.map(s => s.name.split(" ")[0]).join(", ")})...`;
+
+      const batchResults = await Promise.all(
+        batch.map(spec => runSpecialist(client, spec, compact))
+      );
+      allReports.push(...batchResults);
+
+      if (i + BATCH_SIZE < SPECIALISTS.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+      }
+    }
+    const briefings = allReports.join("\n\n");
+
+    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+    // Stage 2: Dalio
+    job.stage = "heads";
+    job.detail = "Ray Dalio sintetizando...";
+    const dalio = await runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, compact);
+
+    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+    // Stage 2b: Devil
+    job.stage = "heads";
+    job.detail = "Advogado do Diabo atacando...";
+    const devil = await runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, compact);
+
+    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+    // Stage 3: Chairman
+    job.stage = "chairman";
+    job.detail = "Chairman produzindo relatorio final...";
+    const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
+
+    // Done
+    job.status = "complete";
+    job.stage = "complete";
+    job.detail = "";
+    job.response = chairman;
+    job.snapshot_size = snapshot.length;
+    job.completed_at = new Date().toISOString();
+  } catch (err: any) {
+    job.status = "error";
+    job.stage = "error";
+    job.error = err.message?.slice(0, 500) || "Unknown error";
+    job.completed_at = new Date().toISOString();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// POST HANDLER (starts job or runs quick)
+// ═══════════════════════════════════════════════════════
+export async function POST(req: NextRequest) {
+  try {
+    const { mode } = await req.json();
+
+    // ── QUICK MODE: single call, returns immediately ──
     if (mode === "quick") {
+      const client = new Anthropic({ apiKey: getKey() });
+      const snapshot = buildSnapshot();
       const response = await client.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 2048,
@@ -597,73 +677,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ response: text, mode, timestamp: new Date().toISOString(), snapshot_size: snapshot.length });
     }
 
-    // ── FULL MODE: multi-call chain with streaming stages ──
-    // Batched to respect rate limits (30K input tokens/min)
-    // 4 specialists per batch × 3 batches, 2s pause between batches
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          const BATCH_SIZE = 4;
-          const BATCH_DELAY_MS = 12000; // 12s between batches (rate limit: 30K tokens/min)
-          const allReports: string[] = [];
+    // ── FULL MODE: create job, run in background ──
+    const jobId = `council_${Date.now()}`;
+    jobs[jobId] = {
+      status: "running",
+      stage: "starting",
+      detail: "Iniciando Council v2.2...",
+      started_at: new Date().toISOString(),
+    };
 
-          // Stage 1: 12 specialists in batches (using COMPACT snapshot to save tokens)
-          for (let i = 0; i < SPECIALISTS.length; i += BATCH_SIZE) {
-            const batch = SPECIALISTS.slice(i, i + BATCH_SIZE);
-            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-            const totalBatches = Math.ceil(SPECIALISTS.length / BATCH_SIZE);
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"specialists",step:1,total:5,detail:`Especialistas batch ${batchNum}/${totalBatches} (${batch.map(s=>s.name.split(" ")[0]).join(", ")})...`})}\n\n`));
+    // Fire and forget — runs in background
+    runFullCouncil(jobId).catch(() => {});
 
-            const batchResults = await Promise.all(
-              batch.map(spec => runSpecialist(client, spec, compact))
-            );
-            allReports.push(...batchResults);
+    // Clean old jobs (keep last 5)
+    const allIds = Object.keys(jobs).sort();
+    if (allIds.length > 5) {
+      for (const old of allIds.slice(0, allIds.length - 5)) {
+        delete jobs[old];
+      }
+    }
 
-            // Pause between batches to respect rate limit
-            if (i + BATCH_SIZE < SPECIALISTS.length) {
-              await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-            }
-          }
-          const briefings = allReports.join("\n\n");
-
-          // Cooldown before heads (longer pause after 12 specialist calls)
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-
-          // Stage 2: Dalio + Devil in sequence (using compact snapshot)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"heads",step:2,total:5,detail:"Ray Dalio sintetizando..."})}\n\n`));
-          const dalio = await runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, compact);
-
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"heads",step:3,total:5,detail:"Advogado do Diabo atacando..."})}\n\n`));
-          const devil = await runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, compact);
-
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-
-          // Stage 3: Chairman synthesizes everything (FULL snapshot for maximum context)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"chairman",step:4,total:5,detail:"Chairman produzindo relatorio final..."})}\n\n`));
-          const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
-
-          // Final: send complete response
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"complete",response:chairman,snapshot_size:snapshot.length})}\n\n`));
-          controller.close();
-        } catch (err: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"error",error:err.message?.slice(0,500)||"Unknown"})}\n\n`));
-          controller.close();
-        }
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    return NextResponse.json({ jobId, status: "running" });
   } catch (error: any) {
     console.error("[council] Error:", error.message);
     return NextResponse.json({ error: error.message || "Unknown error" }, { status: 500 });
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// GET HANDLER (poll job status)
+// ═══════════════════════════════════════════════════════
+export async function GET(req: NextRequest) {
+  const jobId = req.nextUrl.searchParams.get("jobId");
+  if (!jobId || !jobs[jobId]) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+  const job = jobs[jobId];
+  return NextResponse.json({
+    jobId,
+    status: job.status,
+    stage: job.stage,
+    detail: job.detail,
+    response: job.status === "complete" ? job.response : undefined,
+    error: job.status === "error" ? job.error : undefined,
+    snapshot_size: job.snapshot_size,
+    started_at: job.started_at,
+    completed_at: job.completed_at,
+  });
 }

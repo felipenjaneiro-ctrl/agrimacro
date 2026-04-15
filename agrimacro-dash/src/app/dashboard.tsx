@@ -5257,47 +5257,48 @@ export default function Dashboard() {
                   border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
                 }}>{intelCouncilLoading?"Council...":"Council Quick"}</button>
 
-                {/* Council Full Button — streams stages via SSE */}
+                {/* Council Full Button — job polling */}
                 <button onClick={async()=>{
                   if(intelCouncilLoading) return;
                   setIntelCouncilLoading(true);
-                  setCouncilStage("Conectando...");
+                  setCouncilStage("Iniciando Council v2.2...");
                   try {
                     const res = await fetch("/api/council",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"full"})});
-                    const reader = res.body?.getReader();
-                    if(!reader){throw new Error("No stream reader");}
-                    const decoder = new TextDecoder();
-                    let buffer = "";
-                    while(true){
-                      const {done, value} = await reader.read();
-                      if(done) break;
-                      buffer += decoder.decode(value, {stream:true});
-                      const lines = buffer.split("\n\n");
-                      buffer = lines.pop() || "";
-                      for(const line of lines){
-                        if(!line.startsWith("data: ")) continue;
-                        try{
-                          const ev = JSON.parse(line.slice(6));
-                          if(ev.stage==="specialists") setCouncilStage(ev.detail || "Analisando especialistas...");
-                          else if(ev.stage==="heads") setCouncilStage(ev.detail || "Heads deliberando...");
-                          else if(ev.stage==="chairman") setCouncilStage(ev.detail || "Chairman sintetizando...");
-                          else if(ev.stage==="complete" && ev.response){
-                            const entry={text:ev.response,time:new Date().toLocaleString("pt-BR")};
-                            setIntelCouncil(entry);
-                            setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
-                            setCouncilStage("");
-                          } else if(ev.stage==="error"){
-                            setIntelCouncil({text:"ERRO: "+(ev.error||"Unknown"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
-                            setCouncilStage("");
-                          }
-                        }catch{}
+                    const d = await res.json();
+                    if(!d.jobId) throw new Error(d.error || "No jobId returned");
+                    const jobId = d.jobId;
+                    // Poll every 5s
+                    const poll = setInterval(async()=>{
+                      try {
+                        const sr = await fetch(`/api/council?jobId=${jobId}`);
+                        const st = await sr.json();
+                        if(st.status==="running"){
+                          setCouncilStage(st.detail || st.stage || "Processando...");
+                        } else if(st.status==="complete" && st.response){
+                          clearInterval(poll);
+                          const entry={text:st.response,time:new Date().toLocaleString("pt-BR")};
+                          setIntelCouncil(entry);
+                          setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                          setCouncilStage("");
+                          setIntelCouncilLoading(false);
+                        } else if(st.status==="error"){
+                          clearInterval(poll);
+                          setIntelCouncil({text:"ERRO: "+(st.error||"Unknown"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                          setCouncilStage("");
+                          setIntelCouncilLoading(false);
+                        }
+                      } catch(pe:any){
+                        clearInterval(poll);
+                        setIntelCouncil({text:"ERRO polling: "+pe.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                        setCouncilStage("");
+                        setIntelCouncilLoading(false);
                       }
-                    }
+                    }, 5000);
                   }catch(e:any){
                     setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
                     setCouncilStage("");
+                    setIntelCouncilLoading(false);
                   }
-                  setIntelCouncilLoading(false);
                 }} disabled={intelCouncilLoading} style={{
                   padding:"8px 20px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
                   background:intelCouncilLoading?"rgba(220,60,60,.20)":"rgba(220,60,60,.10)",color:"#ef4444",marginLeft:8,
