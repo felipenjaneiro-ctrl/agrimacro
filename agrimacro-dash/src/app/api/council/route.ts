@@ -380,6 +380,9 @@ function buildCompactSnapshot(): string {
 }
 
 // ═══════════════════════════════════════════════════════
+// WEIGHT ENGINE (pesos dinamicos por fator)
+const WEIGHT_ENGINE = `WEIGHT ENGINE \u2014 PESOS DIN\u00c2MICOS AgriMacro. Cada fator recebe peso proporcional a INTENSIDADE (z-score), HORIZONTE (prazo), REGIME (tendencia vs lateral). COT: >85/<15=40%, 70-85/15-30=25%, 30-70=10%, dsem>20K=+10%. STU: z>2=35%, z1-2=20%, z<1=10%. CLIMA: seca ativa(<5mm)=35%, moderada=20%, normal=5%, ENSO ativo=+10%. SAZONALIDADE: desvio>15%=25%, 5-15%=15%, <5%=5%. GEOPOLITICA: evento ativo=40%, subsidio=25%, nada=5%. EXPORTACOES: pace<80%/>110%=25%, basis extremo=20%, normal=10%. MARGENS: z>2=30%, z1-2=20%, z<1=10%. DTE SHORT: <10d=50%(sobrepoe tudo), 10-20d=35%, 20-30d=20%, >30d=5%. HORIZONTE: 1-4sem=COT40+Clima30+Geo20+Saz10. 1-3m=STU35+Export25+COT20+Margens20. 6-12m=Estrutural40+COP30+Ciclo30. INSTRUCAO: liste PESOS [commodity] hoje: COT=X% | STU=X% | Clima=X% | Geo=X% antes de analisar. Ordem decrescente de peso.`;
+
 // AT + AF FRAMEWORKS
 // ═══════════════════════════════════════════════════════
 const AT_FRAMEWORK = `FRAMEWORK AT (An\u00e1lise T\u00e9cnica):
@@ -560,7 +563,7 @@ async function runSpecialist(
   const res = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 400,
-    system: spec.system + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + context,
+    system: spec.system + "\n\n" + WEIGHT_ENGINE + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + context,
     messages: [{ role: "user", content: "Analise o snapshot. Veredicto: FORTEMENTE SUPORTA / SUPORTA / NEUTRO / CONTRADIZ / FORTEMENTE CONTRADIZ." }],
   });
   const text = res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
@@ -586,7 +589,7 @@ async function runChairman(
   const res = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 4000,
-    system: CHAIRMAN_SYSTEM + "\n\n" + COUNCIL_SYSTEM + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + BRIEFING_DALIO + "\n" + BRIEFING_CARLOS + "\n" + BRIEFING_HENRIK + "\n" + BRIEFING_DAVID + "\n" + BRIEFING_ANA,
+    system: CHAIRMAN_SYSTEM + "\n\n" + COUNCIL_SYSTEM + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + BRIEFING_DALIO + "\n" + BRIEFING_CARLOS + "\n" + BRIEFING_HENRIK + "\n" + BRIEFING_DAVID + "\n" + BRIEFING_ANA + "\n\n" + WEIGHT_ENGINE,
     messages: [{ role: "user", content:
       `BRIEFINGS (12 especialistas):\n${briefings}\n\n` +
       `${dalio}\n\n${devil}\n\n` +
