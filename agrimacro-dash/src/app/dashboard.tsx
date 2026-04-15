@@ -1310,6 +1310,7 @@ export default function Dashboard() {
   const [dxProcessed, setDxProcessed] = useState<any[]|null>(null);
   const [intelCouncil, setIntelCouncil] = useState<{text:string;time:string}|null>(null);
   const [intelCouncilLoading, setIntelCouncilLoading] = useState(false);
+  const [councilStage, setCouncilStage] = useState("");
   const [councilHistory, setCouncilHistory] = useState<Array<{text:string;time:string}>>(()=>{
     if(typeof window!=="undefined"){try{const s=localStorage.getItem("agrimacro_council_history");if(s)return JSON.parse(s);}catch{}}
     return [];
@@ -5256,25 +5257,52 @@ export default function Dashboard() {
                   border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
                 }}>{intelCouncilLoading?"Council...":"Council Quick"}</button>
 
-                {/* Council Full Button */}
+                {/* Council Full Button — streams stages via SSE */}
                 <button onClick={async()=>{
                   if(intelCouncilLoading) return;
                   setIntelCouncilLoading(true);
+                  setCouncilStage("Conectando...");
                   try {
                     const res = await fetch("/api/council",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"full"})});
-                    const d = await res.json();
-                    if(res.ok && d.response){
-                      const entry={text:d.response,time:new Date().toLocaleString("pt-BR")};
-                      setIntelCouncil(entry);
-                      setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
-                    } else setIntelCouncil({text:"ERRO: "+(d.error||"API error"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
-                  }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});}
+                    const reader = res.body?.getReader();
+                    if(!reader){throw new Error("No stream reader");}
+                    const decoder = new TextDecoder();
+                    let buffer = "";
+                    while(true){
+                      const {done, value} = await reader.read();
+                      if(done) break;
+                      buffer += decoder.decode(value, {stream:true});
+                      const lines = buffer.split("\n\n");
+                      buffer = lines.pop() || "";
+                      for(const line of lines){
+                        if(!line.startsWith("data: ")) continue;
+                        try{
+                          const ev = JSON.parse(line.slice(6));
+                          if(ev.stage==="specialists") setCouncilStage("Analisando 12 especialistas... (1/3)");
+                          else if(ev.stage==="heads") setCouncilStage("Dalio + Devil deliberando... (2/3)");
+                          else if(ev.stage==="chairman") setCouncilStage("Chairman sintetizando... (3/3)");
+                          else if(ev.stage==="complete" && ev.response){
+                            const entry={text:ev.response,time:new Date().toLocaleString("pt-BR")};
+                            setIntelCouncil(entry);
+                            setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                            setCouncilStage("");
+                          } else if(ev.stage==="error"){
+                            setIntelCouncil({text:"ERRO: "+(ev.error||"Unknown"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                            setCouncilStage("");
+                          }
+                        }catch{}
+                      }
+                    }
+                  }catch(e:any){
+                    setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                    setCouncilStage("");
+                  }
                   setIntelCouncilLoading(false);
                 }} disabled={intelCouncilLoading} style={{
                   padding:"8px 20px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
-                  background:"rgba(220,60,60,.10)",color:"#ef4444",marginLeft:8,
+                  background:intelCouncilLoading?"rgba(220,60,60,.20)":"rgba(220,60,60,.10)",color:"#ef4444",marginLeft:8,
                   border:"1px solid rgba(220,60,60,.25)",transition:"all .2s",
-                }}>{intelCouncilLoading?"Council...":"Council Full"}</button>
+                }}>{intelCouncilLoading?(councilStage||"Council..."):"Council Full"}</button>
 
                 <div style={{fontSize:9,color:"#64748b",marginTop:4}}>Aprofundar: chat | Council Quick: 300 palavras | Council Full: relatorio executivo completo</div>
               </div>

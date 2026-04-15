@@ -385,27 +385,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ response: text, mode, timestamp: new Date().toISOString(), snapshot_size: snapshot.length });
     }
 
-    // ── FULL MODE: multi-call chain ──
-    // Step 1: 12 specialists in parallel
-    const specialistReports = await Promise.all(
-      SPECIALISTS.map(spec => runSpecialist(client, spec, snapshot))
-    );
-    const briefings = specialistReports.join("\n\n");
+    // ── FULL MODE: multi-call chain with streaming stages ──
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Stage 1: 12 specialists in parallel
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"specialists",step:1,total:3})}\n\n`));
+          const specialistReports = await Promise.all(
+            SPECIALISTS.map(spec => runSpecialist(client, spec, snapshot))
+          );
+          const briefings = specialistReports.join("\n\n");
 
-    // Step 2: Dalio + Devil in parallel
-    const [dalio, devil] = await Promise.all([
-      runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, snapshot),
-      runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, snapshot),
-    ]);
+          // Stage 2: Dalio + Devil in parallel
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"heads",step:2,total:3})}\n\n`));
+          const [dalio, devil] = await Promise.all([
+            runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, snapshot),
+            runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, snapshot),
+          ]);
 
-    // Step 3: Chairman synthesizes everything
-    const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
+          // Stage 3: Chairman synthesizes everything
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"chairman",step:3,total:3})}\n\n`));
+          const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
 
-    return NextResponse.json({
-      response: chairman,
-      mode,
-      timestamp: new Date().toISOString(),
-      snapshot_size: snapshot.length,
+          // Final: send complete response
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"complete",response:chairman,snapshot_size:snapshot.length})}\n\n`));
+          controller.close();
+        } catch (err: any) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"error",error:err.message?.slice(0,500)||"Unknown"})}\n\n`));
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
   } catch (error: any) {
     console.error("[council] Error:", error.message);
