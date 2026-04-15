@@ -888,11 +888,96 @@ async function runFullCouncil(jobId: string) {
 }
 
 // ═══════════════════════════════════════════════════════
-// POST HANDLER (starts job or runs quick)
+// COMMODITY DEEP DIVE (single commodity, single call)
+// ═══════════════════════════════════════════════════════
+const COMMODITY_DOMAINS: Record<string, string> = {
+  ZC: "grains_bear", ZS: "grains_bear", ZW: "grains_bear", KE: "grains_bear", ZM: "grains_bear", ZL: "grains_bear",
+  LE: "livestock", GF: "livestock", HE: "livestock",
+  CL: "energy", NG: "energy",
+  GC: "metals", SI: "metals",
+  KC: "softs", CC: "softs", SB: "softs", CT: "softs",
+  DX: "macro_structural",
+};
+
+async function runCommodityAnalysis(jobId: string, commodity: string) {
+  const job = jobs[jobId];
+  try {
+    const client = new Anthropic({ apiKey: getKey() });
+    const domain = COMMODITY_DOMAINS[commodity] || "grains_bear";
+    const focused = buildFocusedSnapshot(domain);
+    const portfolioSnap = buildFocusedSnapshot("portfolio_risk");
+
+    job.stage = "analyzing";
+    job.detail = `Analisando ${commodity}...`;
+
+    const system = `Voce e o Council AgriMacro analisando uma commodity especifica: ${commodity}.
+Use os frameworks AT e AF abaixo e os dados do snapshot.
+
+${AT_FRAMEWORK}
+
+${AF_FRAMEWORK}
+
+${WEIGHT_ENGINE}
+
+FORMATO OBRIGATORIO:
+=== ANALISE ${commodity} ===
+Data: [data do snapshot]
+
+--- AT (Analise Tecnica) ---
+Preco atual: [do snapshot]
+Momentum 5d/20d: [calcular do snapshot se disponivel]
+IV: [do snapshot] | Skew: [do snapshot] | Term: [do snapshot]
+Curva forward: [contango/backwardation do snapshot]
+Suportes e resistencias: [inferir dos dados]
+
+--- AF (Analise Fundamental) ---
+COT Index: [do snapshot, 3 janelas] | Crowd: [label]
+Estoques: [do snapshot, desvio vs 5y]
+Sazonalidade ${new Date().toLocaleString("pt-BR", {month:"long"})}: [do snapshot]
+Spreads relevantes: [do snapshot]
+
+--- CRUZAMENTO AT+AF ---
+Confluencia: CONVERGENTE ou DIVERGENTE
+Direcao dominante: BULLISH / BEARISH / NEUTRO com threshold especifico
+Risco critico: [1 risco que o portfolio nao esta precificando]
+
+--- POSICOES ABERTAS ${commodity} ---
+[filtrar do snapshot]
+
+--- ACAO RECOMENDADA ---
+[concreta com threshold e prazo]
+
+Se dado N/A: escrever explicitamente. NUNCA fabricar.
+Maximo 500 palavras. Portugues brasileiro.`;
+
+    const res = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1500,
+      system: system,
+      messages: [{ role: "user", content: `DADOS ${commodity}:\n${focused}\n\nPORTFOLIO:\n${portfolioSnap}` }],
+    });
+
+    const text = res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+    job.status = "complete";
+    job.stage = "complete";
+    job.detail = "";
+    job.response = text;
+    job.snapshot_size = focused.length;
+    job.completed_at = new Date().toISOString();
+  } catch (err: any) {
+    job.status = "error";
+    job.stage = "error";
+    job.error = err.message?.slice(0, 500) || "Unknown error";
+    job.completed_at = new Date().toISOString();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// POST HANDLER (starts job or runs quick/commodity)
 // ═══════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
-    const { mode } = await req.json();
+    const { mode, commodity } = await req.json();
 
     // ── QUICK MODE: single call, returns immediately ──
     if (mode === "quick") {
@@ -906,6 +991,14 @@ export async function POST(req: NextRequest) {
       });
       const text = response.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
       return NextResponse.json({ response: text, mode, timestamp: new Date().toISOString(), snapshot_size: snapshot.length });
+    }
+
+    // ── COMMODITY MODE: single-call deep dive ──
+    if (mode === "commodity" && commodity) {
+      const jobId = `commodity_${commodity}_${Date.now()}`;
+      jobs[jobId] = { status: "running", stage: "starting", detail: `Analisando ${commodity}...`, started_at: new Date().toISOString() };
+      runCommodityAnalysis(jobId, commodity).catch(() => {});
+      return NextResponse.json({ jobId, status: "running" });
     }
 
     // ── FULL MODE: create job, run in background ──

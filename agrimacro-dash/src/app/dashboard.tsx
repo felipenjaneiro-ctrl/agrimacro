@@ -6608,26 +6608,39 @@ export default function Dashboard() {
                 border:"1px solid rgba(124,58,237,.3)",transition:"all .2s",
               }}>Deep Dive {selected} (Strategy)</button>
 
-              {/* Option 2: Direct Council analysis */}
+              {/* Option 2: Council commodity analysis (job polling) */}
               <button onClick={async()=>{
                 if(intelCouncilLoading) return;
                 setIntelCouncilLoading(true);
+                setCouncilStage(`Analisando ${selected}...`);
                 try {
-                  const prompt = buildCommodityPromptTop(selected);
-                  const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{role:"user",content:prompt}]})});
+                  const res = await fetch("/api/council",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"commodity",commodity:selected})});
                   const d = await res.json();
-                  if(res.ok && d.response){
-                    const entry={text:`**[${selected}]** ${d.response}`,time:new Date().toLocaleString("pt-BR")};
-                    setIntelCouncil(entry);
-                    setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
-                  } else setIntelCouncil({text:"ERRO: "+(d.error||"API error"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
-                }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});}
-                setIntelCouncilLoading(false);
+                  if(!d.jobId) throw new Error(d.error || "No jobId");
+                  const poll = setInterval(async()=>{
+                    try {
+                      const sr = await fetch(`/api/council?jobId=${d.jobId}`);
+                      const st = await sr.json();
+                      if(st.status==="running") setCouncilStage(st.detail || `Analisando ${selected}...`);
+                      else if(st.status==="complete" && st.response){
+                        clearInterval(poll);
+                        const entry={text:`**[${selected}]** ${st.response}`,time:new Date().toLocaleString("pt-BR")};
+                        setIntelCouncil(entry);
+                        setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
+                        setCouncilStage(""); setIntelCouncilLoading(false);
+                      } else if(st.status==="error"){
+                        clearInterval(poll);
+                        setIntelCouncil({text:"ERRO: "+(st.error||"Unknown"),time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
+                        setCouncilStage(""); setIntelCouncilLoading(false);
+                      }
+                    } catch(pe:any){ clearInterval(poll); setIntelCouncil({text:"ERRO: "+pe.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}); setCouncilStage(""); setIntelCouncilLoading(false); }
+                  }, 5000);
+                }catch(e:any){setIntelCouncil({text:"ERRO: "+e.message,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}); setCouncilStage(""); setIntelCouncilLoading(false);}
               }} disabled={intelCouncilLoading} style={{
                 padding:"6px 16px",fontSize:10,fontWeight:600,borderRadius:6,cursor:intelCouncilLoading?"wait":"pointer",
                 background:intelCouncilLoading?"#1E3044":"rgba(220,180,50,.10)",color:"#DCB432",
                 border:"1px solid rgba(220,180,50,.3)",transition:"all .2s",
-              }}>{intelCouncilLoading?`Analisando...`:`Council ${selected}`}</button>
+              }}>{intelCouncilLoading?(councilStage||`Analisando...`):`Council ${selected}`}</button>
 
               <span style={{fontSize:9,color:"#64748b"}}>Strategy: abre na aba Intel c/ prompt preenchido | Council: analise direta</span>
             </div>
