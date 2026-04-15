@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
       system: system + "\n\n" + snapshot,
       messages: [{ role: "user", content: mode === "quick"
         ? "Analise rapida do portfolio. O que fazer agora?"
-        : "Produza o relatorio executivo completo do Council AgriMacro v2.2 para hoje. Use as 5 perspectivas adversariais (Tecnico, Fundamental, Risco, Sazonalidade, Contrarian). Cruze os dados antes de cada veredicto. Inclua thresholds numericos em todas as recomendacoes."
+        : "Produza o relatorio executivo completo do Council AgriMacro v2.2 para hoje. Os 5 conselheiros (Carlos Mera, Felipe Hernandez, Rodrigo Batista, Henrik Larsson, Ana Lima) devem cruzar AT+AF antes de cada veredicto. Contradicoes ANTES de suportes. Chairman entrega exatamente 3 passos com threshold numerico."
       }],
     });
 
