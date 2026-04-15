@@ -5640,9 +5640,21 @@ export default function Dashboard() {
           {sectionTitle("COUNCIL DIÁRIO — SÍNTESE IA")}
           {intelCouncilLoading && (
             <div style={{textAlign:"center",padding:"16px 0"}}>
-              <div style={{fontSize:11,color:"#DCB432",marginBottom:8}}>Gerando síntese...</div>
-              <div style={{width:200,height:3,background:"rgba(148,163,184,.1)",borderRadius:2,margin:"0 auto",overflow:"hidden"}}>
-                <div style={{width:"40%",height:"100%",background:"#DCB432",borderRadius:2,animation:"pulse 1.5s ease-in-out infinite"}}/>
+              <div style={{fontSize:11,color:"#DCB432",marginBottom:8}}>
+                {councilStage || "Gerando sintese..."}
+              </div>
+              <div style={{width:280,height:4,background:"rgba(148,163,184,.1)",borderRadius:2,margin:"0 auto",overflow:"hidden"}}>
+                <div style={{
+                  height:"100%",background:"#DCB432",borderRadius:2,
+                  transition:"width 1s ease",
+                  width: councilStage.includes("Chairman") ? "85%"
+                    : councilStage.includes("Diabo") ? "70%"
+                    : councilStage.includes("Dalio") ? "55%"
+                    : councilStage.includes("3/3") ? "45%"
+                    : councilStage.includes("2/3") ? "30%"
+                    : councilStage.includes("1/3") ? "20%"
+                    : "5%",
+                }}/>
               </div>
             </div>
           )}
