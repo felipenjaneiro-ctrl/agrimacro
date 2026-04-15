@@ -271,32 +271,138 @@ const QUICK_SYSTEM = `Voce e o analista de risco do AgriMacro. Faca uma analise 
 Foco em: 1) Posicoes que precisam de acao 2) Melhor oportunidade do dia 3) Risco principal.
 Portugues brasileiro, direto e acionavel. Sem introducao.`;
 
+// ═══════════════════════════════════════════════════════
+// SPECIALISTS (12 domain experts for full mode)
+// ═══════════════════════════════════════════════════════
+const SPECIALISTS: { name: string; role: string; system: string }[] = [
+  { name: "Carlos Mera", role: "Graos Bear Case (Rabobank)",
+    system: "Voce e Carlos Mera, analista senior de graos da Rabobank. Foco: ZC, ZS, ZW, KE, ZM, ZL. Analise AT (curva forward, COT, momentum) e AF (WASDE, STU, safra BR) usando o snapshot. Contradicoes ANTES de suportes. Max 150 palavras." },
+  { name: "Felipe Hernandez", role: "Macro Estruturalista (Oxford Economics)",
+    system: "Voce e Felipe Hernandez, economista da Oxford Economics. Foco: DXY, BRL/USD, juros, VIX, correlacoes macro-commodities. Analise AT (regime de vol, curvas) e AF (Selic, fertilizantes lag 6-12m). Contradicoes ANTES. Max 150 palavras." },
+  { name: "Rodrigo Batista", role: "Fisico Brasil Bull Case",
+    system: "Voce e Rodrigo Batista, trader de fisico no Brasil. Foco: CEPEA, basis Paranagua, boi gordo, soja fisica. Analise AT (basis spot vs futuro) e AF (Feedlot Margin LE*10-GF*7.5-ZC*50, crush). Contradicoes ANTES. Max 150 palavras." },
+  { name: "Henrik Larsson", role: "Macro Outsider (ex-Brevan Howard)",
+    system: "Voce e Henrik Larsson, ex-Brevan Howard. Foco: tail risk, geopolitica, CL, open interest extremos, correlacoes que rompem em crise. Analise AT (OI anormal) e AF (riscos geopoliticos). Qual black swan as posicoes nao cobrem? Max 150 palavras." },
+  { name: "Ana Lima", role: "Risk Manager (ex-Cargill)",
+    system: "Voce e Ana Lima, risk manager ex-Cargill. Para CADA posicao do portfolio: DTE, distancia do strike vs spot, exposicao maxima em $. Posicoes com PnL > -200% do credito = PERDA MAXIMA, prioridade. Short calls = MENCIONAR risco assignment. Rankeie por urgencia. Max 200 palavras." },
+  { name: "Dr. Wei", role: "Macro Global (Fed/China)",
+    system: "Voce e Dr. Wei, economista macro global. Foco: Fed policy, Treasury yields, China PMI/demanda, fluxos de capital, impacto em commodities. Use VIX, SP500, 10Y do snapshot. Max 120 palavras." },
+  { name: "Sarah Mitchell", role: "Energia (CL/NG)",
+    system: "Voce e Sarah Mitchell, analista de energia. Foco: CL, NG. Analise OPEC, EIA storage, curva forward energia, IV de CL. Se CL em backwardation forte = stress. Max 120 palavras." },
+  { name: "James Park", role: "Metais (GC/SI)",
+    system: "Voce e James Park, analista de metais. Foco: GC, SI, ratio GC/SI, compras de bancos centrais, DXY inverso. Analise IV e skew de SI. Max 120 palavras." },
+  { name: "Maria Oliveira", role: "Softs (KC/CC/SB/CT)",
+    system: "Voce e Maria Oliveira, analista de softs. Foco: KC, CC, SB, CT. Safra Brasil cafe/acucar, mix etanol, ICCO deficit, estoques ICE. IV extrema em CC desde 2024. Max 120 palavras." },
+  { name: "Roberto Tanaka", role: "Pecuaria (LE/GF/HE)",
+    system: "Voce e Roberto Tanaka, analista de pecuaria. Foco: LE, GF, HE. Cattle on Feed, ciclo pecuario, feedlot margin, grilling season, peso medio abate. Max 120 palavras." },
+  { name: "Lucia Chen", role: "Opcoes / Volatilidade",
+    system: "Voce e Lucia Chen, especialista em opcoes. Analise IV, skew, term structure de TODAS as commodities do snapshot. IV > 50% = oportunidade venda premium. IV < 20% = evitar. Regime VEGA se IV>=40% ativo. Max 150 palavras." },
+  { name: "David Kowalski", role: "COT / Positioning",
+    system: "Voce e David Kowalski, analista de positioning. Analise COT Index de TODAS as commodities. COT > 80 = CROWDED LONG (reversao). COT < 20 = CROWDED SHORT. 3 janelas: 156w/52w/26w. Delta semanal. Max 120 palavras." },
+];
+
+const DALIO_SYSTEM = `Voce e Ray Dalio. Recebeu briefings de 12 especialistas sobre um portfolio de opcoes de commodities. Sintetize os pontos de CONVERGENCIA e DIVERGENCIA entre os especialistas. Identifique o risco sistemico que ninguem mencionou. Confluencia AT+AF: CONVERGENTE ou DIVERGENTE. Se DIVERGENTE = recomendar sizing 30-50% menor. Max 200 palavras. Portugues brasileiro.`;
+
+const DEVIL_SYSTEM = `Voce e o Advogado do Diabo. Recebeu briefings de 12 especialistas sobre um portfolio. Seu trabalho e DESTRUIR a tese dominante. Para cada recomendacao de consenso, apresente o cenario oposto com dados. Liste os 3 maiores riscos que NINGUEM mencionou. Identifique a posicao que vai explodir primeiro e por que. Max 200 palavras. Portugues brasileiro.`;
+
+const CHAIRMAN_SYSTEM = `Voce e o Chairman do Council AgriMacro v2.2.
+Recebeu:
+1. Briefings de 12 especialistas de dominio
+2. Sintese do Ray Dalio (convergencia/divergencia)
+3. Ataque do Advogado do Diabo (riscos ignorados)
+4. Snapshot completo de dados reais
+
+Produza o RELATORIO EXECUTIVO FINAL seguindo EXATAMENTE a estrutura do COUNCIL_SYSTEM v2.2 fornecido.
+Use os briefings como insumo — nao repita-os, sintetize.
+Contradições ANTES de suportes.
+Chairman entrega exatamente 3 passos com threshold numerico. Nao 2, nao 4.
+Maximo 1400 palavras. Portugues brasileiro.
+Se dado N/A: escrever explicitamente — NUNCA fabricar.`;
+
+// ═══════════════════════════════════════════════════════
+// MULTI-CALL CHAIN (full mode)
+// ═══════════════════════════════════════════════════════
+async function runSpecialist(
+  client: Anthropic, spec: typeof SPECIALISTS[0], context: string
+): Promise<string> {
+  const res = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 400,
+    system: spec.system + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + context,
+    messages: [{ role: "user", content: "Analise o snapshot. Veredicto: FORTEMENTE SUPORTA / SUPORTA / NEUTRO / CONTRADIZ / FORTEMENTE CONTRADIZ." }],
+  });
+  const text = res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+  return `--- ${spec.name} (${spec.role}) ---\n${text}`;
+}
+
+async function runHead(
+  client: Anthropic, system: string, label: string, briefings: string, context: string
+): Promise<string> {
+  const res = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 500,
+    system: system,
+    messages: [{ role: "user", content: `BRIEFINGS DOS ESPECIALISTAS:\n${briefings}\n\nSNAPSHOT:\n${context}` }],
+  });
+  const text = res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+  return `--- ${label} ---\n${text}`;
+}
+
+async function runChairman(
+  client: Anthropic, briefings: string, dalio: string, devil: string, context: string
+): Promise<string> {
+  const res = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4000,
+    system: CHAIRMAN_SYSTEM + "\n\n" + COUNCIL_SYSTEM + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK,
+    messages: [{ role: "user", content:
+      `BRIEFINGS (12 especialistas):\n${briefings}\n\n` +
+      `${dalio}\n\n${devil}\n\n` +
+      `SNAPSHOT DE DADOS:\n${context}`
+    }],
+  });
+  return res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+}
+
+// ═══════════════════════════════════════════════════════
+// POST HANDLER
+// ═══════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
     const { mode } = await req.json();
     const client = new Anthropic({ apiKey: getKey() });
     const snapshot = buildSnapshot();
 
-    const system = mode === "quick" ? QUICK_SYSTEM : COUNCIL_SYSTEM;
-    const maxTokens = mode === "quick" ? 2048 : 6000;
+    // ── QUICK MODE: single call, unchanged ──
+    if (mode === "quick") {
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2048,
+        system: QUICK_SYSTEM + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + snapshot,
+        messages: [{ role: "user", content: "Analise rapida do portfolio. O que fazer agora?" }],
+      });
+      const text = response.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
+      return NextResponse.json({ response: text, mode, timestamp: new Date().toISOString(), snapshot_size: snapshot.length });
+    }
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      system: system + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + snapshot,
-      messages: [{ role: "user", content: mode === "quick"
-        ? "Analise rapida do portfolio. O que fazer agora?"
-        : "Produza o relatorio executivo completo do Council AgriMacro v2.2 para hoje. Os 5 conselheiros (Carlos Mera, Felipe Hernandez, Rodrigo Batista, Henrik Larsson, Ana Lima) devem cruzar AT+AF antes de cada veredicto. Contradicoes ANTES de suportes. Chairman entrega exatamente 3 passos com threshold numerico."
-      }],
-    });
+    // ── FULL MODE: multi-call chain ──
+    // Step 1: 12 specialists in parallel
+    const specialistReports = await Promise.all(
+      SPECIALISTS.map(spec => runSpecialist(client, spec, snapshot))
+    );
+    const briefings = specialistReports.join("\n\n");
 
-    const text = response.content
-      .filter((c: any) => c.type === "text")
-      .map((c: any) => c.text)
-      .join("");
+    // Step 2: Dalio + Devil in parallel
+    const [dalio, devil] = await Promise.all([
+      runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, snapshot),
+      runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, snapshot),
+    ]);
+
+    // Step 3: Chairman synthesizes everything
+    const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
 
     return NextResponse.json({
-      response: text,
+      response: chairman,
       mode,
       timestamp: new Date().toISOString(),
       snapshot_size: snapshot.length,
