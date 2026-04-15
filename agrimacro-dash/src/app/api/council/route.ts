@@ -380,6 +380,212 @@ function buildCompactSnapshot(): string {
 }
 
 // ═══════════════════════════════════════════════════════
+// FOCUSED SNAPSHOTS (domain-specific for each specialist)
+// ═══════════════════════════════════════════════════════
+function filterSyms(obj: any, syms: string[]): any {
+  if (!obj) return {};
+  const out: any = {};
+  for (const s of syms) { if (obj[s]) out[s] = obj[s]; }
+  return out;
+}
+function filterPositions(port: any, syms?: string[]): string {
+  if (!port?.positions) return "";
+  const pos = port.positions.filter((p: any) => (p.sec_type === "FOP" || p.sec_type === "FUT") && (!syms || syms.includes(p.symbol)));
+  return pos.map((p: any) => `${p.symbol} ${p.local_symbol}: ${p.position > 0 ? "+" : ""}${p.position} delta=${p.delta ?? "?"} theta=${p.theta ?? "?"} iv=${p.iv ? (p.iv * 100).toFixed(0) + "%" : "?"} avgCost=${p.avg_cost ?? "?"}`).join("\n");
+}
+function filterCOT(cot: any, syms?: string[]): string {
+  if (!cot?.commodities) return "";
+  const lines: string[] = [];
+  Object.entries(cot.commodities).forEach(([sym, d]: any) => {
+    if (syms && !syms.includes(sym)) return;
+    const dis = d.disaggregated || {};
+    if (dis.cot_index != null) {
+      const label = dis.cot_index >= 80 ? "CROWDED_LONG" : dis.cot_index <= 20 ? "CROWDED_SHORT" : "neutral";
+      const w52 = dis.cot_index_52w != null ? ` 52w=${dis.cot_index_52w.toFixed(0)}` : "";
+      const mm = dis.latest?.managed_money_net != null ? ` MM=${dis.latest.managed_money_net}` : "";
+      lines.push(`${sym}: idx=${dis.cot_index.toFixed(0)} ${label}${w52}${mm}`);
+    }
+  });
+  return lines.join("\n");
+}
+function filterIV(oc: any, syms?: string[]): string {
+  if (!oc?.underlyings) return "";
+  const lines: string[] = [];
+  Object.entries(oc.underlyings).forEach(([sym, d]: any) => {
+    if (syms && !syms.includes(sym)) return;
+    const ivr = d.iv_rank || {};
+    const sk = d.skew || {};
+    const ts = d.term_structure || {};
+    lines.push(`${sym}: IV=${ivr.current_iv ? (ivr.current_iv * 100).toFixed(1) + "%" : "?"} Rank=${ivr.rank_52w != null ? ivr.rank_52w.toFixed(0) + "%" : "?"} Skew=${sk.skew_pct != null ? sk.skew_pct + "%" : "?"} Term=${ts.structure || "?"}`);
+  });
+  return lines.join("\n");
+}
+function filterNews(news: any, keywords: string[]): string {
+  if (!news?.items?.length) return "";
+  const kw = keywords.map(k => k.toLowerCase());
+  const matched = news.items.filter((n: any) => kw.some(k => (n.title || "").toLowerCase().includes(k)));
+  return matched.slice(0, 5).map((n: any) => `- ${n.title} [${n.source || "?"}]`).join("\n");
+}
+function macroBlock(): string {
+  const p: string[] = [];
+  const macro = loadData("macro_indicators.json");
+  if (macro) {
+    if (macro.vix) p.push(`VIX=${macro.vix.value}(${macro.vix.level})`);
+    if (macro.sp500) p.push(`SP500=${macro.sp500.value}`);
+    if (macro.treasury_10y) p.push(`10Y=${macro.treasury_10y.value}%`);
+  }
+  const bcb = loadData("bcb_data.json");
+  if (bcb) {
+    const brl = bcb.brl_usd; if (Array.isArray(brl) && brl.length) p.push(`BRL/USD=${brl[brl.length - 1].value}`);
+    const selic = bcb.selic_meta; if (Array.isArray(selic) && selic.length) p.push(`Selic=${selic[selic.length - 1].value}%`);
+  }
+  const fw = loadData("fedwatch.json");
+  if (fw?.probabilities) p.push(`Fed:${fw.market_expectation} hold=${fw.probabilities.hold}%`);
+  return p.join(" | ");
+}
+
+function buildFocusedSnapshot(domain: string): string {
+  const p: string[] = [];
+  const port = loadData("ibkr_portfolio.json");
+  const oc = loadData("options_chain.json");
+  const cot = loadData("cot.json");
+  const news = loadData("news.json");
+  const spreads = loadData("spreads.json");
+  const sw = loadData("stocks_watch.json");
+  const season = loadData("seasonality.json");
+  const physBr = loadData("physical_br.json");
+  const conab = loadData("conab_data.json");
+  const bilateral = loadData("bilateral_indicators.json");
+  const eia = loadData("eia_data.json");
+  const weather = loadData("weather_agro.json");
+  const calendar = loadData("calendar.json");
+  const theta = loadPipeline("theta_calendar.json");
+  const stress = loadPipeline("stress_test.json");
+
+  const GRAINS = ["ZC", "ZS", "ZW", "ZM", "ZL", "KE"];
+  const ENERGY = ["CL", "NG"];
+  const METALS = ["GC", "SI"];
+  const SOFTS = ["KC", "CC", "SB", "CT"];
+  const LIVESTOCK = ["LE", "GF", "HE"];
+  const activeSym: string[] = Array.from(new Set((port?.positions || []).filter((x: any) => x.sec_type === "FOP" || x.sec_type === "FUT").map((x: any) => x.symbol))) as string[];
+
+  switch (domain) {
+    case "grains_bear": {
+      p.push("== GRAINS DATA ==");
+      p.push(filterCOT(cot, GRAINS));
+      p.push(filterIV(oc, GRAINS));
+      if (sw?.commodities) GRAINS.forEach(s => { const d: any = sw.commodities[s]; if (d?.stock_current) p.push(`STK ${s}: ${d.stock_current} ${d.stock_unit || ""} dev=${d.stock_avg ? ((d.stock_current - d.stock_avg) / d.stock_avg * 100).toFixed(0) + "%" : "?"}`); });
+      if (conab?.safras) Object.entries(conab.safras).forEach(([c, d]: any) => { if (d.producao_ton) p.push(`CONAB ${c}: prod=${d.producao_ton}t`); });
+      if (season) GRAINS.forEach(s => { const v = season[s]?.monthly_returns?.[new Date().getMonth()]; if (v != null) p.push(`Saz ${s}: ${typeof v === "number" ? v.toFixed(2) : v.avg?.toFixed(2) || "?"}%`); });
+      if (bilateral?.summary) p.push(`Bilateral: ${JSON.stringify(bilateral.summary).slice(0, 200)}`);
+      const gNews = filterNews(news, ["tariff", "grain", "Ukraine", "China", "soy", "corn", "wheat"]);
+      if (gNews) p.push("NEWS:\n" + gNews);
+      break;
+    }
+    case "macro_structural": {
+      p.push("== MACRO ==");
+      p.push(macroBlock());
+      if (eia) { const fields = ["wti_spot", "natural_gas_spot", "diesel_price"]; fields.forEach(f => { if (eia[f]) p.push(`EIA ${f}: ${eia[f].value} ${eia[f].unit || ""}`); }); }
+      if (spreads?.spreads) Object.entries(spreads.spreads).forEach(([k, v]: any) => p.push(`Spread ${k}: z=${v.zscore_1y} ${v.regime}`));
+      const mNews = filterNews(news, ["Fed", "dollar", "inflation", "rate", "China", "GDP", "tariff"]);
+      if (mNews) p.push("NEWS:\n" + mNews);
+      break;
+    }
+    case "physical_brazil": {
+      p.push("== FISICO BR ==");
+      p.push(macroBlock());
+      if (physBr) { const products = physBr.products || physBr; Object.entries(products).forEach(([k, v]: any) => { if (v?.price) p.push(`CEPEA ${v.label || k}: R$${v.price}`); }); }
+      if (conab?.safras) Object.entries(conab.safras).forEach(([c, d]: any) => { if (d.producao_ton) p.push(`CONAB ${c}: ${d.producao_ton}t`); });
+      if (bilateral?.lcs) p.push(`Bilateral LCS: spread=$${bilateral.lcs.spread_usd_mt?.toFixed(2)} comp=${bilateral.lcs.competitive_origin}`);
+      if (season) ["ZS", "ZC"].forEach(s => { const v = season[s]?.monthly_returns?.[new Date().getMonth()]; if (v != null) p.push(`Saz ${s}: ${typeof v === "number" ? v.toFixed(2) : "?"}%`); });
+      break;
+    }
+    case "tail_risk": {
+      p.push("== TAIL RISK ==");
+      p.push(macroBlock());
+      if (news?.items) p.push("NEWS FULL:\n" + news.items.slice(0, 8).map((n: any) => `- ${n.title}`).join("\n"));
+      p.push(filterCOT(cot));  // ALL commodities
+      if (port) p.push("PORTFOLIO:\n" + filterPositions(port));
+      if (calendar?.events) { const today = new Date().toISOString().slice(0, 10); const up = calendar.events.filter((e: any) => e.date >= today).slice(0, 6); if (up.length) p.push("CALENDAR:\n" + up.map((e: any) => `${e.date}: ${e.name || e.event}`).join("\n")); }
+      break;
+    }
+    case "portfolio_risk":
+    case "portfolio_full": {
+      p.push("== PORTFOLIO FULL ==");
+      if (port?.summary) p.push(`NetLiq=$${port.summary.NetLiquidation} Cash=$${port.summary.TotalCashValue} BuyPow=$${port.summary.BuyingPower}`);
+      if (port) p.push(filterPositions(port));
+      if (port?.portfolio_greeks) { const pg = port.portfolio_greeks; p.push(`Greeks: delta=${pg.total_delta} theta=$${pg.total_theta}/dia vega=${pg.total_vega}`); }
+      const tbills = (port?.positions || []).filter((p: any) => (p.symbol || "").includes("US-T") || (p.local_symbol || "").includes("IBCID"));
+      if (tbills.length) p.push(`T-Bills: $${tbills.reduce((s: number, t: any) => s + Math.abs(t.market_value || 0), 0).toFixed(0)}`);
+      if (theta?.timeline) p.push("THETA:\n" + theta.timeline.map((t: any) => `${t.sym} ${t.contract}: DTE=${t.dte || "?"} ${t.phase}`).join("\n"));
+      if (stress) { p.push(`Stress: ${stress.risk_level}`); if (stress.most_vulnerable) p.push(`Vulnerable: ${stress.most_vulnerable.sym} worst=$${stress.most_vulnerable.worst_loss}`); }
+      p.push(filterCOT(cot, activeSym));
+      break;
+    }
+    case "cot_specialist": {
+      p.push("== COT FULL ==");
+      p.push(filterCOT(cot));  // ALL commodities, full detail
+      if (season) { p.push("SEASONALITY:"); Object.keys(season).sort().forEach(s => { const v = season[s]?.monthly_returns?.[new Date().getMonth()]; if (v != null) p.push(`${s}:${typeof v === "number" ? v.toFixed(1) : "?"}%`); }); }
+      const cotExtreme = Object.entries(cot?.commodities || {}).filter(([, d]: any) => { const idx = d.disaggregated?.cot_index; return idx != null && (idx >= 80 || idx <= 20); }).map(([s]) => s);
+      if (cotExtreme.length && port) p.push("POSITIONS w/ extreme COT:\n" + filterPositions(port, cotExtreme));
+      break;
+    }
+    case "energy": {
+      p.push("== ENERGY ==");
+      p.push(filterIV(oc, ENERGY));
+      p.push(filterCOT(cot, ENERGY));
+      if (eia) Object.entries(eia).forEach(([k, v]: any) => { if (v?.value) p.push(`EIA ${k}: ${v.value} ${v.unit || ""}`); });
+      if (port) p.push("CL/NG positions:\n" + filterPositions(port, ENERGY));
+      const eNews = filterNews(news, ["oil", "gas", "OPEC", "Hormuz", "energy", "refinery", "barrel"]);
+      if (eNews) p.push("NEWS:\n" + eNews);
+      break;
+    }
+    case "metals": {
+      p.push("== METALS ==");
+      p.push(filterIV(oc, METALS));
+      p.push(filterCOT(cot, METALS));
+      p.push(macroBlock());
+      if (port) p.push("GC/SI positions:\n" + filterPositions(port, METALS));
+      const mNews = filterNews(news, ["gold", "silver", "Fed", "dollar", "inflation", "safe-haven"]);
+      if (mNews) p.push("NEWS:\n" + mNews);
+      break;
+    }
+    case "softs": {
+      p.push("== SOFTS ==");
+      p.push(filterIV(oc, SOFTS));
+      p.push(filterCOT(cot, SOFTS));
+      if (sw?.commodities) SOFTS.forEach(s => { const d: any = sw.commodities[s]; if (d?.stock_current) p.push(`STK ${s}: ${d.stock_current} dev=${d.stock_avg ? ((d.stock_current - d.stock_avg) / d.stock_avg * 100).toFixed(0) + "%" : "?"}`); });
+      if (physBr) { const products = physBr.products || physBr; ["cafe", "acucar", "algodao", "etanol"].forEach(k => { Object.entries(products).forEach(([pk, v]: any) => { if (pk.includes(k) && v?.price) p.push(`CEPEA ${v.label || pk}: R$${v.price}`); }); }); }
+      const sNews = filterNews(news, ["cocoa", "coffee", "sugar", "cotton", "West Africa", "Brazil", "drought"]);
+      if (sNews) p.push("NEWS:\n" + sNews);
+      break;
+    }
+    case "livestock": {
+      p.push("== LIVESTOCK ==");
+      p.push(filterIV(oc, LIVESTOCK));
+      p.push(filterCOT(cot, LIVESTOCK));
+      if (spreads?.spreads) { ["feedlot", "cattle_crush"].forEach(k => { const v: any = spreads.spreads[k]; if (v) p.push(`Spread ${k}: z=${v.zscore_1y} ${v.regime}`); }); }
+      if (sw?.commodities) LIVESTOCK.forEach(s => { const d: any = sw.commodities[s]; if (d?.stock_current) p.push(`STK ${s}: ${d.stock_current}`); });
+      if (physBr) { const products = physBr.products || physBr; Object.entries(products).forEach(([k, v]: any) => { if (k.includes("boi") && v?.price) p.push(`CEPEA ${v.label || k}: R$${v.price}`); }); }
+      if (port) p.push("GF/LE/HE positions:\n" + filterPositions(port, LIVESTOCK));
+      if (season) LIVESTOCK.forEach(s => { const v = season[s]?.monthly_returns?.[new Date().getMonth()]; if (v != null) p.push(`Saz ${s}: ${typeof v === "number" ? v.toFixed(2) : "?"}%`); });
+      break;
+    }
+    case "options_vol": {
+      p.push("== OPTIONS/VOL ==");
+      p.push(filterIV(oc));  // ALL underlyings
+      p.push(macroBlock());  // VIX
+      if (port?.portfolio_greeks) { const pg = port.portfolio_greeks; p.push(`Portfolio Greeks: delta=${pg.total_delta} theta=$${pg.total_theta}/dia vega=${pg.total_vega}`); }
+      break;
+    }
+    default:
+      return buildCompactSnapshot();
+  }
+
+  return p.filter(Boolean).join("\n");
+}
+
+// ═══════════════════════════════════════════════════════
 // WEIGHT ENGINE (pesos dinamicos por fator)
 const WEIGHT_ENGINE = `WEIGHT ENGINE \u2014 PESOS DIN\u00c2MICOS AgriMacro. Cada fator recebe peso proporcional a INTENSIDADE (z-score), HORIZONTE (prazo), REGIME (tendencia vs lateral). COT: >85/<15=40%, 70-85/15-30=25%, 30-70=10%, dsem>20K=+10%. STU: z>2=35%, z1-2=20%, z<1=10%. CLIMA: seca ativa(<5mm)=35%, moderada=20%, normal=5%, ENSO ativo=+10%. SAZONALIDADE: desvio>15%=25%, 5-15%=15%, <5%=5%. GEOPOLITICA: evento ativo=40%, subsidio=25%, nada=5%. EXPORTACOES: pace<80%/>110%=25%, basis extremo=20%, normal=10%. MARGENS: z>2=30%, z1-2=20%, z<1=10%. DTE SHORT: <10d=50%(sobrepoe tudo), 10-20d=35%, 20-30d=20%, >30d=5%. HORIZONTE: 1-4sem=COT40+Clima30+Geo20+Saz10. 1-3m=STU35+Export25+COT20+Margens20. 6-12m=Estrutural40+COP30+Ciclo30. INSTRUCAO: liste PESOS [commodity] hoje: COT=X% | STU=X% | Clima=X% | Geo=X% antes de analisar. Ordem decrescente de peso.`;
 
@@ -509,31 +715,31 @@ Portugues brasileiro, direto e acionavel. Sem introducao.`;
 // ═══════════════════════════════════════════════════════
 // SPECIALISTS (12 domain experts for full mode)
 // ═══════════════════════════════════════════════════════
-const SPECIALISTS: { name: string; role: string; system: string }[] = [
-  { name: "Carlos Mera", role: "Graos Bear Case (Rabobank)",
-    system: BRIEFING_CARLOS + " Foco: ZC, ZS, ZW, KE, ZM, ZL. Analise AT (curva forward, COT, momentum) e AF (WASDE, STU, safra BR) usando o snapshot. Contradicoes ANTES de suportes. Max 150 palavras." },
-  { name: "Felipe Hernandez", role: "Macro Estruturalista (Oxford Economics)",
+const SPECIALISTS: { name: string; role: string; domain: string; system: string }[] = [
+  { name: "Carlos Mera", role: "Graos Bear Case (Rabobank)", domain: "grains_bear",
+    system: BRIEFING_CARLOS + " Foco: ZC, ZS, ZW, KE, ZM, ZL. Analise AT (curva forward, COT, momentum) e AF (WASDE, STU, safra BR). Contradicoes ANTES. Max 150 palavras." },
+  { name: "Felipe Hernandez", role: "Macro Estruturalista (Oxford Economics)", domain: "macro_structural",
     system: "Voce e Felipe Hernandez, economista da Oxford Economics. Foco: DXY, BRL/USD, juros, VIX, correlacoes macro-commodities. Analise AT (regime de vol, curvas) e AF (Selic, fertilizantes lag 6-12m). Contradicoes ANTES. Max 150 palavras." },
-  { name: "Rodrigo Batista", role: "Fisico Brasil Bull Case",
+  { name: "Rodrigo Batista", role: "Fisico Brasil Bull Case", domain: "physical_brazil",
     system: "Voce e Rodrigo Batista, trader de fisico no Brasil. Foco: CEPEA, basis Paranagua, boi gordo, soja fisica. Analise AT (basis spot vs futuro) e AF (Feedlot Margin LE*10-GF*7.5-ZC*50, crush). Contradicoes ANTES. Max 150 palavras." },
-  { name: "Henrik Larsson", role: "Macro Outsider (ex-Brevan Howard)",
+  { name: "Henrik Larsson", role: "Macro Outsider (ex-Brevan Howard)", domain: "tail_risk",
     system: BRIEFING_HENRIK + " Foco: tail risk, geopolitica, CL, open interest extremos, correlacoes que rompem em crise. Analise AT (OI anormal) e AF (riscos geopoliticos). Qual black swan as posicoes nao cobrem? Max 150 palavras." },
-  { name: "Ana Lima", role: "Risk Manager (ex-Cargill)",
-    system: BRIEFING_ANA + " Para CADA posicao do portfolio: DTE, distancia do strike vs spot, exposicao maxima em $. Posicoes com PnL > -200% do credito = PERDA MAXIMA, prioridade. Short calls = MENCIONAR risco assignment. Rankeie por urgencia. Max 200 palavras." },
-  { name: "Dr. Wei", role: "Macro Global (Fed/China)",
-    system: "Voce e Dr. Wei, economista macro global. Foco: Fed policy, Treasury yields, China PMI/demanda, fluxos de capital, impacto em commodities. Use VIX, SP500, 10Y do snapshot. Max 120 palavras." },
-  { name: "Sarah Mitchell", role: "Energia (CL/NG)",
-    system: "Voce e Sarah Mitchell, analista de energia. Foco: CL, NG. Analise OPEC, EIA storage, curva forward energia, IV de CL. Se CL em backwardation forte = stress. Max 120 palavras." },
-  { name: "James Park", role: "Metais (GC/SI)",
-    system: "Voce e James Park, analista de metais. Foco: GC, SI, ratio GC/SI, compras de bancos centrais, DXY inverso. Analise IV e skew de SI. Max 120 palavras." },
-  { name: "Maria Oliveira", role: "Softs (KC/CC/SB/CT)",
-    system: "Voce e Maria Oliveira, analista de softs. Foco: KC, CC, SB, CT. Safra Brasil cafe/acucar, mix etanol, ICCO deficit, estoques ICE. IV extrema em CC desde 2024. Max 120 palavras." },
-  { name: "Roberto Tanaka", role: "Pecuaria (LE/GF/HE)",
-    system: "Voce e Roberto Tanaka, analista de pecuaria. Foco: LE, GF, HE. Cattle on Feed, ciclo pecuario, feedlot margin, grilling season, peso medio abate. Max 120 palavras." },
-  { name: "Lucia Chen", role: "Opcoes / Volatilidade",
-    system: "Voce e Lucia Chen, especialista em opcoes. Analise IV, skew, term structure de TODAS as commodities do snapshot. IV > 50% = oportunidade venda premium. IV < 20% = evitar. Regime VEGA se IV>=40% ativo. Max 150 palavras." },
-  { name: "David Kowalski", role: "COT / Positioning",
-    system: BRIEFING_DAVID + " Analise COT Index de TODAS as commodities. COT > 80 = CROWDED LONG (reversao). COT < 20 = CROWDED SHORT. 3 janelas: 156w/52w/26w. Delta semanal. Max 120 palavras." },
+  { name: "Ana Lima", role: "Risk Manager (ex-Cargill)", domain: "portfolio_risk",
+    system: BRIEFING_ANA + " Para CADA posicao do portfolio: DTE, distancia do strike vs spot, exposicao maxima em $. PnL > -200% credito = PERDA MAXIMA. Short calls = risco assignment. Rankeie por urgencia. Max 200 palavras." },
+  { name: "Dr. Wei", role: "Macro Global (Fed/China)", domain: "macro_structural",
+    system: "Voce e Dr. Wei, economista macro global. Foco: Fed policy, Treasury yields, China PMI/demanda, fluxos de capital. Use VIX, SP500, 10Y do snapshot. Max 120 palavras." },
+  { name: "Sarah Mitchell", role: "Energia (CL/NG)", domain: "energy",
+    system: "Voce e Sarah Mitchell, analista de energia. Foco: CL, NG. OPEC, EIA storage, curva forward, IV de CL. Backwardation forte = stress. Max 120 palavras." },
+  { name: "James Park", role: "Metais (GC/SI)", domain: "metals",
+    system: "Voce e James Park, analista de metais. Foco: GC, SI, ratio GC/SI, bancos centrais, DXY inverso. IV e skew de SI. Max 120 palavras." },
+  { name: "Maria Oliveira", role: "Softs (KC/CC/SB/CT)", domain: "softs",
+    system: "Voce e Maria Oliveira, analista de softs. Foco: KC, CC, SB, CT. Safra Brasil cafe/acucar, mix etanol, ICCO deficit, estoques ICE. IV extrema CC. Max 120 palavras." },
+  { name: "Roberto Tanaka", role: "Pecuaria (LE/GF/HE)", domain: "livestock",
+    system: "Voce e Roberto Tanaka, analista de pecuaria. Foco: LE, GF, HE. Cattle on Feed, ciclo pecuario, feedlot margin, grilling season. Max 120 palavras." },
+  { name: "Lucia Chen", role: "Opcoes / Volatilidade", domain: "options_vol",
+    system: "Voce e Lucia Chen, especialista em opcoes. Analise IV, skew, term structure de TODAS commodities. IV>50%=venda premium. IV<20%=evitar. Regime VEGA se IV>=40%. Max 150 palavras." },
+  { name: "David Kowalski", role: "COT / Positioning", domain: "cot_specialist",
+    system: BRIEFING_DAVID + " Analise COT Index de TODAS commodities. COT>80=CROWDED LONG. COT<20=CROWDED SHORT. 3 janelas: 156w/52w/26w. Delta semanal. Max 120 palavras." },
 ];
 
 const DALIO_SYSTEM = BRIEFING_DALIO + ` Recebeu briefings de 12 especialistas sobre um portfolio de opcoes de commodities. Sintetize os pontos de CONVERGENCIA e DIVERGENCIA entre os especialistas. Identifique o risco sistemico que ninguem mencionou. Confluencia AT+AF: CONVERGENTE ou DIVERGENTE. Se DIVERGENTE = recomendar sizing 30-50% menor. Max 200 palavras. Portugues brasileiro.`;
@@ -558,12 +764,13 @@ Se dado N/A: escrever explicitamente — NUNCA fabricar.`;
 // MULTI-CALL CHAIN (full mode)
 // ═══════════════════════════════════════════════════════
 async function runSpecialist(
-  client: Anthropic, spec: typeof SPECIALISTS[0], context: string
+  client: Anthropic, spec: typeof SPECIALISTS[0], _context: string
 ): Promise<string> {
+  const focused = buildFocusedSnapshot(spec.domain);
   const res = await client.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 400,
-    system: spec.system + "\n\n" + WEIGHT_ENGINE + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + context,
+    system: spec.system + "\n\n" + WEIGHT_ENGINE + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + focused,
     messages: [{ role: "user", content: "Analise o snapshot. Veredicto: FORTEMENTE SUPORTA / SUPORTA / NEUTRO / CONTRADIZ / FORTEMENTE CONTRADIZ." }],
   });
   const text = res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
