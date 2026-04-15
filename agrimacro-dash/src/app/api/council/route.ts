@@ -169,6 +169,28 @@ function buildSnapshot(): string {
 }
 
 // ═══════════════════════════════════════════════════════
+// AT + AF FRAMEWORKS
+// ═══════════════════════════════════════════════════════
+const AT_FRAMEWORK = `FRAMEWORK AT (An\u00e1lise T\u00e9cnica):
+- Tend\u00eancia: MA200 semanal (prim\u00e1ria), MA50 di\u00e1rio (secund\u00e1ria), ADX>25 tend\u00eancia forte
+- Momentum: RSI>70 sobrecomprado, RSI<30 sobrevendido. Diverg\u00eancia RSI vs pre\u00e7o = sinal mais forte
+- Volume/OI: OI crescente confirma tend\u00eancia. OI caindo = exaust\u00e3o
+- Curva forward: backwardation (spot>forward) = tightness f\u00edsico. Contango = mercado folgado
+- Candlesticks: Inverted Hammer em resist\u00eancia = revers\u00e3o baixista. Hammer em suporte = revers\u00e3o altista
+- Pecu\u00e1ria GF/LE: rally >30% em 3-4 meses = consolida\u00e7\u00e3o prov\u00e1vel. ATH raramente sustentado na primeira tentativa
+- COT como AT: COT Index >80 = sobrecomprado, alerta de revers\u00e3o. COT Index <20 = sobrevendido`;
+
+const AF_FRAMEWORK = `FRAMEWORK AF (An\u00e1lise Fundamentalista):
+- STU (Stock-to-Use): <10% = apertado bullish. >25% = folgado bearish. Z-score vs m\u00e9dia 5 anos \u00e9 mais relevante
+- Feedlot Margin = LE\u00d710 \u2212 GF\u00d77.5 \u2212 ZC\u00d750. Negativo = feedlots param de comprar GF em semanas
+- Ciclo pecu\u00e1rio: 8-12 anos. Herd building = menos abate = pre\u00e7os sobem. Liquida\u00e7\u00e3o = mais abate = pre\u00e7os caem
+- Crush Spread ZS: >$3.00 = esmagamento lucrativo bullish ZS. <$1.50 = bearish ZS
+- Basis BR (FOB Paranagu\u00e1 vs CBOT): positivo = Brasil CARO. Negativo = Brasil BARATO competitivo
+- CMP ZS EUA: ~$10.20/bu. CMP ZC EUA: ~$4.80/bu. CMP Soja Cerrado BR: ~$7.50/bu
+- DXY: correla\u00e7\u00e3o negativa. DXY -1% = commodities +0.5-1%
+- Fertilizantes: lag 6-12m do petr\u00f3leo para custo de produ\u00e7\u00e3o de gr\u00e3os`;
+
+// ═══════════════════════════════════════════════════════
 // COUNCIL SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════
 const COUNCIL_SYSTEM = `Voc\u00ea \u00e9 o COUNCIL AGRIMACRO v2.2.
@@ -249,20 +271,6 @@ const QUICK_SYSTEM = `Voce e o analista de risco do AgriMacro. Faca uma analise 
 Foco em: 1) Posicoes que precisam de acao 2) Melhor oportunidade do dia 3) Risco principal.
 Portugues brasileiro, direto e acionavel. Sem introducao.`;
 
-const FRAMEWORK = `REGRAS HARD-STOP (aplicam-se a QUALQUER modo — quick ou full):
-R01. Curva forward em strong backwardation = NAO vender PUT.
-R02. IV < 20% = NAO vender premium.
-R03. WASDE day (dia 8-14 do mes) = fechar/reduzir graos 24h antes.
-R06. Max loss = 2x credito recebido = stop mecanico.
-R07. NUNCA adicionar a posicao perdedora. NUNCA re-entrar no mesmo spread.
-R08. Fechar a 50% do max profit.
-R11. Max 3 underlyings correlacionados por setor.
-REGRA #1: NUNCA ROLAR. 0 rolls = 67.6% WR. 1 roll = 34.2% WR. Cada roll piora em ~$12K.
-
-CAPITAL: 60/25/15 split (trades/reserva/caixa). Regime VEGA (IV>=40% ativo) expande para 65%.
-GREEKS: theta positivo = coletando premium. Theta negativo = pagando. Delta sign-aware.
-Se dado N/A no snapshot: escrever "N/A" — NUNCA fabricar.`;
-
 export async function POST(req: NextRequest) {
   try {
     const { mode } = await req.json();
@@ -275,7 +283,7 @@ export async function POST(req: NextRequest) {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: maxTokens,
-      system: system + "\n\n" + FRAMEWORK + "\n\n" + snapshot,
+      system: system + "\n\n" + AT_FRAMEWORK + "\n\n" + AF_FRAMEWORK + "\n\n" + snapshot,
       messages: [{ role: "user", content: mode === "quick"
         ? "Analise rapida do portfolio. O que fazer agora?"
         : "Produza o relatorio executivo completo do Council AgriMacro v2.2 para hoje. Os 5 conselheiros (Carlos Mera, Felipe Hernandez, Rodrigo Batista, Henrik Larsson, Ana Lima) devem cruzar AT+AF antes de cada veredicto. Contradicoes ANTES de suportes. Chairman entrega exatamente 3 passos com threshold numerico."
