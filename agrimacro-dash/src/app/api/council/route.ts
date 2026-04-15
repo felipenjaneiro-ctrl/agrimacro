@@ -249,6 +249,20 @@ const QUICK_SYSTEM = `Voce e o analista de risco do AgriMacro. Faca uma analise 
 Foco em: 1) Posicoes que precisam de acao 2) Melhor oportunidade do dia 3) Risco principal.
 Portugues brasileiro, direto e acionavel. Sem introducao.`;
 
+const FRAMEWORK = `REGRAS HARD-STOP (aplicam-se a QUALQUER modo — quick ou full):
+R01. Curva forward em strong backwardation = NAO vender PUT.
+R02. IV < 20% = NAO vender premium.
+R03. WASDE day (dia 8-14 do mes) = fechar/reduzir graos 24h antes.
+R06. Max loss = 2x credito recebido = stop mecanico.
+R07. NUNCA adicionar a posicao perdedora. NUNCA re-entrar no mesmo spread.
+R08. Fechar a 50% do max profit.
+R11. Max 3 underlyings correlacionados por setor.
+REGRA #1: NUNCA ROLAR. 0 rolls = 67.6% WR. 1 roll = 34.2% WR. Cada roll piora em ~$12K.
+
+CAPITAL: 60/25/15 split (trades/reserva/caixa). Regime VEGA (IV>=40% ativo) expande para 65%.
+GREEKS: theta positivo = coletando premium. Theta negativo = pagando. Delta sign-aware.
+Se dado N/A no snapshot: escrever "N/A" — NUNCA fabricar.`;
+
 export async function POST(req: NextRequest) {
   try {
     const { mode } = await req.json();
@@ -261,7 +275,7 @@ export async function POST(req: NextRequest) {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: maxTokens,
-      system: system + "\n\n" + snapshot,
+      system: system + "\n\n" + FRAMEWORK + "\n\n" + snapshot,
       messages: [{ role: "user", content: mode === "quick"
         ? "Analise rapida do portfolio. O que fazer agora?"
         : "Produza o relatorio executivo completo do Council AgriMacro v2.2 para hoje. Os 5 conselheiros (Carlos Mera, Felipe Hernandez, Rodrigo Batista, Henrik Larsson, Ana Lima) devem cruzar AT+AF antes de cada veredicto. Contradicoes ANTES de suportes. Chairman entrega exatamente 3 passos com threshold numerico."
