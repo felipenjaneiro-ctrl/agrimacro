@@ -5278,9 +5278,9 @@ export default function Dashboard() {
                         if(!line.startsWith("data: ")) continue;
                         try{
                           const ev = JSON.parse(line.slice(6));
-                          if(ev.stage==="specialists") setCouncilStage("Analisando 12 especialistas... (1/3)");
-                          else if(ev.stage==="heads") setCouncilStage("Dalio + Devil deliberando... (2/3)");
-                          else if(ev.stage==="chairman") setCouncilStage("Chairman sintetizando... (3/3)");
+                          if(ev.stage==="specialists") setCouncilStage(ev.detail || "Analisando especialistas...");
+                          else if(ev.stage==="heads") setCouncilStage(ev.detail || "Heads deliberando...");
+                          else if(ev.stage==="chairman") setCouncilStage(ev.detail || "Chairman sintetizando...");
                           else if(ev.stage==="complete" && ev.response){
                             const entry={text:ev.response,time:new Date().toLocaleString("pt-BR")};
                             setIntelCouncil(entry);

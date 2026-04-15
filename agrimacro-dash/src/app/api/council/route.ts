@@ -301,6 +301,85 @@ function buildSnapshot(): string {
 }
 
 // ═══════════════════════════════════════════════════════
+// COMPACT SNAPSHOT (for specialists — respects rate limits)
+// ═══════════════════════════════════════════════════════
+function buildCompactSnapshot(): string {
+  const p: string[] = [];
+
+  // Portfolio summary (not full positions)
+  const port = loadData("ibkr_portfolio.json");
+  if (port?.summary) {
+    p.push(`PORTFOLIO: NetLiq=$${port.summary.NetLiquidation} Cash=$${port.summary.TotalCashValue} UnrPnL=$${port.summary.UnrealizedPnL}`);
+    const fop = (port.positions || []).filter((x: any) => x.sec_type === "FOP" || x.sec_type === "FUT");
+    const syms = [...new Set(fop.map((x: any) => x.symbol))].sort();
+    p.push(`Positions: ${syms.join(", ")} (${fop.length} legs)`);
+  }
+
+  // IV one-liner per underlying
+  const oc = loadData("options_chain.json");
+  if (oc?.underlyings) {
+    p.push("IV:");
+    Object.entries(oc.underlyings).forEach(([sym, d]: any) => {
+      const iv = d.iv_rank?.current_iv ? (d.iv_rank.current_iv * 100).toFixed(0) + "%" : "?";
+      const term = d.term_structure?.structure || "?";
+      p.push(`  ${sym}:IV=${iv} T=${term}`);
+    });
+  }
+
+  // COT extremes only
+  const cot = loadData("cot.json");
+  if (cot?.commodities) {
+    const extremes: string[] = [];
+    Object.entries(cot.commodities).forEach(([sym, d]: any) => {
+      const idx = d.disaggregated?.cot_index;
+      if (idx != null) extremes.push(`${sym}=${idx.toFixed(0)}`);
+    });
+    if (extremes.length) p.push(`COT: ${extremes.join(" ")}`);
+  }
+
+  // Macro one-liner
+  const macro = loadData("macro_indicators.json");
+  if (macro) {
+    const parts: string[] = [];
+    if (macro.vix) parts.push(`VIX=${macro.vix.value}`);
+    if (macro.sp500) parts.push(`SP500=${macro.sp500.value}`);
+    if (macro.treasury_10y) parts.push(`10Y=${macro.treasury_10y.value}%`);
+    if (parts.length) p.push(`MACRO: ${parts.join(" ")}`);
+  }
+
+  // Spreads one-liner
+  const spreads = loadData("spreads.json");
+  if (spreads?.spreads) {
+    const sp: string[] = [];
+    Object.entries(spreads.spreads).forEach(([k, v]: any) => sp.push(`${k}:z=${v.zscore_1y}`));
+    p.push(`SPREADS: ${sp.join(" ")}`);
+  }
+
+  // Stocks deviations
+  const sw = loadData("stocks_watch.json");
+  if (sw?.commodities) {
+    const stk: string[] = [];
+    Object.entries(sw.commodities).forEach(([sym, d]: any) => {
+      if (d.stock_current != null && d.stock_avg) {
+        const dev = ((d.stock_current - d.stock_avg) / d.stock_avg * 100).toFixed(0);
+        stk.push(`${sym}=${dev}%`);
+      }
+    });
+    if (stk.length) p.push(`ESTOQUES_DEV: ${stk.join(" ")}`);
+  }
+
+  // DNA signals
+  const dna = loadData("commodity_dna.json");
+  if (dna?.commodities) {
+    const sigs: string[] = [];
+    Object.entries(dna.commodities).forEach(([sym, d]: any) => sigs.push(`${sym}:${d.composite_signal}`));
+    p.push(`DNA: ${sigs.join(" ")}`);
+  }
+
+  return p.join("\n");
+}
+
+// ═══════════════════════════════════════════════════════
 // AT + AF FRAMEWORKS
 // ═══════════════════════════════════════════════════════
 const AT_FRAMEWORK = `FRAMEWORK AT (An\u00e1lise T\u00e9cnica):
@@ -504,6 +583,7 @@ export async function POST(req: NextRequest) {
     const { mode } = await req.json();
     const client = new Anthropic({ apiKey: getKey() });
     const snapshot = buildSnapshot();
+    const compact = buildCompactSnapshot();
 
     // ── QUICK MODE: single call, unchanged ──
     if (mode === "quick") {
@@ -518,26 +598,51 @@ export async function POST(req: NextRequest) {
     }
 
     // ── FULL MODE: multi-call chain with streaming stages ──
+    // Batched to respect rate limits (30K input tokens/min)
+    // 4 specialists per batch × 3 batches, 2s pause between batches
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Stage 1: 12 specialists in parallel
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"specialists",step:1,total:3})}\n\n`));
-          const specialistReports = await Promise.all(
-            SPECIALISTS.map(spec => runSpecialist(client, spec, snapshot))
-          );
-          const briefings = specialistReports.join("\n\n");
+          const BATCH_SIZE = 4;
+          const BATCH_DELAY_MS = 12000; // 12s between batches (rate limit: 30K tokens/min)
+          const allReports: string[] = [];
 
-          // Stage 2: Dalio + Devil in parallel
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"heads",step:2,total:3})}\n\n`));
-          const [dalio, devil] = await Promise.all([
-            runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, snapshot),
-            runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, snapshot),
-          ]);
+          // Stage 1: 12 specialists in batches (using COMPACT snapshot to save tokens)
+          for (let i = 0; i < SPECIALISTS.length; i += BATCH_SIZE) {
+            const batch = SPECIALISTS.slice(i, i + BATCH_SIZE);
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(SPECIALISTS.length / BATCH_SIZE);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"specialists",step:1,total:5,detail:`Especialistas batch ${batchNum}/${totalBatches} (${batch.map(s=>s.name.split(" ")[0]).join(", ")})...`})}\n\n`));
 
-          // Stage 3: Chairman synthesizes everything
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"chairman",step:3,total:3})}\n\n`));
+            const batchResults = await Promise.all(
+              batch.map(spec => runSpecialist(client, spec, compact))
+            );
+            allReports.push(...batchResults);
+
+            // Pause between batches to respect rate limit
+            if (i + BATCH_SIZE < SPECIALISTS.length) {
+              await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+            }
+          }
+          const briefings = allReports.join("\n\n");
+
+          // Cooldown before heads (longer pause after 12 specialist calls)
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+          // Stage 2: Dalio + Devil in sequence (using compact snapshot)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"heads",step:2,total:5,detail:"Ray Dalio sintetizando..."})}\n\n`));
+          const dalio = await runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, compact);
+
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"heads",step:3,total:5,detail:"Advogado do Diabo atacando..."})}\n\n`));
+          const devil = await runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, compact);
+
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+          // Stage 3: Chairman synthesizes everything (FULL snapshot for maximum context)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({stage:"chairman",step:4,total:5,detail:"Chairman produzindo relatorio final..."})}\n\n`));
           const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
 
           // Final: send complete response
