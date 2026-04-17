@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 
 const KEY_PATH = process.env.ANTHROPIC_API_KEY_FILE || join(process.env.HOME || process.env.USERPROFILE || "", ".anthropic_key");
@@ -823,7 +823,7 @@ async function runChairman(
 }
 
 // ═══════════════════════════════════════════════════════
-// JOB STORE (in-memory, per-process)
+// JOB STORE (file-based, survives restarts)
 // ═══════════════════════════════════════════════════════
 interface CouncilJob {
   status: "running" | "complete" | "error";
@@ -835,10 +835,36 @@ interface CouncilJob {
   started_at: string;
   completed_at?: string;
 }
-const jobs: Record<string, CouncilJob> = {};
+
+const JOBS_FILE = join(process.cwd(), "council_jobs.json");
+
+function loadJobs(): Record<string, CouncilJob> {
+  try {
+    if (existsSync(JOBS_FILE)) return JSON.parse(readFileSync(JOBS_FILE, "utf-8"));
+  } catch { }
+  return {};
+}
+
+function saveJob(jobId: string, job: CouncilJob) {
+  try {
+    const all = loadJobs();
+    all[jobId] = job;
+    const keys = Object.keys(all).sort();
+    const trimmed: Record<string, CouncilJob> = {};
+    for (const k of keys.slice(-10)) trimmed[k] = all[k];
+    writeFileSync(JOBS_FILE, JSON.stringify(trimmed, null, 2));
+  } catch (e) {
+    console.error("saveJob error:", e);
+  }
+}
+
+function updateJob(jobId: string, updates: Partial<CouncilJob>) {
+  const job = loadJobs()[jobId];
+  if (!job) return;
+  saveJob(jobId, { ...job, ...updates });
+}
 
 async function runFullCouncil(jobId: string) {
-  const job = jobs[jobId];
   try {
     const client = new Anthropic({ apiKey: getKey() });
     const snapshot = buildSnapshot();
@@ -853,8 +879,7 @@ async function runFullCouncil(jobId: string) {
       const batch = SPECIALISTS.slice(i, i + BATCH_SIZE);
       const batchNum = Math.floor(i / BATCH_SIZE) + 1;
       const totalBatches = Math.ceil(SPECIALISTS.length / BATCH_SIZE);
-      job.stage = "specialists";
-      job.detail = `Especialistas batch ${batchNum}/${totalBatches} (${batch.map(s => s.name.split(" ")[0]).join(", ")})...`;
+      updateJob(jobId, { stage: "specialists", detail: `Especialistas batch ${batchNum}/${totalBatches} (${batch.map(s => s.name.split(" ")[0]).join(", ")})...` });
 
       const batchResults = await Promise.all(
         batch.map(spec => runSpecialist(client, spec, compact))
@@ -870,36 +895,25 @@ async function runFullCouncil(jobId: string) {
     await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
 
     // Stage 2: Dalio
-    job.stage = "heads";
-    job.detail = "Ray Dalio sintetizando...";
+    updateJob(jobId, { stage: "heads", detail: "Ray Dalio sintetizando..." });
     const dalio = await runHead(client, DALIO_SYSTEM, "RAY DALIO (Sintese)", briefings, compact);
 
     await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
 
     // Stage 2b: Devil
-    job.stage = "heads";
-    job.detail = "Advogado do Diabo atacando...";
+    updateJob(jobId, { stage: "heads", detail: "Advogado do Diabo atacando..." });
     const devil = await runHead(client, DEVIL_SYSTEM, "ADVOGADO DO DIABO", briefings, compact);
 
     await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
 
     // Stage 3: Chairman
-    job.stage = "chairman";
-    job.detail = "Chairman produzindo relatorio final...";
+    updateJob(jobId, { stage: "chairman", detail: "Chairman produzindo relatorio final..." });
     const chairman = await runChairman(client, briefings, dalio, devil, snapshot);
 
     // Done
-    job.status = "complete";
-    job.stage = "complete";
-    job.detail = "";
-    job.response = chairman;
-    job.snapshot_size = snapshot.length;
-    job.completed_at = new Date().toISOString();
+    updateJob(jobId, { status: "complete", stage: "complete", detail: "", response: chairman, snapshot_size: snapshot.length, completed_at: new Date().toISOString() });
   } catch (err: any) {
-    job.status = "error";
-    job.stage = "error";
-    job.error = err.message?.slice(0, 500) || "Unknown error";
-    job.completed_at = new Date().toISOString();
+    updateJob(jobId, { status: "error", stage: "error", error: err.message?.slice(0, 500) || "Unknown error", completed_at: new Date().toISOString() });
   }
 }
 
@@ -916,15 +930,13 @@ const COMMODITY_DOMAINS: Record<string, string> = {
 };
 
 async function runCommodityAnalysis(jobId: string, commodity: string) {
-  const job = jobs[jobId];
   try {
     const client = new Anthropic({ apiKey: getKey() });
     const domain = COMMODITY_DOMAINS[commodity] || "grains_bear";
     const focused = buildFocusedSnapshot(domain);
     const portfolioSnap = buildFocusedSnapshot("portfolio_risk");
 
-    job.stage = "analyzing";
-    job.detail = `Analisando ${commodity}...`;
+    updateJob(jobId, { stage: "analyzing", detail: `Analisando ${commodity}...` });
 
     const system = `Voce e o Council AgriMacro analisando uma commodity especifica: ${commodity}.
 Use os frameworks AT e AF abaixo e os dados do snapshot.
@@ -974,17 +986,9 @@ Maximo 500 palavras. Portugues brasileiro.`;
     });
 
     const text = res.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-    job.status = "complete";
-    job.stage = "complete";
-    job.detail = "";
-    job.response = text;
-    job.snapshot_size = focused.length;
-    job.completed_at = new Date().toISOString();
+    updateJob(jobId, { status: "complete", stage: "complete", detail: "", response: text, snapshot_size: focused.length, completed_at: new Date().toISOString() });
   } catch (err: any) {
-    job.status = "error";
-    job.stage = "error";
-    job.error = err.message?.slice(0, 500) || "Unknown error";
-    job.completed_at = new Date().toISOString();
+    updateJob(jobId, { status: "error", stage: "error", error: err.message?.slice(0, 500) || "Unknown error", completed_at: new Date().toISOString() });
   }
 }
 
@@ -1012,30 +1016,22 @@ export async function POST(req: NextRequest) {
     // ── COMMODITY MODE: single-call deep dive ──
     if (mode === "commodity" && commodity) {
       const jobId = `commodity_${commodity}_${Date.now()}`;
-      jobs[jobId] = { status: "running", stage: "starting", detail: `Analisando ${commodity}...`, started_at: new Date().toISOString() };
+      saveJob(jobId, { status: "running", stage: "starting", detail: `Analisando ${commodity}...`, started_at: new Date().toISOString() });
       runCommodityAnalysis(jobId, commodity).catch(() => {});
       return NextResponse.json({ jobId, status: "running" });
     }
 
     // ── FULL MODE: create job, run in background ──
     const jobId = `council_${Date.now()}`;
-    jobs[jobId] = {
+    saveJob(jobId, {
       status: "running",
       stage: "starting",
       detail: "Iniciando Council v2.2...",
       started_at: new Date().toISOString(),
-    };
+    });
 
     // Fire and forget — runs in background
     runFullCouncil(jobId).catch(() => {});
-
-    // Clean old jobs (keep last 5)
-    const allIds = Object.keys(jobs).sort();
-    if (allIds.length > 5) {
-      for (const old of allIds.slice(0, allIds.length - 5)) {
-        delete jobs[old];
-      }
-    }
 
     return NextResponse.json({ jobId, status: "running" });
   } catch (error: any) {
@@ -1049,10 +1045,10 @@ export async function POST(req: NextRequest) {
 // ═══════════════════════════════════════════════════════
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get("jobId");
-  if (!jobId || !jobs[jobId]) {
+  const job = jobId ? loadJobs()[jobId] : undefined;
+  if (!jobId || !job) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
-  const job = jobs[jobId];
   return NextResponse.json({
     jobId,
     status: job.status,
