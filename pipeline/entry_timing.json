@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-14T17:08:04.028504",
+  "generated_at": "2026-04-14T19:01:02.052873",
   "scan_date": "2026-04-14",
   "scan_month": "Apr",
   "total_scanned": 34,
@@ -236,12 +236,12 @@
     {
       "sym": "ZS",
       "direction": "PUT",
-      "reason": "Curva em STRONG BACKWARDATION (-4.9%) \u2014 mercado estressado, PUT selling bloqueado"
+      "reason": "Curva em STRONG BACKWARDATION (-5.2%) \u2014 mercado estressado, PUT selling bloqueado"
     },
     {
       "sym": "ZL",
       "direction": "PUT",
-      "reason": "Curva em STRONG BACKWARDATION (-10.2%) \u2014 mercado estressado, PUT selling bloqueado"
+      "reason": "Curva em STRONG BACKWARDATION (-11.3%) \u2014 mercado estressado, PUT selling bloqueado"
     },
     {
       "sym": "HE",
@@ -261,12 +261,12 @@
     {
       "sym": "CL",
       "direction": "PUT",
-      "reason": "Curva em STRONG BACKWARDATION (-12.6%) \u2014 mercado estressado, PUT selling bloqueado"
+      "reason": "Curva em STRONG BACKWARDATION (-12.7%) \u2014 mercado estressado, PUT selling bloqueado"
     },
     {
       "sym": "NG",
       "direction": "PUT",
-      "reason": "Curva em STRONG BACKWARDATION (-6.3%) \u2014 mercado estressado, PUT selling bloqueado"
+      "reason": "Curva em STRONG BACKWARDATION (-6.4%) \u2014 mercado estressado, PUT selling bloqueado"
     }
   ]
 }
