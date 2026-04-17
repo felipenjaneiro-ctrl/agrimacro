@@ -1272,6 +1272,7 @@ export default function Dashboard() {
   const [physicalBrData, setPhysicalBrData] = useState<any>(null);
   const [imeaData, setImeaData] = useState<any>(null);
   const [commodityDna, setCommodityDna] = useState<any>(null);
+  const [oppRanking, setOppRanking] = useState<any>(null);
   // INTEL state
   const [weatherData, setWeatherData] = useState<any>(null);
   const [bcbData, setBcbData] = useState<any>(null);
@@ -1364,6 +1365,7 @@ export default function Dashboard() {
       fetch("/data/processed/commodity_dna.json").then(r=>r.json()).then(setCommodityDna).catch(()=>console.warn("No commodity DNA")),
       fetch("/data/processed/price_validation.json").then(r=>r.json()).then(setPriceValidation).catch(()=>console.warn("No price validation")),
       fetch("/data/processed/bottleneck.json").then(r=>r.json()).then(d=>{if(d?.commodities)setBottleneckData(d.commodities);}).catch(()=>console.warn("No bottleneck")),
+      fetch("/data/processed/opportunity_ranking.json").then(r=>r.json()).then(setOppRanking).catch(()=>console.warn("No opportunity ranking")),
     ]).finally(()=>{setErrors(errs);setLoading(false);});
   },[]);
 
@@ -6496,6 +6498,31 @@ export default function Dashboard() {
           </>) : renderCommodityView()) : renderTab()}
         </div>
       </div>
+
+      {/* ── Opportunity Ranking footer bar ── */}
+      {oppRanking?.rankings && (
+        <div style={{padding:"8px 16px",background:C.panel,borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,overflowX:"auto",flexShrink:0}}>
+          <span style={{fontSize:11,fontWeight:700,color:C.textDim,whiteSpace:"nowrap"}}>Ranking</span>
+          {oppRanking.rankings.slice(0,10).map((r:any)=>{
+            const gradeColor = r.grade==="A"?C.green:r.grade==="B"?C.cyan:r.grade==="C"?C.amber:C.red;
+            return (
+              <button key={r.sym} onClick={()=>{setSelected(r.sym);setViewMode("commodity");setTab("Visão Geral");}} style={{
+                display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:4,cursor:"pointer",
+                background:r.sym===selected?"rgba(148,163,184,.12)":"transparent",
+                border:`1px solid ${r.confluence?gradeColor:C.border}`,transition:"all .15s",flexShrink:0,
+              }}>
+                <span style={{fontSize:11,fontWeight:600,color:C.text}}>{r.sym}</span>
+                <span style={{fontSize:9,fontWeight:700,color:gradeColor}}>{r.grade}</span>
+                <span style={{fontSize:9,color:C.textMuted}}>{r.pct.toFixed(0)}%</span>
+                {r.confluence && <span style={{fontSize:8,color:gradeColor}}>*</span>}
+              </button>
+            );
+          })}
+          {oppRanking.avoid?.length > 0 && (
+            <span style={{fontSize:9,color:C.textMuted,whiteSpace:"nowrap",marginLeft:4}}>Evitar: {oppRanking.avoid.join(", ")}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

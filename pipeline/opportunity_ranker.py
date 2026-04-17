@@ -19,6 +19,7 @@ from datetime import datetime
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "..", "agrimacro-dash", "public", "data", "processed")
 OUT  = os.path.join(BASE, "opportunity_ranking.json")
+OUT_PUBLIC = os.path.join(DATA, "opportunity_ranking.json")
 
 ALL_SYMS = ["ZC","ZS","ZW","KE","ZM","ZL","LE","GF","HE","KC","CC","SB","CT","CL","NG","GC","SI"]
 
@@ -276,8 +277,9 @@ def main():
         "rankings": rankings,
     }
 
-    with open(OUT, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+    for path in (OUT, OUT_PUBLIC):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
 
     # Console output
     print(f"\n{'='*70}")
