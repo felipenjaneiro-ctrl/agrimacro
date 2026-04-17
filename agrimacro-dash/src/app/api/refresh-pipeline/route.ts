@@ -17,6 +17,7 @@ const STEPS = [
   "confidence_score.py",
   "qa_daily_report.py",
   "generate_report_pdf.py",
+  "opportunity_ranker.py",
 ];
 
 // External data collectors (in agrimacro-dash root, not pipeline/)

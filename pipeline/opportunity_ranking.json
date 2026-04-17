@@ -1,0 +1,311 @@
+{
+  "generated_at": "2026-04-17T12:31:20.940144",
+  "total_ranked": 17,
+  "max_score": 130,
+  "top3": [
+    "ZL",
+    "ZS",
+    "CC"
+  ],
+  "avoid": [],
+  "rankings": [
+    {
+      "sym": "ZL",
+      "score": 82,
+      "max": 130,
+      "pct": 63.1,
+      "factors": {
+        "cot": "COT=100 EXTREMO",
+        "iv": "IV=26% moderada",
+        "stocks": "Estoques +2% vs média",
+        "seasonality": "Saz +2.2%",
+        "weather": "Seca ativa Cerrado (MT/GO/MS) (2mm/7d)",
+        "dna": "DNA=MIXED (#1: COT Positioning)"
+      },
+      "confluence": true,
+      "confluence_drivers": [
+        "COT",
+        "IV",
+        "Weather"
+      ],
+      "alert": "Triple confluence (COT, IV, Weather) — alta convicção",
+      "grade": "A"
+    },
+    {
+      "sym": "ZS",
+      "score": 80,
+      "max": 130,
+      "pct": 61.5,
+      "factors": {
+        "cot": "COT=88 EXTREMO",
+        "iv": "IV=14% baixa",
+        "stocks": "Estoques +12% vs média",
+        "seasonality": "Saz +2.3%",
+        "weather": "Seca ativa Cerrado (MT/GO/MS) (2mm/7d); Seca ativa Sul do Brasil (PR/RS) (3mm/7d)",
+        "dna": "DNA=MIXED (#1: COT Positioning)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "A"
+    },
+    {
+      "sym": "CC",
+      "score": 78,
+      "max": 130,
+      "pct": 60.0,
+      "factors": {
+        "cot": "COT=0 EXTREMO",
+        "iv": "IV=44% ALTA",
+        "seasonality": "Saz +2.4%",
+        "dna": "DNA=BULLISH (#1: COT Positioning)"
+      },
+      "confluence": true,
+      "confluence_drivers": [
+        "COT",
+        "IV",
+        "DNA"
+      ],
+      "alert": "Triple confluence (COT, IV, DNA) — alta convicção",
+      "grade": "A"
+    },
+    {
+      "sym": "ZM",
+      "score": 76,
+      "max": 130,
+      "pct": 58.5,
+      "factors": {
+        "cot": "COT=82 elevado",
+        "iv": "IV=24% OK",
+        "stocks": "Estoques +20% vs média",
+        "seasonality": "Saz +2.4%",
+        "weather": "Seca ativa Cerrado (MT/GO/MS) (2mm/7d)",
+        "dna": "DNA=MIXED (#1: COT Positioning)"
+      },
+      "confluence": true,
+      "confluence_drivers": [
+        "COT",
+        "Estoques",
+        "Weather"
+      ],
+      "alert": "Triple confluence (COT, Estoques, Weather) — alta convicção",
+      "grade": "B"
+    },
+    {
+      "sym": "ZW",
+      "score": 75,
+      "max": 130,
+      "pct": 57.7,
+      "factors": {
+        "cot": "COT=91 EXTREMO",
+        "iv": "IV=30% moderada",
+        "stocks": "Estoques +11% vs média",
+        "seasonality": "Saz -0.4%",
+        "dna": "DNA=BULLISH (#1: COT Positioning)"
+      },
+      "confluence": true,
+      "confluence_drivers": [
+        "COT",
+        "IV",
+        "DNA"
+      ],
+      "alert": "Triple confluence (COT, IV, DNA) — alta convicção",
+      "grade": "B"
+    },
+    {
+      "sym": "NG",
+      "score": 70,
+      "max": 130,
+      "pct": 53.8,
+      "factors": {
+        "cot": "COT=28 elevado",
+        "iv": "IV=52% ALTA",
+        "seasonality": "Saz +5.0%",
+        "dna": "DNA=BEARISH (#1: Sazonalidade (Apr))"
+      },
+      "confluence": true,
+      "confluence_drivers": [
+        "COT",
+        "IV",
+        "Sazonalidade",
+        "DNA"
+      ],
+      "alert": "Triple confluence (COT, IV, Sazonalidade, DNA) — alta convicção",
+      "grade": "B"
+    },
+    {
+      "sym": "SB",
+      "score": 67,
+      "max": 130,
+      "pct": 51.5,
+      "factors": {
+        "cot": "COT=39 neutro",
+        "iv": "IV=40% ALTA",
+        "stocks": "Estoques -7% vs média",
+        "seasonality": "Saz -0.9%",
+        "weather": "Seca ativa Cerrado (MT/GO/MS) (2mm/7d); Seca ativa Sul do Brasil (PR/RS) (3mm/7d)",
+        "dna": "DNA=MIXED (#1: Historico de trades)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "B"
+    },
+    {
+      "sym": "KE",
+      "score": 60,
+      "max": 130,
+      "pct": 46.2,
+      "factors": {
+        "cot": "COT=95 EXTREMO",
+        "stocks": "Estoques +11% vs média",
+        "seasonality": "Saz +1.1%",
+        "dna": "DNA=BULLISH (#1: COT Positioning)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "B"
+    },
+    {
+      "sym": "ZC",
+      "score": 55,
+      "max": 130,
+      "pct": 42.3,
+      "factors": {
+        "cot": "COT=79 elevado",
+        "iv": "IV=18% baixa",
+        "stocks": "Estoques +13% vs média",
+        "seasonality": "Saz +1.4%",
+        "weather": "Seca ativa Cerrado (MT/GO/MS) (2mm/7d)",
+        "dna": "DNA=MIXED (#1: Spread: Corn/Meal Ratio)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "C"
+    },
+    {
+      "sym": "KC",
+      "score": 52,
+      "max": 130,
+      "pct": 40.0,
+      "factors": {
+        "cot": "COT=58 neutro",
+        "iv": "IV=34% moderada",
+        "stocks": "Estoques -3% vs média",
+        "seasonality": "Saz +1.2%",
+        "weather": "Seca ativa Minas Gerais (Cafe) (0mm/7d)",
+        "dna": "DNA=MIXED (#1: IV / Volatilidade)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "C"
+    },
+    {
+      "sym": "CT",
+      "score": 50,
+      "max": 130,
+      "pct": 38.5,
+      "factors": {
+        "cot": "COT=46 neutro",
+        "iv": "IV=23% OK",
+        "stocks": "Estoques +10% vs média",
+        "seasonality": "Saz -0.1%",
+        "weather": "Seca ativa Delta Mississippi (US) (1mm/7d); Seca ativa Cerrado (MT/GO/MS) (2mm/7d)",
+        "dna": "DNA=MIXED (#1: Momentum (20d))"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "C"
+    },
+    {
+      "sym": "CL",
+      "score": 50,
+      "max": 130,
+      "pct": 38.5,
+      "factors": {
+        "cot": "COT=34 neutro",
+        "iv": "IV=97% ALTA",
+        "seasonality": "Saz +3.1%",
+        "dna": "DNA=MIXED (#1: Spread: Soybean Oil / Crude Ratio)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "C"
+    },
+    {
+      "sym": "LE",
+      "score": 37,
+      "max": 130,
+      "pct": 28.5,
+      "factors": {
+        "cot": "COT=81 elevado",
+        "iv": "IV=15% baixa",
+        "stocks": "Estoques -5% vs média",
+        "seasonality": "Saz +0.7%",
+        "dna": "DNA=BEARISH (#1: COT Positioning)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "D"
+    },
+    {
+      "sym": "SI",
+      "score": 33,
+      "max": 130,
+      "pct": 25.4,
+      "factors": {
+        "iv": "IV=55% ALTA",
+        "seasonality": "Saz +0.6%",
+        "dna": "DNA=MIXED (#1: IV / Volatilidade)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "D"
+    },
+    {
+      "sym": "HE",
+      "score": 29,
+      "max": 130,
+      "pct": 22.3,
+      "factors": {
+        "cot": "COT=69 neutro",
+        "iv": "IV=5% baixa",
+        "stocks": "Estoques -0% vs média",
+        "seasonality": "Saz +9.1%",
+        "dna": "DNA=MIXED (#1: Sazonalidade (Apr))"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "D"
+    },
+    {
+      "sym": "GF",
+      "score": 27,
+      "max": 130,
+      "pct": 20.8,
+      "factors": {
+        "cot": "COT=63 neutro",
+        "iv": "IV=11% baixa",
+        "stocks": "Estoques -4% vs média",
+        "seasonality": "Saz +0.9%",
+        "dna": "DNA=BEARISH (#1: Momentum (20d))"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "D"
+    },
+    {
+      "sym": "GC",
+      "score": 21,
+      "max": 130,
+      "pct": 16.2,
+      "factors": {
+        "cot": "COT=48 neutro",
+        "iv": "IV=24% OK",
+        "seasonality": "Saz +1.1%",
+        "dna": "DNA=MIXED (#1: IV / Volatilidade)"
+      },
+      "confluence": false,
+      "confluence_drivers": [],
+      "grade": "D"
+    }
+  ]
+}
