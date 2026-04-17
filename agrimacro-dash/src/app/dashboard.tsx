@@ -1272,16 +1272,6 @@ export default function Dashboard() {
   const [physicalBrData, setPhysicalBrData] = useState<any>(null);
   const [imeaData, setImeaData] = useState<any>(null);
   const [commodityDna, setCommodityDna] = useState<any>(null);
-  const [showStrategyBuilder, setShowStrategyBuilder] = useState(false);
-  const [sbUnderlying, setSbUnderlying] = useState("CL");
-  const [sbDirection, setSbDirection] = useState<"PUT"|"CALL">("PUT");
-  const [sbStrike, setSbStrike] = useState("");
-  const [sbDte, setSbDte] = useState("45");
-  const [sbQty, setSbQty] = useState("22");
-  const [sbStructure, setSbStructure] = useState("butterfly");
-  const [sbNote, setSbNote] = useState("");
-  const [sbLoading, setSbLoading] = useState(false);
-  const [sbResult, setSbResult] = useState<string|null>(null);
   // INTEL state
   const [weatherData, setWeatherData] = useState<any>(null);
   const [bcbData, setBcbData] = useState<any>(null);
@@ -6413,152 +6403,10 @@ export default function Dashboard() {
               </button>
               {pipeMsg && <span style={{fontSize:9,color:C.textMuted,marginLeft:4}}>{pipeMsg}</span>}
               <a href="/api/latest-pdf" target="_blank" rel="noopener noreferrer" style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#a855f7",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",letterSpacing:0.5,textDecoration:"none",marginLeft:8}}>PDF Report</a>
-              <button onClick={()=>setShowStrategyBuilder(prev=>!prev)} style={{
-                padding:"3px 12px",fontSize:10,fontWeight:700,borderRadius:4,cursor:"pointer",marginLeft:8,
-                background:showStrategyBuilder?"rgba(124,58,237,.25)":"rgba(124,58,237,.10)",
-                color:"#a78bfa",border:`1px solid ${showStrategyBuilder?"rgba(124,58,237,.5)":"rgba(124,58,237,.25)"}`,
-                letterSpacing:0.5,transition:"all .2s",
-              }}>{showStrategyBuilder?"\u{1F4D0} Fechar Builder":"\u{1F4D0} Strategy Builder"}</button>
             </div>
           </div>
           <div style={{fontSize:11,color:C.textMuted}}>{lastDate}</div>
         </div>
-
-        {/* Strategy Builder Panel */}
-        {showStrategyBuilder && (
-          <div style={{padding:"14px 24px",borderBottom:`1px solid rgba(124,58,237,.3)`,background:"linear-gradient(180deg,#1a1030 0%,#0E1A24 100%)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-              <span style={{fontSize:13,fontWeight:700,color:"#a78bfa"}}>{"\u{1F4D0}"} Strategy Builder</span>
-              <span style={{fontSize:9,color:"#64748b"}}>Monte estrutura e envie para analise com contexto completo</span>
-            </div>
-            <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
-              {/* Underlying */}
-              <div>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>Underlying</div>
-                <select value={sbUnderlying} onChange={e=>setSbUnderlying(e.target.value)} style={{
-                  padding:"5px 8px",fontSize:11,background:"#142332",color:"#e2e8f0",border:"1px solid #1e3a4a",borderRadius:4,
-                }}>
-                  {COMMODITIES.filter(c=>c.group!=="Macro").map(c=>(
-                    <option key={c.sym} value={c.sym}>{c.sym} — {c.name}</option>
-                  ))}
-                </select>
-              </div>
-              {/* Direction */}
-              <div>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>Direcao</div>
-                <div style={{display:"flex",gap:4}}>
-                  {(["PUT","CALL"] as const).map(d=>(
-                    <button key={d} onClick={()=>setSbDirection(d)} style={{
-                      padding:"5px 12px",fontSize:10,fontWeight:600,borderRadius:4,cursor:"pointer",
-                      background:sbDirection===d?(d==="PUT"?"rgba(220,60,60,.2)":"rgba(0,200,120,.2)"):"transparent",
-                      color:sbDirection===d?(d==="PUT"?"#DC3C3C":"#00C878"):"#64748b",
-                      border:`1px solid ${sbDirection===d?(d==="PUT"?"rgba(220,60,60,.4)":"rgba(0,200,120,.4)"):"#1e3a4a"}`,
-                    }}>{d}</button>
-                  ))}
-                </div>
-              </div>
-              {/* Structure */}
-              <div>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>Estrutura</div>
-                <select value={sbStructure} onChange={e=>setSbStructure(e.target.value)} style={{
-                  padding:"5px 8px",fontSize:11,background:"#142332",color:"#e2e8f0",border:"1px solid #1e3a4a",borderRadius:4,
-                }}>
-                  <option value="butterfly">Butterfly 22x22</option>
-                  <option value="ratio">Ratio Spread</option>
-                  <option value="vertical">Vertical Spread</option>
-                  <option value="strangle">Strangle</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-              {/* Strike */}
-              <div>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>Strike (OTM)</div>
-                <input type="text" value={sbStrike} onChange={e=>setSbStrike(e.target.value)}
-                  placeholder={(() => { const u: any = optionsChain?.underlyings?.[sbUnderlying]; return u?.und_price ? `ATM ~${u.und_price.toFixed(0)}` : "ex: 65"; })()}
-                  style={{width:90,padding:"5px 8px",fontSize:11,background:"#142332",color:"#e2e8f0",border:"1px solid #1e3a4a",borderRadius:4}} />
-              </div>
-              {/* DTE */}
-              <div>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>DTE</div>
-                <input type="text" value={sbDte} onChange={e=>setSbDte(e.target.value)} placeholder="45"
-                  style={{width:50,padding:"5px 8px",fontSize:11,background:"#142332",color:"#e2e8f0",border:"1px solid #1e3a4a",borderRadius:4}} />
-              </div>
-              {/* Qty */}
-              <div>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>Contratos</div>
-                <input type="text" value={sbQty} onChange={e=>setSbQty(e.target.value)} placeholder="22"
-                  style={{width:50,padding:"5px 8px",fontSize:11,background:"#142332",color:"#e2e8f0",border:"1px solid #1e3a4a",borderRadius:4}} />
-              </div>
-              {/* Note */}
-              <div style={{flex:1,minWidth:150}}>
-                <div style={{fontSize:8,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:0.5}}>Tese / Nota</div>
-                <input type="text" value={sbNote} onChange={e=>setSbNote(e.target.value)} placeholder="Ex: IV alta, sazonalidade favoravel..."
-                  style={{width:"100%",padding:"5px 8px",fontSize:11,background:"#142332",color:"#e2e8f0",border:"1px solid #1e3a4a",borderRadius:4,boxSizing:"border-box"}} />
-              </div>
-              {/* Analyze button */}
-              <button onClick={async()=>{
-                if(sbLoading) return;
-                setSbLoading(true);
-                setSbResult(null);
-                try {
-                  // Build enriched prompt
-                  const ctx = buildCommodityPromptTop(sbUnderlying);
-                  const structLabel = sbStructure==="butterfly"?"Butterfly 22x22 (BUY ATM + SELL OTM30 + BUY OTM15)"
-                    :sbStructure==="ratio"?"Ratio Spread (BUY 1 ATM + SELL 4 OTM)"
-                    :sbStructure==="vertical"?"Vertical Spread (BUY/SELL adjacentes)"
-                    :sbStructure==="strangle"?"Strangle (SELL PUT OTM + SELL CALL OTM)"
-                    :"Custom";
-                  const prompt = `${ctx}\n\n=== ESTRUTURA PROPOSTA ===\nUnderlying: ${sbUnderlying}\nDirecao: SELL ${sbDirection}\nEstrutura: ${structLabel}\nStrike OTM: ${sbStrike || "a definir (recomendar)"}\nDTE: ${sbDte} dias\nContratos: ${sbQty}\nTese: ${sbNote || "N/A"}\n\nAvalie esta estrutura considerando:\n1. AT + AF para ${sbUnderlying} (dados acima)\n2. O strike proposto e adequado dado IV, delta, e risco?\n3. O DTE esta no sweet spot de theta?\n4. Alternativas se a estrutura nao for ideal\n5. Proximo passo concreto com threshold de entrada\n\nSe algum dado for N/A, dizer explicitamente. Nunca fabricar.`;
-
-                  const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:[{role:"user",content:prompt}]})});
-                  const d = await res.json();
-                  if(res.ok && d.response) {
-                    setSbResult(d.response);
-                    // Also set in council panel for visibility
-                    const entry = {text:`**[Builder ${sbUnderlying} ${sbDirection}]** ${d.response}`,time:new Date().toLocaleString("pt-BR")};
-                    setIntelCouncil(entry);
-                    setCouncilHistory(prev=>{const updated=[entry,...prev].slice(0,5);try{localStorage.setItem("agrimacro_council_history",JSON.stringify(updated));}catch{}return updated;});
-                  } else setSbResult("ERRO: "+(d.error||"API error"));
-                } catch(e:any) { setSbResult("ERRO: "+e.message); }
-                setSbLoading(false);
-              }} disabled={sbLoading} style={{
-                padding:"5px 18px",fontSize:11,fontWeight:700,borderRadius:4,cursor:sbLoading?"wait":"pointer",
-                background:sbLoading?"#1E3044":"rgba(124,58,237,.2)",color:"#a78bfa",
-                border:"1px solid rgba(124,58,237,.4)",letterSpacing:0.5,transition:"all .2s",alignSelf:"flex-end",
-              }}>{sbLoading?"Analisando...":"Analisar Estrutura"}</button>
-            </div>
-
-            {/* Quick context line */}
-            {(()=>{
-              const u: any = optionsChain?.underlyings?.[sbUnderlying];
-              const iv = u?.iv_rank?.current_iv;
-              const term = u?.term_structure?.structure;
-              const c: any = cot?.commodities?.[sbUnderlying]?.disaggregated;
-              const bars = prices?.[sbUnderlying];
-              const price = Array.isArray(bars) && bars.length ? bars[bars.length-1].close : null;
-              return (
-                <div style={{marginTop:8,fontSize:9,color:"#64748b",fontFamily:"monospace",display:"flex",gap:12,flexWrap:"wrap"}}>
-                  {price && <span>Preco: ${price.toFixed(2)}</span>}
-                  {iv && <span>IV: {(iv*100).toFixed(0)}%</span>}
-                  {term && <span>Term: {term}</span>}
-                  {c?.cot_index != null && <span>COT: {c.cot_index.toFixed(0)}</span>}
-                  {u?.skew?.skew_pct != null && <span>Skew: {u.skew.skew_pct > 0 ? "+" : ""}{u.skew.skew_pct}%</span>}
-                </div>
-              );
-            })()}
-
-            {/* Result inline */}
-            {sbResult && (
-              <div style={{marginTop:12,padding:12,background:"#0a1520",borderRadius:8,border:"1px solid rgba(124,58,237,.2)",maxHeight:300,overflowY:"auto"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:10,color:"#a78bfa",fontWeight:600}}>Analise da Estrutura</span>
-                  <button onClick={()=>setSbResult(null)} style={{fontSize:9,color:"#64748b",background:"none",border:"none",cursor:"pointer"}}>fechar</button>
-                </div>
-                <div style={{fontSize:11,color:"#e2e8f0",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{sbResult}</div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Global tabs -- visões macro/cross-asset */}
         <div style={{display:"flex",gap:0,borderBottom:`1px solid #1E3044`,background:"#0E1A24",overflowX:"auto"}}>
