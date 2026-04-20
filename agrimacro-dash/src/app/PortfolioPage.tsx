@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useCallback } from "react";
+import PortfolioSyncBadge from "./PortfolioSyncBadge";
 
 /* ── palette ── */
 const C = {
@@ -1236,6 +1237,9 @@ export default function PortfolioPage({ portfolio, greeks, optionsChain, prices 
 
   return (
     <div style={{ overflow: "auto", padding: 24, minHeight: "100vh" }}>
+      <div style={{ marginBottom: 16 }}>
+        <PortfolioSyncBadge lastUpdateISO={portfolio?.generated_at || portfolio?.export_timestamp} />
+      </div>
       {renderKPIs()}
       {renderPositions()}
       {renderStrategyBuilder()}
