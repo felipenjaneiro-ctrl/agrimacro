@@ -19,7 +19,7 @@ except ImportError:
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                      TableStyle, PageBreak, HRFlowable)
 
-BASE = Path(r"C:\Users\felip\OneDrive") / "Área de Trabalho" / "agrimacro"
+BASE = Path(__file__).resolve().parent.parent
 DATA = BASE / "agrimacro-dash" / "public" / "data"
 RAW, PROC = DATA / "raw", DATA / "processed"
 REPORTS = BASE / "reports"; REPORTS.mkdir(exist_ok=True)

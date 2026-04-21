@@ -21,8 +21,7 @@ from pathlib import Path
 
 def load_env():
     env_paths = [
-        Path(os.path.expanduser("~")) / "OneDrive" / "READET~1" / "agrimacro" / ".env",
-        Path(os.path.expanduser("~")) / "OneDrive" / "Área de Trabalho" / "agrimacro" / ".env",
+        Path(__file__).resolve().parent.parent / ".env",
         Path("..") / ".env",
         Path(".") / ".env",
     ]
@@ -335,15 +334,9 @@ def main():
     print(f"Base URL: {BASE_URL}")
     print("=" * 60)
 
-    possible_paths = [
-        Path(os.path.expanduser("~")) / "OneDrive" / "READET~1" / "agrimacro" / "agrimacro-dash" / "public" / "data" / "processed",
-        Path(os.path.expanduser("~")) / "OneDrive" / "Área de Trabalho" / "agrimacro" / "agrimacro-dash" / "public" / "data" / "processed",
-    ]
-    output_dir = Path(".")
-    for p in possible_paths:
-        if p.exists():
-            output_dir = p
-            break
+    # Output path (relativo ao script: pipeline/ -> agrimacro/)
+    output_dir = Path(__file__).resolve().parent.parent / "agrimacro-dash" / "public" / "data" / "processed"
+    output_dir.mkdir(parents=True, exist_ok=True)
     print(f"📁 Output: {output_dir}")
     output_file = output_dir / "usda_fas.json"
 

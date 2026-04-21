@@ -963,10 +963,9 @@ def main():
     print(f"  {TODAY_BR}")
     print("=" * 60)
 
-    # Data path
+    # Data path (relativo ao script: pipeline/ -> agrimacro/)
     possible = [
-        Path(os.path.expanduser("~")) / "OneDrive" / "READET~1" / "agrimacro" / "agrimacro-dash" / "public" / "data",
-        Path(os.path.expanduser("~")) / "OneDrive" / "Área de Trabalho" / "agrimacro" / "agrimacro-dash" / "public" / "data",
+        Path(__file__).resolve().parent.parent / "agrimacro-dash" / "public" / "data",
         Path("/mnt/user-data/uploads"),  # Fallback for Claude environment
     ]
     data_path = None
@@ -981,10 +980,9 @@ def main():
     print(f"\n📁 Dados: {data_path}")
     data = load_all_data(data_path)
 
-    # Output path
+    # Output path (relativo ao script: pipeline/ -> agrimacro/)
     reports_possible = [
-        Path(os.path.expanduser("~")) / "OneDrive" / "READET~1" / "agrimacro" / "reports",
-        Path(os.path.expanduser("~")) / "OneDrive" / "Área de Trabalho" / "agrimacro" / "reports",
+        Path(__file__).resolve().parent.parent / "reports",
         Path("/mnt/user-data/outputs"),
     ]
     reports_dir = Path(".")

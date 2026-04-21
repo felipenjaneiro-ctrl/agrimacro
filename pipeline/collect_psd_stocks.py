@@ -2,7 +2,7 @@
 from pathlib import Path
 from datetime import datetime
 
-OUT = Path(r"C:\Users\felip\OneDrive\Área de Trabalho\agrimacro\agrimacro-dash\public\data\processed")
+OUT = Path(__file__).resolve().parent.parent / "agrimacro-dash" / "public" / "data" / "processed"
 BASE = "https://apps.fas.usda.gov/psdonline/downloads"
 
 PSD_SOURCES = {

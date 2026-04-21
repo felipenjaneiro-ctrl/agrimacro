@@ -7,7 +7,7 @@ except ImportError:
     os.system(f"{sys.executable} -m pip install requests --quiet")
     import requests
 
-BASE = Path(r"C:\Users\felip\OneDrive") / "Área de Trabalho" / "agrimacro"
+BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "agrimacro-dash" / "public" / "data" / "processed"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT = DATA_DIR / "futures_contracts.json"

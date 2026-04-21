@@ -12,7 +12,7 @@ except ImportError:
     os.system(f"{sys.executable} -m pip install pandas --quiet")
     import pandas as pd
 
-BASE = Path(r"C:\Users\felip\OneDrive") / "Área de Trabalho" / "agrimacro"
+BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "agrimacro-dash" / "public" / "data" / "processed"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 RAW_COT = BASE / "agrimacro-dash" / "public" / "data" / "raw" / "cot"
