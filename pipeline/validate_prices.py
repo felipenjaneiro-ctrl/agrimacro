@@ -11,6 +11,10 @@ Limites por grupo de commodity:
 - FX: +-3%
 Override: volume do dia > 5x media 20d anula flags de variacao
 (gap com fluxo e movimento real, nao dado corrompido).
+
+Rollover: volume do dia > 3x media 20d AND media dos 3 dias anteriores
+< 0.3x media 20d -> marca is_rollover_gap (nao suspeito). Fingerprint
+de troca de contrato na serie ContFuture do IBKR (sem back-adjustment).
 """
 
 import json
@@ -55,6 +59,39 @@ PRICE_BOUNDS = {
 }
 
 
+def detect_rollover(bars, idx):
+    """
+    Detecta se bars[idx] e um dia de rollover de contrato continuous futures.
+
+    Heuristica: volume do dia > 3x media 20d AND media dos 3 dias uteis
+    anteriores < 0.3x media 20d. Fingerprint indica liquidez migrando do
+    contrato expirando para o novo front -- gap de rollover na serie
+    ContFuture do IBKR (nao back-adjusted).
+
+    Retorna: (is_rollover, vol_ratio, prior_ratio)
+    """
+    if idx < 20:
+        return False, 0.0, 0.0
+    window = bars[idx - 20:idx]
+    vols = [b.get("volume", 0) or 0 for b in window]
+    vols = [v for v in vols if v > 0]
+    if not vols:
+        return False, 0.0, 0.0
+    avg_vol = sum(vols) / len(vols)
+    if avg_vol <= 0:
+        return False, 0.0, 0.0
+
+    today_vol = bars[idx].get("volume", 0) or 0
+    prior_3 = [bars[idx - k].get("volume", 0) or 0 for k in (1, 2, 3)]
+    prior_mean = sum(prior_3) / 3
+
+    vol_ratio = today_vol / avg_vol
+    prior_ratio = prior_mean / avg_vol
+
+    is_rollover = (vol_ratio > 3.0) and (prior_ratio < 0.3)
+    return is_rollover, vol_ratio, prior_ratio
+
+
 def load_cache():
     """Carrega ultimo preco bom conhecido."""
     if CACHE_PATH.exists():
@@ -97,6 +134,7 @@ def validate_and_fix():
         "passed": 0,
         "warned": 0,
         "blocked": 0,
+        "rollovers": 0,
         "details": {}
     }
 
@@ -152,9 +190,23 @@ def validate_and_fix():
                             current, abs(current - avg) / std, avg)
                     )
 
-        # REGRA 4 (override): volume do dia > 5x media 20d anula flags de variacao.
-        # Gap com fluxo e movimento real. Bounds absolutos NAO sao anulados.
-        if variation_issues and len(bars) >= 20:
+        # REGRA 4a (rollover): gap por troca de contrato NAO e suspeito.
+        # Checa antes do override de volume porque e fingerprint mais especifico.
+        is_rollover_gap = False
+        rollover_info = None
+        if variation_issues:
+            is_roll, vr, pr = detect_rollover(bars, len(bars) - 1)
+            if is_roll:
+                is_rollover_gap = True
+                rollover_info = {"vol_ratio": round(vr, 2), "prior_ratio": round(pr, 2)}
+                variation_issues = []
+                validation["rollovers"] += 1
+                print("[ROLLOVER] {}: gap por troca de contrato (vol {:.1f}x, prior {:.2f}x)".format(
+                    sym, vr, pr))
+
+        # REGRA 4b (override de volume): so se NAO for rollover.
+        # volume do dia > 5x media 20d anula flags de variacao (news flow).
+        if variation_issues and not is_rollover_gap and len(bars) >= 20:
             current_vol = bars[-1].get("volume", 0) or 0
             vols = [b.get("volume", 0) or 0 for b in bars[-21:-1]]
             vols = [v for v in vols if v > 0]
@@ -177,6 +229,9 @@ def validate_and_fix():
             "is_suspicious": False,
             "reason": None
         }
+        if is_rollover_gap:
+            detail["is_rollover_gap"] = True
+            detail["rollover_info"] = rollover_info
 
         if issues:
             # DADO SUSPEITO -- usar cache se disponivel
@@ -230,6 +285,7 @@ def validate_and_fix():
     print("  Total: {}".format(validation["total"]))
     print("  Aprovados: {}".format(validation["passed"]))
     print("  Bloqueados: {}".format(validation["blocked"]))
+    print("  Rollovers: {}".format(validation["rollovers"]))
 
     blocked_syms = [
         s for s, v in validation["details"].items()
