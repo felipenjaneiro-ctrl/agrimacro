@@ -33,7 +33,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from validate_prices import detect_rollover
 
 BASE = Path(__file__).parent.parent
-PH_PATH = BASE / "agrimacro-dash" / "public" / "data" / "processed" / "price_history.json"
+# Dual-write: processed/ e raw/. Dashboard le de raw/; validate_prices le de processed/.
+# collect_prices.py (Yahoo fallback) ja escreve em ambos -- manter paridade aqui tambem.
+PH_PATHS = [
+    BASE / "agrimacro-dash" / "public" / "data" / "processed" / "price_history.json",
+    BASE / "agrimacro-dash" / "public" / "data" / "raw" / "price_history.json",
+]
 LOG_DIR = BASE / "data" / "logs"
 LOG_PATH = LOG_DIR / "rollover_adjustments.log"
 
@@ -95,11 +100,13 @@ def backadjust(dry_run=False, symbol_filter=None, verbose=True):
 
     Retorna: {sym: {"rollovers": [...], "raw_bars": [...], "adjusted_bars": [...]}}
     """
-    if not PH_PATH.exists():
-        print(f"[ERR] {PH_PATH} nao encontrado")
+    existing_paths = [p for p in PH_PATHS if p.exists()]
+    if not existing_paths:
+        print(f"[ERR] nenhum price_history.json encontrado em {[str(p) for p in PH_PATHS]}")
         return {}
 
-    with open(PH_PATH, encoding="utf-8") as f:
+    # Le do primeiro existente (ordem de PH_PATHS: processed/ tem prioridade se presente)
+    with open(existing_paths[0], encoding="utf-8") as f:
         data = json.load(f)
 
     result = {}
@@ -150,11 +157,14 @@ def backadjust(dry_run=False, symbol_filter=None, verbose=True):
         return result
 
     ts_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = PH_PATH.parent / f"price_history.json.bak_raw_{ts_tag}"
-    shutil.copy2(PH_PATH, backup_path)
-
-    with open(PH_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=1)
+    # Dual-write: backup + escrever em cada path existente
+    backup_paths = []
+    for p in existing_paths:
+        bp = p.parent / f"price_history.json.bak_raw_{ts_tag}"
+        shutil.copy2(p, bp)
+        backup_paths.append(bp)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=1)
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     with open(LOG_PATH, "a", encoding="utf-8") as f:
@@ -168,7 +178,8 @@ def backadjust(dry_run=False, symbol_filter=None, verbose=True):
         print(f"  Simbolos varridos: {len(result)}")
         print(f"  Simbolos ajustados: {len(adjusted_syms)} -> {adjusted_syms}")
         print(f"  Rollovers detectados: {total}")
-        print(f"  Backup raw: {backup_path.name}")
+        print(f"  Paths escritos: {len(existing_paths)} -> {[p.parent.name + '/' + p.name for p in existing_paths]}")
+        print(f"  Backups: {[bp.name for bp in backup_paths]}")
         print(f"  Log: {LOG_PATH.relative_to(BASE)}")
     return result
 
