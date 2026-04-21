@@ -177,7 +177,7 @@ def validate_and_fix():
                         daily_chg, limit, sym)
                 )
 
-        # REGRA 3: Variacao vs media 20 dias
+        # REGRA 3: Variacao vs media 20 dias (com override de volume inline)
         if len(bars) >= 20:
             closes = [b.get("close", 0) for b in bars[-21:-1]]
             closes = [c for c in closes if c > 0]
@@ -185,10 +185,25 @@ def validate_and_fix():
                 avg = sum(closes) / len(closes)
                 std = (sum((c - avg) ** 2 for c in closes) / len(closes)) ** 0.5
                 if std > 0 and abs(current - avg) > 3 * std:
-                    variation_issues.append(
-                        "Preco {} e {:.1f}\u03c3 da media 20d ({:.2f})".format(
-                            current, abs(current - avg) / std, avg)
-                    )
+                    # Override de volume (threshold mais permissivo 3x -- sigma em range
+                    # comprimido e prone a falso positivo). REGRA 2 mantem limite 5x
+                    # via REGRA 4b global. Se volume hoje > 3x media 20d, sigma e
+                    # movimento real confirmado por fluxo, nao dado corrompido.
+                    vols_r3 = [b.get("volume", 0) or 0 for b in bars[-21:-1]]
+                    vols_r3 = [v for v in vols_r3 if v > 0]
+                    cur_vol_r3 = bars[-1].get("volume", 0) or 0
+                    vol_confirms = False
+                    if vols_r3 and cur_vol_r3 > 0:
+                        avg_vol_r3 = sum(vols_r3) / len(vols_r3)
+                        if avg_vol_r3 > 0 and cur_vol_r3 > 3 * avg_vol_r3:
+                            vol_confirms = True
+                            print("[OVERRIDE-SIGMA] {}: {:.1f}sigma anulado por volume {:.1f}x media".format(
+                                sym, abs(current - avg) / std, cur_vol_r3 / avg_vol_r3))
+                    if not vol_confirms:
+                        variation_issues.append(
+                            "Preco {} e {:.1f}\u03c3 da media 20d ({:.2f})".format(
+                                current, abs(current - avg) / std, avg)
+                        )
 
         # REGRA 4a (rollover): gap por troca de contrato NAO e suspeito.
         # Checa antes do override de volume porque e fingerprint mais especifico.

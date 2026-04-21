@@ -6378,8 +6378,8 @@ export default function Dashboard() {
       {/* Main content */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {/* Header */}
-        <div style={{padding:"14px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.panel}}>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
+        <div style={{padding:"14px 24px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.panel,flexWrap:"wrap",gap:8,rowGap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",rowGap:8}}>
             <div style={{fontSize:16,fontWeight:700}}>{viewMode==="intel"?"Central de Inteligência":COMMODITIES.find(c=>c.sym===selected)?.name||selected}</div>
             <Badge label="DADOS REAIS" color={C.green} />
             {pipelineOk && <Badge label="PIPELINE ONLINE" color={C.blue} />}
