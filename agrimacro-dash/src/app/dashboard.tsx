@@ -6497,32 +6497,32 @@ export default function Dashboard() {
             {renderTab()}
           </>) : renderCommodityView()) : renderTab()}
         </div>
-      </div>
 
-      {/* ── Opportunity Ranking footer bar ── */}
-      {oppRanking?.rankings && (
-        <div style={{padding:"8px 16px",background:C.panel,borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,overflowX:"auto",flexShrink:0}}>
-          <span style={{fontSize:11,fontWeight:700,color:C.textDim,whiteSpace:"nowrap"}}>Ranking</span>
-          {oppRanking.rankings.slice(0,10).map((r:any)=>{
-            const gradeColor = r.grade==="A"?C.green:r.grade==="B"?C.cyan:r.grade==="C"?C.amber:C.red;
-            return (
-              <button key={r.sym} onClick={()=>{setSelected(r.sym);setViewMode("commodity");setTab("Visão Geral");}} style={{
-                display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:4,cursor:"pointer",
-                background:r.sym===selected?"rgba(148,163,184,.12)":"transparent",
-                border:`1px solid ${r.confluence?gradeColor:C.border}`,transition:"all .15s",flexShrink:0,
-              }}>
-                <span style={{fontSize:11,fontWeight:600,color:C.text}}>{r.sym}</span>
-                <span style={{fontSize:9,fontWeight:700,color:gradeColor}}>{r.grade}</span>
-                <span style={{fontSize:9,color:C.textMuted}}>{r.pct.toFixed(0)}%</span>
-                {r.confluence && <span style={{fontSize:8,color:gradeColor}}>*</span>}
-              </button>
-            );
-          })}
-          {oppRanking.avoid?.length > 0 && (
-            <span style={{fontSize:9,color:C.textMuted,whiteSpace:"nowrap",marginLeft:4}}>Evitar: {oppRanking.avoid.join(", ")}</span>
-          )}
-        </div>
-      )}
+        {/* ── Opportunity Ranking footer bar (dentro do Main Content Wrapper) ── */}
+        {oppRanking?.rankings && (
+          <div style={{padding:"8px 16px",background:C.panel,borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,overflowX:"auto",flexShrink:0}}>
+            <span style={{fontSize:11,fontWeight:700,color:C.textDim,whiteSpace:"nowrap"}}>Ranking</span>
+            {oppRanking.rankings.slice(0,10).map((r:any)=>{
+              const gradeColor = r.grade==="A"?C.green:r.grade==="B"?C.cyan:r.grade==="C"?C.amber:C.red;
+              return (
+                <button key={r.sym} onClick={()=>{setSelected(r.sym);setViewMode("commodity");setTab("Visão Geral");}} style={{
+                  display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:4,cursor:"pointer",
+                  background:r.sym===selected?"rgba(148,163,184,.12)":"transparent",
+                  border:`1px solid ${r.confluence?gradeColor:C.border}`,transition:"all .15s",flexShrink:0,
+                }}>
+                  <span style={{fontSize:11,fontWeight:600,color:C.text}}>{r.sym}</span>
+                  <span style={{fontSize:9,fontWeight:700,color:gradeColor}}>{r.grade}</span>
+                  <span style={{fontSize:9,color:C.textMuted}}>{r.pct.toFixed(0)}%</span>
+                  {r.confluence && <span style={{fontSize:8,color:gradeColor}}>*</span>}
+                </button>
+              );
+            })}
+            {oppRanking.avoid?.length > 0 && (
+              <span style={{fontSize:9,color:C.textMuted,whiteSpace:"nowrap",marginLeft:4}}>Evitar: {oppRanking.avoid.join(", ")}</span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
