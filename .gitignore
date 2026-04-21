@@ -1,9 +1,8 @@
-# Node
+﻿# Node
 agrimacro-dash/node_modules/
 agrimacro-dash/.next/
 
 # Data files (mudam todo dia, gerados pelo pipeline)
-agrimacro-dash/public/data/
 
 # Raw data (CSVs grandes da CFTC, USDA, etc)
 data/raw/
@@ -68,7 +67,6 @@ agrimacro-dash/logs/
 **/header_part.txt
 **/test_write.txt
 **/*.py.bak*
-**/collect_new_sources.py
 
 # Claude Code / AI tools
 .claude/
@@ -81,3 +79,11 @@ agrimacro-dash/logs/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Permitir JSONs do portfolio (usados pelo servidor)
+# Bloqueia todos os JSONs de dados, mas permite portfolio + greeks
+agrimacro-dash/public/data/**
+!agrimacro-dash/public/data/
+!agrimacro-dash/public/data/processed/
+!agrimacro-dash/public/data/processed/ibkr_portfolio.json
+!agrimacro-dash/public/data/processed/ibkr_greeks.json
