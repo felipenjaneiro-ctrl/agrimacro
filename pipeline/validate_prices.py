@@ -2,13 +2,15 @@
 Validacao de sanidade de precos.
 Roda APOS coleta mas ANTES de qualquer uso dos dados.
 
-Limites baseados nos circuit breakers reais da CME:
-- Graos: +-7% (CME daily limit ~25-35 cents = ~5-7%)
-- Softs: +-10% (CC, KC tem limites maiores)
-- Pecuaria: +-5% (LE, GF, HE -- limite CME ~4.5 cents = ~5%)
-- Energia: +-15% (CL sem limite fixo, mas +-15% e anormal)
-- Metais: +-8%
-- Macro: +-2%
+Limites por grupo de commodity:
+- Graos: +-5%
+- Softs: +-7%
+- Pecuaria: +-8% (volatil apos WASDE/Cold Storage/H5N1 news)
+- Energia: +-10%
+- Metais: +-7%
+- FX: +-3%
+Override: volume do dia > 5x media 20d anula flags de variacao
+(gap com fluxo e movimento real, nao dado corrompido).
 """
 
 import json
@@ -23,14 +25,20 @@ VAL_PATH = BASE / "agrimacro-dash" / "public" / "data" / "processed" / "price_va
 
 # Limites de variacao diaria por simbolo (baseados em CME circuit breakers)
 DAILY_LIMITS = {
-    "ZC": 7.0,  "ZS": 7.0,  "ZW": 7.0,  "KE": 7.0,
-    "ZM": 7.0,  "ZL": 7.0,
-    "SB": 10.0, "KC": 10.0, "CT": 7.0,
-    "CC": 15.0, "OJ": 10.0,
-    "LE": 5.0,  "GF": 5.0,  "HE": 5.0,
-    "CL": 15.0, "NG": 15.0,
-    "GC": 8.0,  "SI": 10.0,
-    "DX": 2.0,
+    # Graos: +-5%
+    "ZC": 5.0,  "ZS": 5.0,  "ZW": 5.0,  "KE": 5.0,
+    "ZM": 5.0,  "ZL": 5.0,
+    # Softs: +-7%
+    "CC": 7.0,  "KC": 7.0,  "SB": 7.0,  "CT": 7.0,
+    "OJ": 10.0,  # nao incluido no rebalance -- mantido
+    # Pecuaria: +-8% (volatil apos reports)
+    "LE": 8.0,  "GF": 8.0,  "HE": 8.0,
+    # Energia: +-10%
+    "CL": 10.0, "NG": 10.0,
+    # Metais: +-7%
+    "GC": 7.0,  "SI": 7.0,
+    # FX: +-3%
+    "DX": 3.0,  "BRL": 3.0,
 }
 
 # Faixas de preco absolutas validas (protecao contra zeros e absurdos)
@@ -43,6 +51,7 @@ PRICE_BOUNDS = {
     "CL": (20, 300),     "NG": (1, 30),
     "GC": (1000, 10000), "SI": (15, 200),
     "DX": (70, 130),
+    "BRL": (3, 10),
 }
 
 
@@ -113,20 +122,19 @@ def validate_and_fix():
 
         current = bars[-1].get("close", 0)
         prev = bars[-2].get("close", 0)
-        issues = []
 
         # REGRA 1: Bounds absolutos
+        bounds_issue = None
         if not (bounds[0] <= current <= bounds[1]):
-            issues.append(
-                "Preco {} fora dos bounds validos [{}, {}]".format(
-                    current, bounds[0], bounds[1])
-            )
+            bounds_issue = "Preco {} fora dos bounds validos [{}, {}]".format(
+                current, bounds[0], bounds[1])
 
         # REGRA 2: Variacao diaria
+        variation_issues = []
         if prev > 0:
             daily_chg = abs((current - prev) / prev * 100)
             if daily_chg > limit:
-                issues.append(
+                variation_issues.append(
                     "Variacao diaria {:.1f}% excede limite de +-{}% para {}".format(
                         daily_chg, limit, sym)
                 )
@@ -139,10 +147,25 @@ def validate_and_fix():
                 avg = sum(closes) / len(closes)
                 std = (sum((c - avg) ** 2 for c in closes) / len(closes)) ** 0.5
                 if std > 0 and abs(current - avg) > 3 * std:
-                    issues.append(
+                    variation_issues.append(
                         "Preco {} e {:.1f}\u03c3 da media 20d ({:.2f})".format(
                             current, abs(current - avg) / std, avg)
                     )
+
+        # REGRA 4 (override): volume do dia > 5x media 20d anula flags de variacao.
+        # Gap com fluxo e movimento real. Bounds absolutos NAO sao anulados.
+        if variation_issues and len(bars) >= 20:
+            current_vol = bars[-1].get("volume", 0) or 0
+            vols = [b.get("volume", 0) or 0 for b in bars[-21:-1]]
+            vols = [v for v in vols if v > 0]
+            if vols and current_vol > 0:
+                avg_vol = sum(vols) / len(vols)
+                if avg_vol > 0 and current_vol > 5 * avg_vol:
+                    print("[OVERRIDE] {}: variacao anulada por volume {:.1f}x media (movimento real)".format(
+                        sym, current_vol / avg_vol))
+                    variation_issues = []
+
+        issues = ([bounds_issue] if bounds_issue else []) + variation_issues
 
         # Calcular change_pct real (sempre recalculado)
         real_chg = ((current - prev) / prev * 100) if prev > 0 else 0
