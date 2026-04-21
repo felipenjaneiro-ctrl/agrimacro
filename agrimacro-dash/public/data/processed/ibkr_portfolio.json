@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-04-20 20:17",
+  "generated_at": "2026-04-20 20:33",
   "account": "U2404446",
   "summary": {
-    "BuyingPower": "3091068.66",
-    "GrossPositionValue": "501359.99",
-    "NetLiquidation": "1355558.93",
-    "TotalCashValue": "201003.33",
-    "UnrealizedPnL": "77445.26",
+    "BuyingPower": "3089753.25",
+    "GrossPositionValue": "502920.78",
+    "NetLiquidation": "1355712.10",
+    "TotalCashValue": "201003.13",
+    "UnrealizedPnL": "77618.74",
     "RealizedPnL": "0.00"
   },
   "portfolio_greeks": {
