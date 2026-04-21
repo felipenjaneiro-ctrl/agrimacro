@@ -93,6 +93,26 @@ def main():
         log(f"Yahoo falhou: {e}", "WARN")
         results["prices_yahoo"] = {"status": "WARN", "error": str(e)}
 
+    # Step 2b: Back-adjustment Panama (ContFuture do IBKR nao e ajustado)
+    log(f"Step 2b/{total_steps}: Back-adjustment Panama de rollovers...")
+    try:
+        from backadjust_rollovers import backadjust
+        ba_result = backadjust(verbose=False)
+        adjusted_syms = sorted(s for s, r in ba_result.items() if r.get("rollovers"))
+        total_rolls = sum(len(r.get("rollovers", [])) for r in ba_result.values())
+        if adjusted_syms:
+            log(f"Rollovers ajustados: {total_rolls} em {adjusted_syms}", "OK")
+        else:
+            log("Nenhum rollover detectado", "OK")
+        results["price_backadjust"] = {
+            "status": "OK",
+            "symbols_adjusted": adjusted_syms,
+            "rollovers": total_rolls,
+        }
+    except Exception as e:
+        log(f"Back-adjustment falhou: {e}", "WARN")
+        results["price_backadjust"] = {"status": "WARN", "error": str(e)}
+
     # Step 3: VALIDACAO OBRIGATORIA (sempre roda)
     log(f"Step 3/{total_steps}: Validando integridade dos precos...")
     try:
