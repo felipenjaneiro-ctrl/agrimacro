@@ -87,3 +87,6 @@ agrimacro-dash/public/data/**
 !agrimacro-dash/public/data/processed/
 !agrimacro-dash/public/data/processed/ibkr_portfolio.json
 !agrimacro-dash/public/data/processed/ibkr_greeks.json
+!agrimacro-dash/public/data/processed/price_history.json
+!agrimacro-dash/public/data/processed/contract_history.json
+!agrimacro-dash/public/data/processed/futures_contracts.json
