@@ -81,17 +81,25 @@ def main():
         log(f"Options chain falhou (nao critico): {e}", "WARN")
         results["options_chain"] = {"status": "WARN", "error": str(e)}
 
-    # Step 2: Yahoo Finance (FALLBACK para gaps)
-    gaps = 19 - len(ibkr_symbols)
-    log(f"Step 2/{total_steps}: Yahoo Finance (fallback para {gaps} gaps)...")
-    try:
-        from collect_prices import main as collect_prices_main
-        collect_prices_main(skip_symbols=ibkr_symbols)
-        log("Yahoo: gaps preenchidos", "OK")
-        results["prices_yahoo"] = {"status": "OK"}
-    except Exception as e:
-        log(f"Yahoo falhou: {e}", "WARN")
-        results["prices_yahoo"] = {"status": "WARN", "error": str(e)}
+    # ===========================================================================
+    # STEP 2 DESATIVADO (22/04/2026) -- Yahoo Finance removido do pipeline
+    # Motivo: dados IBKR reais chegam via sync_portfolio.ps1 do PC/MacBook.
+    # Yahoo estava sobrescrevendo dados IBKR com series continuous =F de
+    # qualidade inferior e gaps de rollover nao ajustados.
+    # Se IBKR nao sincronizar, analises tecnicas devem pausar (staleness guard
+    # a ser implementado) em vez de fallback silencioso.
+    # ===========================================================================
+    # # Step 2: Yahoo Finance (FALLBACK para gaps)
+    # gaps = 19 - len(ibkr_symbols)
+    # log(f"Step 2/{total_steps}: Yahoo Finance (fallback para {gaps} gaps)...")
+    # try:
+    #     from collect_prices import main as collect_prices_main
+    #     collect_prices_main(skip_symbols=ibkr_symbols)
+    #     log("Yahoo: gaps preenchidos", "OK")
+    #     results["prices_yahoo"] = {"status": "OK"}
+    # except Exception as e:
+    #     log(f"Yahoo falhou: {e}", "WARN")
+    #     results["prices_yahoo"] = {"status": "WARN", "error": str(e)}
 
     # Step 2b: Back-adjustment Panama (ContFuture do IBKR nao e ajustado)
     log(f"Step 2b/{total_steps}: Back-adjustment Panama de rollovers...")
