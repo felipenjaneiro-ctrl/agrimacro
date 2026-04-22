@@ -191,6 +191,15 @@ interface FuturesData {
   commodities:Record<string,FuturesCommodity>;
 }
 
+interface DataFreshness {
+  status: "FRESH" | "STALE" | "CRITICAL";
+  last_sync_utc: string | null;
+  hours_old: number | null;
+  source: string;
+  generated_at: string;
+  error?: string;
+}
+
 type Tab = "Visão Geral"|"Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk"|"Paridades";
 
 // -- Color Theme ------------------------------------------------------------
@@ -1232,8 +1241,37 @@ function COTChart({history,type,width}:{history:COTHistoryEntry[];type:"legacy"|
 }
 // -- Main Dashboard ---------------------------------------------------------
 
+function FreshnessBanner({data}:{data:DataFreshness|null}){
+  if(!data || data.status === "FRESH") return null;
+  const isCritical = data.status === "CRITICAL";
+  const bg = isCritical ? "#DC3C3C" : "#DCB432";
+  const txt = isCritical ? "#FFFFFF" : "#0E1A24";
+  const hrs = data.hours_old != null ? data.hours_old.toFixed(1) : "?";
+  const lastSync = data.last_sync_utc
+    ? new Date(data.last_sync_utc).toLocaleString("pt-BR",{timeZone:"America/New_York"})
+    : "nunca";
+  const msg = isCritical
+    ? `DADOS CRITICOS: ultima sync ha ${hrs}h. Analises tecnicas podem estar incorretas. Sincronize TWS do PC ou MacBook imediatamente.`
+    : `Dados desatualizados ha ${hrs}h. Ultima sync: ${lastSync}. Rode sync_portfolio.ps1 no PC.`;
+  return (
+    <div style={{
+      position:"fixed",top:0,left:0,right:0,zIndex:9999,
+      background:bg,color:txt,padding:"10px 20px",
+      borderBottom:"2px solid rgba(0,0,0,0.25)",
+      fontSize:13,fontWeight:700,letterSpacing:0.3,
+      fontFamily:"'Segoe UI','Helvetica Neue',sans-serif",
+      boxShadow:"0 2px 8px rgba(0,0,0,0.4)",minHeight:40,
+      display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+    }}>
+      <span style={{fontSize:16}}>{isCritical ? "\u{1F6A8}" : "⚠️"}</span>
+      <span>{msg}</span>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   // State
+  const [freshness,setFreshness] = useState<DataFreshness|null>(null);
   const [prices,setPrices] = useState<PriceData|null>(null);
   const [season,setSeason] = useState<SeasonData|null>(null);
   const [spreads,setSpreads] = useState<SpreadsData|null>(null);
@@ -1332,6 +1370,7 @@ export default function Dashboard() {
     const errs:string[]=[];
     Promise.all([
       fetch("/data/raw/price_history.json").then(r=>{if(!r.ok)throw new Error("prices");return r.json();}).then(setPrices).catch(()=>errs.push("prices")),
+      fetch("/data/processed/data_freshness.json").then(r=>r.json()).then(setFreshness).catch(()=>console.warn("No data_freshness")),
       fetch("/data/processed/seasonality.json").then(r=>{if(!r.ok)throw new Error("season");return r.json();}).then(setSeason).catch(()=>errs.push("season")),
       fetch("/data/processed/spreads.json").then(r=>{if(!r.ok)throw new Error("spreads");return r.json();}).then(setSpreads).catch(()=>errs.push("spreads")),
       fetch("/data/processed/eia_data.json").then(r=>{if(!r.ok)throw new Error("eia");return r.json();}).then(setEiaData).catch(()=>errs.push("eia")),
@@ -6247,7 +6286,9 @@ export default function Dashboard() {
   };
   // -- Main Return --------------------------------------------------------
   return (
-    <div style={{display:"flex",minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI','Helvetica Neue',sans-serif"}}>
+    <>
+    <FreshnessBanner data={freshness} />
+    <div style={{display:"flex",minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Segoe UI','Helvetica Neue',sans-serif",paddingTop:freshness && freshness.status !== "FRESH" ? 40 : 0}}>
       <style>{`@keyframes cotPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }`}</style>
       {/* Sidebar */}
       <div style={{width:220,minHeight:"100vh",background:C.panel,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column"}}>
@@ -6524,6 +6565,7 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+    </>
   );
 }
 

@@ -142,6 +142,28 @@ def main():
         log(f"Validacao falhou (CRITICO): {e}", "ERR")
         results["price_validation"] = {"status": "ERR", "error": str(e)}
 
+    # Step 3b: Data freshness guard (price_history.json mtime)
+    # Se CRITICAL (>24h sem sync do PC), pula geracao de PDF/video que dependem de precos frescos.
+    log(f"Step 3b/{total_steps}: Verificando frescor dos dados de preco...")
+    freshness_status = "UNKNOWN"
+    try:
+        from check_data_freshness import check_freshness
+        fr = check_freshness()
+        freshness_status = fr["status"]
+        hrs = fr.get("hours_old")
+        if freshness_status == "FRESH":
+            log(f"Dados frescos ({hrs}h)", "OK")
+            results["data_freshness"] = {"status": "OK", "age_hours": hrs}
+        elif freshness_status == "STALE":
+            log(f"Dados desatualizados ({hrs}h) -- sync recomendado", "WARN")
+            results["data_freshness"] = {"status": "WARN", "age_hours": hrs}
+        else:
+            log(f"DADOS > 24h ({hrs}h) -- PULANDO ANALISES TECNICAS (PDF/video)", "WARN")
+            results["data_freshness"] = {"status": "CRITICAL", "age_hours": hrs}
+    except Exception as e:
+        log(f"Freshness check falhou: {e}", "WARN")
+        results["data_freshness"] = {"status": "WARN", "error": str(e)}
+
     log(f"Step 4/{total_steps}: Collecting COT from CFTC...")
     try:
         from collect_cot import collect_cot_data
@@ -430,14 +452,18 @@ def main():
         log(f"Calendar failed (non-blocking): {e}", "WARN")
 
     log(f"Step 27/{total_steps}: Generating daily report...")
-    try:
-        from generate_report import main as generate_report
-        generate_report()
-        results["report"] = {"status": "OK"}
-        log("Daily report generated", "OK")
-    except Exception as e:
-        results["report"] = {"status": "ERROR", "error": str(e)}
-        log(f"Report generation failed: {e}", "ERR")
+    if freshness_status == "CRITICAL":
+        log("Step 27 SKIPPED -- dados de preco > 24h (freshness CRITICAL)", "WARN")
+        results["report"] = {"status": "SKIPPED", "reason": "data_critical"}
+    else:
+        try:
+            from generate_report import main as generate_report
+            generate_report()
+            results["report"] = {"status": "OK"}
+            log("Daily report generated", "OK")
+        except Exception as e:
+            results["report"] = {"status": "ERROR", "error": str(e)}
+            log(f"Report generation failed: {e}", "ERR")
 
 
     # -- Grain Ratios (automatico) ---
@@ -511,34 +537,46 @@ def main():
         log(f"Vega monitor failed (non-blocking): {e}", "WARN")
 
     log(f"Step 29/{total_steps}: Generating PDF report (v4 with Options Intelligence)...")
-    try:
-        from patch_report_v4 import build_pdf_v4
-        build_pdf_v4()
-        results["pdf"] = {"status": "OK"}
-        log("PDF v4 report generated (with Options Intelligence + Track Record)", "OK")
-    except Exception as e:
-        results["pdf"] = {"status": "WARN", "error": str(e)}
-        log(f"PDF v4 generation failed (non-blocking): {e}", "WARN")
+    if freshness_status == "CRITICAL":
+        log("Step 29 SKIPPED -- dados de preco > 24h (freshness CRITICAL)", "WARN")
+        results["pdf"] = {"status": "SKIPPED", "reason": "data_critical"}
+    else:
+        try:
+            from patch_report_v4 import build_pdf_v4
+            build_pdf_v4()
+            results["pdf"] = {"status": "OK"}
+            log("PDF v4 report generated (with Options Intelligence + Track Record)", "OK")
+        except Exception as e:
+            results["pdf"] = {"status": "WARN", "error": str(e)}
+            log(f"PDF v4 generation failed (non-blocking): {e}", "WARN")
 
     log(f"Step 30/{total_steps}: Generating video script...")
-    try:
-        from generate_video_script import main as generate_video
-        generate_video()
-        results["video_script"] = {"status": "OK"}
-        log("Video script generated", "OK")
-    except Exception as e:
-        results["video_script"] = {"status": "ERROR", "error": str(e)}
-        log(f"Video script failed: {e}", "ERR")
+    if freshness_status == "CRITICAL":
+        log("Step 30 SKIPPED -- dados de preco > 24h (freshness CRITICAL)", "WARN")
+        results["video_script"] = {"status": "SKIPPED", "reason": "data_critical"}
+    else:
+        try:
+            from generate_video_script import main as generate_video
+            generate_video()
+            results["video_script"] = {"status": "OK"}
+            log("Video script generated", "OK")
+        except Exception as e:
+            results["video_script"] = {"status": "ERROR", "error": str(e)}
+            log(f"Video script failed: {e}", "ERR")
 
     log(f"Step 31/{total_steps}: Generating video MP4...")
-    try:
-        from step18_video_generator import main as generate_video_mp4
-        generate_video_mp4()
-        results["video_mp4"] = {"status": "OK"}
-        log("Video MP4 generated", "OK")
-    except BaseException as e:
-        results["video_mp4"] = {"status": "WARN", "error": str(e)}
-        log(f"Video MP4 failed (non-blocking): {e}", "WARN")
+    if freshness_status == "CRITICAL":
+        log("Step 31 SKIPPED -- dados de preco > 24h (freshness CRITICAL)", "WARN")
+        results["video_mp4"] = {"status": "SKIPPED", "reason": "data_critical"}
+    else:
+        try:
+            from step18_video_generator import main as generate_video_mp4
+            generate_video_mp4()
+            results["video_mp4"] = {"status": "OK"}
+            log("Video MP4 generated", "OK")
+        except BaseException as e:
+            results["video_mp4"] = {"status": "WARN", "error": str(e)}
+            log(f"Video MP4 failed (non-blocking): {e}", "WARN")
 
     # =========================================================
     # SUMMARY
