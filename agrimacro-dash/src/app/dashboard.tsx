@@ -6448,7 +6448,10 @@ export default function Dashboard() {
               <a href="/api/latest-pdf" target="_blank" rel="noopener noreferrer" style={{padding:"3px 10px",fontSize:10,fontWeight:600,background:"#a855f7",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",letterSpacing:0.5,textDecoration:"none",marginLeft:8}}>PDF Report</a>
             </div>
           </div>
-          <div style={{fontSize:11,color:C.textMuted}}>{lastDate}</div>
+          <div style={{fontSize:11,color:C.textMuted}}>
+            {new Intl.DateTimeFormat("en-CA", {timeZone:"America/New_York"}).format(new Date())}
+            {lastDate !== "--" && <span style={{opacity:0.6,marginLeft:6}}>(dados: {lastDate})</span>}
+          </div>
         </div>
 
         {/* Global tabs -- visões macro/cross-asset */}
