@@ -41,6 +41,7 @@ agrimacro-dash/logs/
 !pipeline/check_data_freshness.py
 **/bloco*.py
 **/patch_*.py
+!pipeline/patch_report_v4.py
 **/w[0-9]*.py
 **/write*.py
 **/gen.py
