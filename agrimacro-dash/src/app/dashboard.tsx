@@ -238,8 +238,6 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Visão Geral","Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Greeks","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
-
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#6366f1","2022":"#3b82f6","2023":"#8b5cf6","2024":"#ec4899","2025":"#22c55e","2026":"#f59e0b",
   "current":"#f59e0b","average":"#e2e8f0",
@@ -6464,6 +6462,7 @@ export default function Dashboard() {
             {label:"Spreads",tab:"Spreads"},{label:"Físico Intl",tab:"Físico Intl"},
             {label:"Estoques",tab:"Stocks Watch"},{label:"Energia",tab:"Energia"},
             {label:"Custo Produção",tab:"Custo Produção"},
+            {label:"Greeks",tab:"Greeks"},
             {label:"Grain Ratios",tab:"Grain Ratios",only:["ZC","ZS","ZW","KE","ZM","ZL"]},
             {label:"Bilateral",tab:"Bilateral"},
             {label:"Paridades",tab:"Paridades"},
