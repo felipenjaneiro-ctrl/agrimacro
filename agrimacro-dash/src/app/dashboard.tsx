@@ -7,6 +7,7 @@ import SyncedChartPanel from "./SyncedChartPanel";
 import CorrelationMap from "./CorrelationMap";
 import CommodityTab from "./CommodityTab";
 import PortfolioPage from "./PortfolioPage";
+import GreeksTab from "./GreeksTab";
 import { useState, useEffect, useRef } from "react";
 
 /* ---------------------------------------------------------------------------
@@ -200,7 +201,7 @@ interface DataFreshness {
   error?: string;
 }
 
-type Tab = "Visão Geral"|"Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk"|"Paridades";
+type Tab = "Visão Geral"|"Gráfico + COT"|"Comparativo"|"Spreads"|"Sazonalidade"|"Stocks Watch"|"Custo Produção"|"Greeks"|"Físico Intl"|"Leitura do Dia"|"Energia"|"Portfolio"|"Bilateral"|"Grain Ratios"|"Livestock Risk"|"Paridades";
 
 // -- Color Theme ------------------------------------------------------------
 const C = {
@@ -237,7 +238,7 @@ const COMMODITIES:{sym:string;name:string;group:string;unit:string}[] = [
   {sym:"DX",name:"Dollar Index",group:"Macro",unit:"index"},
 ];
 
-const TABS:Tab[] = ["Visão Geral","Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
+const TABS:Tab[] = ["Visão Geral","Gráfico + COT","Comparativo","Spreads","Sazonalidade","Stocks Watch","Custo Produção","Greeks","Físico Intl","Leitura do Dia","Energia","Portfolio","Bilateral","Paridades","Grain Ratios","Livestock Risk"];
 
 const SEASON_COLORS:Record<string,string> = {
   "2021":"#6366f1","2022":"#3b82f6","2023":"#8b5cf6","2024":"#ec4899","2025":"#22c55e","2026":"#f59e0b",
@@ -6274,6 +6275,7 @@ export default function Dashboard() {
       case "Stocks Watch": return renderStocksWatch();
       case "Energia": return renderEnergia();
       case "Custo Produção": return <CostOfProductionTab />;
+      case "Greeks": return <GreeksTab sym={selected} C={C} />;
       case "Físico Intl": return renderFisicoIntl();
       case "Leitura do Dia": return renderLeituraDoDia();
       case "Portfolio": return <PortfolioPage portfolio={portfolio} greeks={greeksData} optionsChain={optionsChain} prices={prices} />;

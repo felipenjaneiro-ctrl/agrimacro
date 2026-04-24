@@ -81,6 +81,22 @@ def main():
         log(f"Options chain falhou (nao critico): {e}", "WARN")
         results["options_chain"] = {"status": "WARN", "error": str(e)}
 
+    # Step 1c: IV Analytics -- ATM IV + Skew 25d + IV Rank 252d (Sprint A)
+    # OPTIONAL: depende de options_chain.json; se upstream falhar, WARN nao ERR.
+    log(f"Step 1c/{total_steps}: Computando IV analytics (ATM IV + Skew + Rank 252d)...")
+    try:
+        from collect_iv_analytics import main as collect_iv_analytics
+        rc = collect_iv_analytics()
+        if rc == 0:
+            log("IV analytics computado", "OK")
+            results["iv_analytics"] = {"status": "OK"}
+        else:
+            log(f"IV analytics retornou rc={rc} (nao critico)", "WARN")
+            results["iv_analytics"] = {"status": "WARN", "error": f"return_code={rc}"}
+    except Exception as e:
+        log(f"IV analytics falhou (nao critico): {e}", "WARN")
+        results["iv_analytics"] = {"status": "WARN", "error": str(e)}
+
     # ===========================================================================
     # STEP 2 DESATIVADO (22/04/2026) -- Yahoo Finance removido do pipeline
     # Motivo: dados IBKR reais chegam via sync_portfolio.ps1 do PC/MacBook.
