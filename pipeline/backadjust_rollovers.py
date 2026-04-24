@@ -39,7 +39,7 @@ PH_PATHS = [
     BASE / "agrimacro-dash" / "public" / "data" / "processed" / "price_history.json",
     BASE / "agrimacro-dash" / "public" / "data" / "raw" / "price_history.json",
 ]
-LOG_DIR = BASE / "data" / "logs"
+LOG_DIR = BASE / "pipeline" / "logs"
 LOG_PATH = LOG_DIR / "rollover_adjustments.log"
 
 SPREAD_PCT_THRESHOLD = 0.02  # |spread / prev_close| > 2% confirma rollover real

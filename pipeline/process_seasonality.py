@@ -37,7 +37,7 @@ SEASON_WINDOWS = {
 }
 
 # Cache dir for long-term history
-LONG_CACHE = Path(__file__).parent.parent / "data" / "raw" / "long_history"
+LONG_CACHE = Path(__file__).parent / "cache" / "long_history"
 
 
 def fetch_long_history(symbol):

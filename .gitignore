@@ -33,6 +33,9 @@ ibkr_export.json
 pipeline/logs/
 agrimacro-dash/logs/
 
+# Pipeline internal cache (long_history Yahoo, etc)
+pipeline/cache/
+
 # Temp fix/debug/diag scripts
 **/fix*.py
 **/diag*.py
