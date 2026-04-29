@@ -176,10 +176,11 @@ def generate_signal_now(spread_key, value, zscore, regime, trend_pct):
 
     signals = {
         "soy_crush": {
-            "extreme_high": f"Margem no pico ({zscore:+.1f}\u03c3). Ind\u00fastria pagando muito pela soja. Aten\u00e7\u00e3o: revers\u00e3o poss\u00edvel.",
-            "high": f"Margem acima do normal ({direction}). Suporte para ZS via demanda industrial.",
-            "normal": "Margem dentro do normal. Esmagamento saud\u00e1vel sem sinal direcional.",
-            "low": "Margem pressionada. Ind\u00fastria pode reduzir compras de ZS.",
+            "extreme_high": f"Margem em extremo hist\u00f3rico (z={zscore:+.1f}\u03c3). Esmagadores em lucro recorde, comprando soja agressivamente. Revers\u00e3o estatisticamente prov\u00e1vel \u2014 acompanhar forward +2m.",
+            "high": f"Margem acima da m\u00e9dia (z={zscore:+.1f}\u03c3). Esmagamento rent\u00e1vel, demanda firme por soja.",
+            "normal": f"Margem em range hist\u00f3rico normal (z={zscore:+.1f}\u03c3). Esmagamento operando em margem t\u00edpica.",
+            "low": f"Margem comprimida (z={zscore:+.1f}\u03c3). Esmagadores reduzindo throughput, demanda por soja enfraquecendo.",
+            "extreme_low": f"Margem em extremo negativo (z={zscore:+.1f}\u03c3). Esmagamento parando ou negativo. Bearish forte para ZS \u2014 menos demanda. Revers\u00e3o estatisticamente prov\u00e1vel.",
         },
         "feedlot": {
             "extreme_high": "Confinamento extremamente lucrativo. Expans\u00e3o de rebanho prov\u00e1vel \u2192 alta futura de GF.",
@@ -227,10 +228,12 @@ def generate_signal_now(spread_key, value, zscore, regime, trend_pct):
 
     level = ("extreme_high" if zscore >= 2.0 else
              "high" if zscore >= 1.0 else
+             "extreme_low" if zscore <= -2.0 else
              "low" if zscore <= -1.0 else "normal")
 
-    return signals.get(spread_key, {}).get(level,
-        f"Z-score {zscore:+.2f}. Posi\u00e7\u00e3o {direction} vs m\u00e9dia hist\u00f3rica.")
+    entry = signals.get(spread_key, {})
+    return entry.get(level) or entry.get("low" if level == "extreme_low" else level) or \
+        f"Z-score {zscore:+.2f}. Posi\u00e7\u00e3o {direction} vs m\u00e9dia hist\u00f3rica."
 
 def calculate_spread(prices: dict, spread_key: str, spread_def: dict) -> dict:
     """Calculate a single spread with historical z-score"""
@@ -403,6 +406,19 @@ def apply_crush_forward(spread_data, futures_data):
         "zl": f"ZL +2m @ {zl_price:.2f} ({zl_label})",
     }
     spread_data["method"] = "forward_2m"
+
+    # Forward warning: lock-in defensivo quando esmagadores travam margem >20% abaixo do spot
+    spot = spread_data.get("current", 0)
+    if spot > 0:
+        fwd_pct = (crush_fwd / spot - 1) * 100
+        if fwd_pct < -20:
+            warning = (
+                f"Forward +2m em {abs(fwd_pct):.0f}% abaixo do spot — "
+                f"mercado precifica reversão. Esmagadores fazendo lock-in defensivo, "
+                f"sinalizando que a margem atual não é sustentável."
+            )
+            existing = spread_data.get("watch_if", "")
+            spread_data["watch_if"] = f"{existing} {warning}".strip() if existing else warning
 
 
 def apply_zlcl_term_structure(spread_data, futures_data):
