@@ -1,18 +1,19 @@
 {
-  "generated_at": "2026-04-29 14:31",
+  "generated_at": "2026-04-29 14:50",
   "account": "U2404446",
   "summary": {
-    "BuyingPower": "3292975.88",
-    "GrossPositionValue": "1514224.34",
-    "NetLiquidation": "1256324.97",
-    "TotalCashValue": "249883.88",
-    "UnrealizedPnL": "-123452.98",
+    "BuyingPower": "3272078.33",
+    "GrossPositionValue": "1548890.59",
+    "NetLiquidation": "1252196.19",
+    "TotalCashValue": "249883.14",
+    "UnrealizedPnL": "-127469.57",
     "RealizedPnL": "0.00"
   },
   "portfolio_greeks": {
-    "total_delta": -22.91,
-    "total_theta": -53.92,
-    "total_vega": 73.43,
+    "total_delta": -1138045.17,
+    "total_theta": 2198.06,
+    "total_vega": -1451.38,
+    "total_delta_contracts": -21.76,
     "positions_with_greeks": 28,
     "positions_without_greeks": 0
   },
@@ -25,13 +26,13 @@
       "position": -22.0,
       "avg_cost": 1061.62454545,
       "market_value": -23355.739999899997,
-      "delta": 0.5982,
-      "gamma": 0.029276,
-      "theta": -0.0327,
-      "vega": 0.1311,
-      "iv": 0.38,
-      "und_price": 74.25,
-      "opt_price": 6.2633
+      "delta": 0.5415,
+      "gamma": 5.296921,
+      "theta": -0.0002,
+      "vega": 0.0011,
+      "iv": 0.2517,
+      "und_price": 0.742,
+      "opt_price": 0.0319
     },
     {
       "symbol": "SI",
@@ -41,13 +42,13 @@
       "position": -11.0,
       "avg_cost": 8932.68,
       "market_value": -98259.48000000001,
-      "delta": -0.3158,
-      "gamma": 0.03909,
-      "theta": -0.0584,
-      "vega": 0.0667,
-      "iv": 0.4695,
-      "und_price": 71.71,
-      "opt_price": 2.0025
+      "delta": -0.3187,
+      "gamma": 0.039885,
+      "theta": -0.0576,
+      "vega": 0.069,
+      "iv": 0.4631,
+      "und_price": 71.405,
+      "opt_price": 1.9937
     },
     {
       "symbol": "SI",
@@ -57,13 +58,13 @@
       "position": 2.0,
       "avg_cost": 17297.32,
       "market_value": 34594.64,
-      "delta": -0.4883,
-      "gamma": 0.044714,
-      "theta": -0.0662,
+      "delta": -0.4943,
+      "gamma": 0.045247,
+      "theta": -0.0655,
       "vega": 0.0773,
-      "iv": 0.4593,
-      "und_price": 71.645,
-      "opt_price": 3.7296
+      "iv": 0.4545,
+      "und_price": 71.405,
+      "opt_price": 3.7564
     },
     {
       "symbol": "ZL",
@@ -89,13 +90,13 @@
       "position": -30.0,
       "avg_cost": 3037.63,
       "market_value": -91128.90000000001,
-      "delta": 0.3308,
-      "gamma": 0.013326,
-      "theta": -0.1069,
+      "delta": 0.3331,
+      "gamma": 0.013301,
+      "theta": -0.1073,
       "vega": 0.1367,
-      "iv": 0.7499,
-      "und_price": 99.9684,
-      "opt_price": 5.1762
+      "iv": 0.7551,
+      "und_price": 100.43,
+      "opt_price": 5.2453
     },
     {
       "symbol": "US-T",
@@ -137,13 +138,13 @@
       "position": 16.0,
       "avg_cost": 4208.62,
       "market_value": 67337.92,
-      "delta": 0.1799,
-      "gamma": 0.013798,
-      "theta": -0.1548,
+      "delta": 0.1825,
+      "gamma": 0.013795,
+      "theta": -0.1648,
       "vega": 0.0629,
-      "iv": 0.8808,
-      "und_price": 106.78,
-      "opt_price": 1.7224
+      "iv": 0.8887,
+      "und_price": 107.22,
+      "opt_price": 1.7693
     },
     {
       "symbol": "CL",
@@ -153,13 +154,13 @@
       "position": -16.0,
       "avg_cost": 5021.38,
       "market_value": -80342.08,
-      "delta": 0.245,
-      "gamma": 0.016534,
-      "theta": -0.2119,
+      "delta": 0.2465,
+      "gamma": 0.016481,
+      "theta": -0.2172,
       "vega": 0.0724,
-      "iv": 0.8791,
-      "und_price": 106.78,
-      "opt_price": 2.5494
+      "iv": 0.8864,
+      "und_price": 107.22,
+      "opt_price": 2.5841
     },
     {
       "symbol": "ZL",
@@ -173,7 +174,7 @@
       "gamma": 8.095216,
       "theta": -0.0004,
       "vega": 0.0007,
-      "iv": 0.2626,
+      "iv": 0.263,
       "und_price": 0.742,
       "opt_price": 0.017
     },
@@ -185,13 +186,13 @@
       "position": 9.0,
       "avg_cost": 4229.5422222,
       "market_value": 38065.879999799996,
-      "delta": -0.1785,
-      "gamma": 0.02747,
-      "theta": -0.0446,
+      "delta": -0.1784,
+      "gamma": 0.027904,
+      "theta": -0.044,
       "vega": 0.0488,
-      "iv": 0.4891,
-      "und_price": 71.645,
-      "opt_price": 0.9838
+      "iv": 0.4821,
+      "und_price": 71.405,
+      "opt_price": 0.9666
     },
     {
       "symbol": "ZL",
@@ -205,7 +206,7 @@
       "gamma": 4.065297,
       "theta": -0.0002,
       "vega": 0.0004,
-      "iv": 0.2786,
+      "iv": 0.284,
       "und_price": 0.742,
       "opt_price": 0.0574
     },
@@ -217,13 +218,13 @@
       "position": 6.0,
       "avg_cost": 4922.32,
       "market_value": 29533.92,
-      "delta": -0.2083,
-      "gamma": 0.030532,
-      "theta": -0.0522,
-      "vega": 0.0578,
-      "iv": 0.4833,
-      "und_price": 71.645,
-      "opt_price": 1.186
+      "delta": -0.2088,
+      "gamma": 0.031072,
+      "theta": -0.0514,
+      "vega": 0.0577,
+      "iv": 0.4763,
+      "und_price": 71.405,
+      "opt_price": 1.1691
     },
     {
       "symbol": "CL",
@@ -233,13 +234,13 @@
       "position": 5.0,
       "avg_cost": 5802.37,
       "market_value": 29011.85,
-      "delta": 0.583,
-      "gamma": 0.015378,
-      "theta": -0.1023,
+      "delta": 0.5853,
+      "gamma": 0.0153,
+      "theta": -0.1026,
       "vega": 0.1413,
-      "iv": 0.6982,
-      "und_price": 99.99,
-      "opt_price": 11.1008
+      "iv": 0.7016,
+      "und_price": 100.43,
+      "opt_price": 11.2102
     },
     {
       "symbol": "CC",
@@ -281,13 +282,13 @@
       "position": -16.0,
       "avg_cost": 4607.63,
       "market_value": -73722.08,
-      "delta": 0.2166,
-      "gamma": 0.015404,
-      "theta": -0.1853,
+      "delta": 0.22,
+      "gamma": 0.015433,
+      "theta": -0.1867,
       "vega": 0.0622,
-      "iv": 0.8817,
-      "und_price": 106.73,
-      "opt_price": 2.1793
+      "iv": 0.8872,
+      "und_price": 107.22,
+      "opt_price": 2.2385
     },
     {
       "symbol": "ZL",
@@ -301,7 +302,7 @@
       "gamma": 7.122612,
       "theta": -0.0003,
       "vega": 0.0006,
-      "iv": 0.2644,
+      "iv": 0.2675,
       "und_price": 0.742,
       "opt_price": 0.0336
     },
@@ -329,13 +330,13 @@
       "position": -1.0,
       "avg_cost": 24867.68,
       "market_value": -24867.68,
-      "delta": -0.6178,
-      "gamma": 0.042897,
-      "theta": -0.0645,
+      "delta": -0.6217,
+      "gamma": 0.043144,
+      "theta": -0.0641,
       "vega": 0.0758,
-      "iv": 0.4577,
-      "und_price": 71.645,
-      "opt_price": 5.5265
+      "iv": 0.4545,
+      "und_price": 71.405,
+      "opt_price": 5.5366
     },
     {
       "symbol": "CC",
@@ -361,13 +362,13 @@
       "position": 24.0,
       "avg_cost": 4592.37,
       "market_value": 110216.88,
-      "delta": 0.1713,
-      "gamma": 0.013293,
-      "theta": -0.1548,
+      "delta": 0.1718,
+      "gamma": 0.013246,
+      "theta": -0.1558,
       "vega": 0.0517,
-      "iv": 0.8834,
-      "und_price": 106.73,
-      "opt_price": 1.6301
+      "iv": 0.8893,
+      "und_price": 107.22,
+      "opt_price": 1.643
     },
     {
       "symbol": "SI",
@@ -377,13 +378,13 @@
       "position": 1.0,
       "avg_cost": 15102.32,
       "market_value": 15102.32,
-      "delta": -0.3999,
-      "gamma": 0.043035,
-      "theta": -0.0659,
-      "vega": 0.0763,
-      "iv": 0.4632,
-      "und_price": 71.645,
-      "opt_price": 2.7685
+      "delta": -0.4019,
+      "gamma": 0.043653,
+      "theta": -0.0651,
+      "vega": 0.0762,
+      "iv": 0.4576,
+      "und_price": 71.405,
+      "opt_price": 2.7507
     },
     {
       "symbol": "CC",
@@ -425,13 +426,13 @@
       "position": 16.0,
       "avg_cost": 3870.495,
       "market_value": 61927.92,
-      "delta": 0.164,
-      "gamma": 0.012868,
-      "theta": -0.1557,
-      "vega": 0.052,
-      "iv": 0.8842,
-      "und_price": 106.73,
-      "opt_price": 1.5514
+      "delta": 0.1614,
+      "gamma": 0.01269,
+      "theta": -0.1565,
+      "vega": 0.0518,
+      "iv": 0.8901,
+      "und_price": 107.22,
+      "opt_price": 1.5248
     },
     {
       "symbol": "SI",
@@ -441,13 +442,13 @@
       "position": 1.0,
       "avg_cost": 17792.32,
       "market_value": 17792.32,
-      "delta": -0.5366,
-      "gamma": 0.04468,
-      "theta": -0.0664,
+      "delta": -0.5363,
+      "gamma": 0.045093,
+      "theta": -0.0658,
       "vega": 0.0778,
-      "iv": 0.4582,
-      "und_price": 71.645,
-      "opt_price": 4.3305
+      "iv": 0.4539,
+      "und_price": 71.405,
+      "opt_price": 4.2837
     },
     {
       "symbol": "CL",
@@ -457,13 +458,13 @@
       "position": -24.0,
       "avg_cost": 5457.63,
       "market_value": -130983.12,
-      "delta": 0.2333,
-      "gamma": 0.016056,
-      "theta": -0.1851,
-      "vega": 0.062,
-      "iv": 0.8815,
-      "und_price": 106.73,
-      "opt_price": 2.3998
+      "delta": 0.2324,
+      "gamma": 0.015951,
+      "theta": -0.1861,
+      "vega": 0.0619,
+      "iv": 0.8868,
+      "und_price": 107.22,
+      "opt_price": 2.3971
     },
     {
       "symbol": "SI",
@@ -473,13 +474,13 @@
       "position": -6.0,
       "avg_cost": 9812.68,
       "market_value": -58876.08,
-      "delta": -0.3632,
-      "gamma": 0.04148,
-      "theta": -0.0632,
+      "delta": -0.3586,
+      "gamma": 0.041793,
+      "theta": -0.0624,
       "vega": 0.0727,
-      "iv": 0.4661,
-      "und_price": 71.645,
-      "opt_price": 2.427
+      "iv": 0.46,
+      "und_price": 71.405,
+      "opt_price": 2.352
     },
     {
       "symbol": "ZL",
@@ -493,7 +494,7 @@
       "gamma": 7.80412,
       "theta": -0.0004,
       "vega": 0.0007,
-      "iv": 0.2621,
+      "iv": 0.2635,
       "und_price": 0.742,
       "opt_price": 0.0272
     },
@@ -505,13 +506,13 @@
       "position": 30.0,
       "avg_cost": 1882.37,
       "market_value": 56471.1,
-      "delta": 0.1967,
-      "gamma": 0.009727,
-      "theta": -0.0903,
+      "delta": 0.1971,
+      "gamma": 0.009708,
+      "theta": -0.0906,
       "vega": 0.11,
-      "iv": 0.7857,
-      "und_price": 99.99,
-      "opt_price": 2.7545
+      "iv": 0.7889,
+      "und_price": 100.43,
+      "opt_price": 2.7681
     }
   ],
   "position_count": 31
