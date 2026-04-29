@@ -13,13 +13,26 @@ from dateutil.relativedelta import relativedelta
 
 def collect_greeks(ib, positions):
     """
-    Para cada posicao de opcao, busca modelGreeks via reqMktData snapshot.
+    Para cada posicao de opcao, busca modelGreeks via reqMktData streaming.
     Nao usa calculateImpliedVolatility (causa erro 10090 e derruba conexao).
     Black-76 cobre o fallback.
     """
     greeks_data = {}
     option_positions = [p for p in positions
                         if p.contract.secType in ('FOP', 'OPT')]
+
+    # Modo 4 (DELAYED_FROZEN): IBKR retorna LIVE quando ha subscription paga,
+    # DELAYED quando nao tem, ou FROZEN se mercado fechado. Quando Felipe assinar
+    # NYMEX/COMEX/NYBOT no futuro, passa automaticamente a retornar LIVE sem
+    # mudar codigo. Setting global da sessao IB — uma chamada e suficiente.
+    ib.reqMarketDataType(4)
+
+    DATA_TYPE_NAMES = {
+        1: 'ibkr_live',
+        2: 'ibkr_frozen',
+        3: 'ibkr_delayed',
+        4: 'ibkr_delayed_frozen',
+    }
 
     for i, pos in enumerate(option_positions):
         contract = pos.contract
@@ -29,14 +42,23 @@ def collect_greeks(ib, positions):
                 print(f'  [!] Conexao perdida em {local_sym}, abortando Greeks')
                 break
 
+            # reqPositions retorna FuturesOption com exchange='' — reqMktData
+            # rejeita com Error 321. qualifyContracts popula exchange/tradingClass.
+            ib.qualifyContracts(contract)
+
+            # snapshot=False (streaming): generic ticks ('106' = modelGreeks) so
+            # funcionam em streaming. snapshot=True falha com "Snapshot market data
+            # subscription is not applicable to generic ticks".
             ticker = ib.reqMktData(contract,
                                    genericTickList='106',
-                                   snapshot=True,
+                                   snapshot=False,
                                    regulatorySnapshot=False)
-            ib.sleep(1.5)
+            ib.sleep(3)  # streaming: aguarda primeiros ticks chegarem
 
             mg = ticker.modelGreeks
             if mg and mg.delta is not None:
+                dt = ticker.marketDataType
+                gs = DATA_TYPE_NAMES.get(dt, 'ibkr_unknown')
                 greeks_data[local_sym] = {
                     'delta': round(mg.delta, 4),
                     'gamma': round(mg.gamma, 6) if mg.gamma else None,
@@ -45,13 +67,17 @@ def collect_greeks(ib, positions):
                     'iv': round(mg.impliedVol, 4) if mg.impliedVol else None,
                     'und_price': round(mg.undPrice, 4) if mg.undPrice else None,
                     'opt_price': round(mg.optPrice, 4) if mg.optPrice else None,
-                    'source': 'ibkr_live'
+                    'source': gs,                # backwards-compat — espelha greeks_source
+                    'greeks_source': gs,
+                    'data_type': dt,
                 }
-                print(f"      [{i+1}/{len(option_positions)}] {local_sym}: delta={greeks_data[local_sym]['delta']} iv={greeks_data[local_sym].get('iv')}")
+                print(f"      [{i+1}/{len(option_positions)}] {local_sym}: delta={greeks_data[local_sym]['delta']} iv={greeks_data[local_sym].get('iv')} [{gs}]")
             else:
                 greeks_data[local_sym] = {
                     'error': 'no_model_greeks',
-                    'source': 'failed'
+                    'source': 'failed',
+                    'greeks_source': 'failed',
+                    'data_type': None,
                 }
                 print(f"      [{i+1}/{len(option_positions)}] {local_sym}: no modelGreeks")
 
@@ -60,7 +86,9 @@ def collect_greeks(ib, positions):
         except Exception as e:
             greeks_data[local_sym] = {
                 'error': str(e)[:100],
-                'source': 'failed'
+                'source': 'failed',
+                'greeks_source': 'failed',
+                'data_type': None,
             }
             if 'Not connected' in str(e):
                 print(f'  [!] Conexao perdida, abortando Greeks restantes')
@@ -193,6 +221,8 @@ def fill_missing_greeks(greeks_map, positions, prices_data):
         result = black76_greeks(F, K, T, r, sigma, opt_type)
         result['und_price'] = round(F, 4)
         result['source'] = source
+        result['greeks_source'] = source  # 'black76_estimated_iv'
+        result['data_type'] = None  # nao veio do IBKR
         result['iv_used'] = round(sigma, 4)
         greeks_map[local_sym] = result
         filled += 1
