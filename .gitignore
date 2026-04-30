@@ -107,3 +107,27 @@ desktop.ini
 agrimacro-dash/public/data/**
 !agrimacro-dash/public/data/
 !agrimacro-dash/public/data/processed/
+
+# JSONs dinamicos de pipeline/ - cron VPS gera, nao versionar (P0.23, 2026-04-30)
+#
+# Antes:  Cron VPS escrevia em arquivos tracked -> divergencia git local vs VPS.
+#         Mesmo padrao do P0.11 (que tratou data/processed/).
+# Agora:  Cron VPS gera local, sem tracking -> sem conflito possivel.
+#
+# Categoria A (cron VPS via run_daily.ps1 + run_pipeline.py):
+#   entry_timing, opportunity_ranking, opportunity_scan, theta_calendar, vega_monitor
+# Tambem limpa logs vestigiais que escaparam do gitignore antigo (linha 33)
+#
+# Categoria D (calibracao on-demand) PERMANECE no git:
+#   commodity_dna, cross_analysis, cycle_analysis, trade_skill_base,
+#   position_sizing, roll_decisions, stress_test, trade_journal
+#   Razao: trade_skill_base.json e config consumida por 7 skills.
+#
+# manifesto.json: orfao (gerador em _quarantine), deixar no git por ora.
+#   TODO P0.24: investigar se mantem, deleta ou ressuscita.
+#
+pipeline/entry_timing.json
+pipeline/opportunity_ranking.json
+pipeline/opportunity_scan.json
+pipeline/theta_calendar.json
+pipeline/vega_monitor.json
