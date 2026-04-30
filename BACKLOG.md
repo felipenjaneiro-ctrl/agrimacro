@@ -16,7 +16,7 @@
 | P0.13 | ✅ FECHADO | Greeks live IBKR 28/28 reais | 28-29/abr |
 | P0.14 | ✅ FECHADO | Greeks agregados em dollar | 28-29/abr |
 | P0.23 | ✅ FECHADO | Refactor pipeline/*.json untrack | 30/abr |
-| P0.25 | 🟡 Em execução | Bug data_freshness.json não regenerar após SCP — endpoint /api/sync-portfolio agora reroda check_data_freshness.py | 30/abr |
+| P0.25 | ✅ FECHADO | Bug data_freshness.json não regenerar após SCP — endpoint /api/sync-portfolio agora reroda check_data_freshness.py | 30/abr |
 
 ## Backlog ativo
 
@@ -28,6 +28,7 @@
 |---|---|---|
 | P0.6 | Bug escapes Unicode UI ("Relações"…) | 30-60min |
 | P0.18 | Refresh button funcional no dashboard | 1-2 sessões |
+| P0.26 | Senha Basic Auth hardcoded em sync_portfolio.ps1 (linha 51) — mover credentials para .env file | 1 sessão |
 | Pré-viagem | Hardening: auto-recovery, alertas Telegram, monitoring | 1-2 sessões |
 | Pré-viagem | Mobile-first review dashboard (iPhone) | 1 sessão |
 | Camada 2 base | Skill commodity-research-felipe-method.md | 1-2 sessões |
@@ -60,6 +61,8 @@
 | collect_cepea.py | Pendente desde fev 2026 |
 | disclaimer PDF capa | Pendente desde fev 2026 |
 | IV CL ~88% | Validar se é realista (Hormuz pricing) vs TWS |
+| futures_contracts | mtime 06/02 — collect_futures_contracts.py pode estar quebrado há 3 meses |
+| heap usage PM2 | 81% após 5 dias — monitorar possível memory leak (não bloqueante) |
 
 ## Princípios para gestão deste arquivo
 1. Cada item recém-descoberto vai PRA AQUI antes de virar P0.X formal
@@ -67,8 +70,9 @@
 3. Quando fechado: move pra "Recém-fechados" com data
 4. Reavaliar prioridade no início de cada sessão
 5. Se um item não tem ação clara em 60 dias, considerar deletar (era ruído)
+6. **Princípio anti-esquecimento (30/abr):** ao final de cada sessão, revisar se itens novos descobertos foram registrados aqui antes de fechar.
 
 ## Histórico de fechamentos (cronológico)
-- 2026-04-30: P0.11, P0.23 (refactors estruturais SCP/untrack)
+- 2026-04-30: P0.11, P0.23, P0.25 (refactors estruturais + freshness fix)
 - 2026-04-29: P0.13, P0.14 (Greeks live + agregação dollar)
 - 2026-04-28: P0.3 (Crush spread texto invertido)
