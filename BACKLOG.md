@@ -16,6 +16,7 @@
 | P0.13 | ✅ FECHADO | Greeks live IBKR 28/28 reais | 28-29/abr |
 | P0.14 | ✅ FECHADO | Greeks agregados em dollar | 28-29/abr |
 | P0.23 | ✅ FECHADO | Refactor pipeline/*.json untrack | 30/abr |
+| P0.25 | 🟡 Em execução | Bug data_freshness.json não regenerar após SCP — endpoint /api/sync-portfolio agora reroda check_data_freshness.py | 30/abr |
 
 ## Backlog ativo
 
