@@ -85,13 +85,25 @@ pipeline/cache/
 Thumbs.db
 desktop.ini
 
-# Permitir JSONs do portfolio (usados pelo servidor)
-# Bloqueia todos os JSONs de dados, mas permite portfolio + greeks
+# JSONs dinamicos de processed/ - TODOS fora do git (refactor P0.11, 2026-04-30)
+#
+# Antes:  Sync PC (PowerShell) commitava ibkr_portfolio/ibkr_greeks/price_history/
+#         contract_history/futures_contracts. Cron VPS gerava o resto local.
+#         Conflito git recorrente quando cron VPS escrevia local enquanto sync PC
+#         commitava versao diferente -> POST /api/sync-portfolio retornava 500.
+#
+# Agora:  Sync PC envia via SCP direto pro VPS (nao passa pelo git).
+#         Cron VPS continua gerando local. Sem ponto de encontro = sem conflito.
+#
+# Arquivos Categoria A (collect_ibkr.py, sync PC -> SCP -> VPS):
+#   price_history.json, contract_history.json, ibkr_portfolio.json, ibkr_greeks.json
+# Arquivo Categoria especial (futures_contracts.json):
+#   gerado pelo cron VPS via collect_futures_contracts.py.
+#   TODO P0.X: investigar por que mtime do arquivo no git esta em 06/02 (3 meses sem update).
+# Arquivos Categoria B (todos demais ~70 JSONs): cron VPS, ja estavam fora do git.
+#
+# Para versionar manifests/configs estaticos no futuro, adicione excecao explicita
+# aqui (ex: !agrimacro-dash/public/data/processed/schema.json).
 agrimacro-dash/public/data/**
 !agrimacro-dash/public/data/
 !agrimacro-dash/public/data/processed/
-!agrimacro-dash/public/data/processed/ibkr_portfolio.json
-!agrimacro-dash/public/data/processed/ibkr_greeks.json
-!agrimacro-dash/public/data/processed/price_history.json
-!agrimacro-dash/public/data/processed/contract_history.json
-!agrimacro-dash/public/data/processed/futures_contracts.json
