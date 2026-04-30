@@ -63,6 +63,7 @@
 | IV CL ~88% | Validar se é realista (Hormuz pricing) vs TWS |
 | futures_contracts | mtime 06/02 — collect_futures_contracts.py pode estar quebrado há 3 meses |
 | heap usage PM2 | 81% após 5 dias — monitorar possível memory leak (não bloqueante) |
+| P0.27 | OneDrive pasta-fantasma "├ürea de Trabalho" vazia (0 MB, só com subpasta agrimacro vazia). Encoding quebrado UTF-8. Limpar em sessão dedicada. Não bloqueante. |
 
 ## Princípios para gestão deste arquivo
 1. Cada item recém-descoberto vai PRA AQUI antes de virar P0.X formal
@@ -71,6 +72,35 @@
 4. Reavaliar prioridade no início de cada sessão
 5. Se um item não tem ação clara em 60 dias, considerar deletar (era ruído)
 6. **Princípio anti-esquecimento (30/abr):** ao final de cada sessão, revisar se itens novos descobertos foram registrados aqui antes de fechar.
+
+## Roadmap Pré-Viagem (deadline: 18 de maio 2026)
+
+**Tier 1 — Substância analítica:**
+- [ ] P0.6 — Bug Unicode escapes UI (30-60 min)
+- [ ] Skill método Felipe formalizada (commodity-research-felipe-method.md)
+- [ ] Trade Journal estruturado (template + entry rolagem ZL hoje)
+- [ ] Super-páginas por commodity (1 página intuitiva por commodity)
+- [ ] Tese Macro mínima viável (semanal + checagem diária)
+- [ ] P0.18 — Refresh button funcional dashboard
+
+**FORA do escopo pré-viagem (decisão deliberada):**
+- Alertas Telegram/mobile (TradingView cobre monitoring)
+- Auto-recovery cron VPS adicional (sistema atual robusto pós P0.11/P0.23/P0.25)
+- Mobile-first review separado (TradingView resolve)
+
+## Roadmap Pós-Viagem (set-dez 2026)
+
+Implementação arquitetura completa conforme docs/architecture/AGRIMACRO_VISION_v2.md:
+
+- **Setembro:** Dashboard Council UI + backend orchestrator + indexação livros core + Estudo Livermore premium selling
+- **Outubro:** Sobol/Morris agent + Backtesting walk-forward Opportunity Ranker + Bonds Agent + História Agent
+- **Novembro:** Estudo multifatorial 15-20 anos + 12 especialistas com checklists profundos + knowledge bases destiladas
+- **Dezembro:** Council Final completo integrado + modo conversacional persistente + Skill Calibration Engine + Decision Patterns Memory
+
+Total estimado: 12-16 semanas de construção pós-viagem.
+
+## Referências
+- **Visão arquitetural completa:** docs/architecture/AGRIMACRO_VISION_v2.md (versionado, 462 linhas)
 
 ## Histórico de fechamentos (cronológico)
 - 2026-04-30: P0.11, P0.23, P0.25 (refactors estruturais + freshness fix)
